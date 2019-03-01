@@ -27,43 +27,30 @@
 
 package trm
 
-import "math"
-
-// BandPassFilter
-type BandpassFilter struct {
-	bpAlpha float64
-	bpBeta  float64
-	bpGamma float64
-	xn1     float64
-	xn2     float64
-	yn1     float64
-	yn2     float64
+type Throat struct {
+	Gain float32
+	tb1  float32
+	ta0  float32
+	Y    float32
 }
 
-// Reset sets the filter values to zero
-func (bf *BandpassFilter) Reset() {
-	bf.xn1 = 0.0
-	bf.xn2 = 0.0
-	bf.yn1 = 0.0
-	bf.yn2 = 0.0
+// Init Initializes the throat lowpass filter coefficients according to the throatCutoff value,
+// and also the throatGain, according to the throatVol value.
+func (thr *Throat) Init(sampleRate, cutoff, gain float32) {
+	thr.Gain = gain
+	thr.ta0 = (cutoff * 2.0) / sampleRate
+	thr.tb1 = 1.0 - thr.ta0
 }
 
-// Update sets the filter values based on sample rate, bandwidth and center frequency
-func (bf *BandpassFilter) Update(sampleRate, bandwidth, centerFreq float64) {
-	tanValue := math.Tan((math.Pi * bandwidth) / sampleRate)
-	cosValue := math.Cos((2.0 * math.Pi * centerFreq) / sampleRate)
-	bf.bpBeta = (1.0 - tanValue) / (2.0 * (1.0 + tanValue))
-	bf.bpGamma = (0.5 + bf.bpBeta) * cosValue
-	bf.bpAlpha = (0.5 - bf.bpBeta) / 2.0
+// Reset sets Y to 0
+func (thr *Throat) Reset() {
+	thr.Y = 0.0
 }
 
-// BandpassFilter is a Frication bandpass filter, with variable center frequency and bandwidth
-func (bf *BandpassFilter) Filter(input float64) float64 {
-	output := 2.0 * ((bf.bpAlpha * (input - bf.xn2)) + (bf.bpGamma * bf.yn1) - (bf.bpBeta * bf.yn2))
-
-	bf.xn2 = bf.xn1
-	bf.xn1 = input
-	bf.yn2 = bf.yn1
-	bf.yn1 = output
-	return output
+// Process Simulates the radiation of sound through the walls of the throat.
+// Note that this form of the filter uses addition instead of subtraction for the econd term, since tb1 has reversed sign.
+func (thr *Throat) Process(input float32) float32 {
+	output := (thr.ta0 * input) + (thr.tb1 * thr.Y)
+	thr.Y = output
+	return output * thr.Gain
 }
