@@ -64,15 +64,6 @@ const Bottom = 1
 /////////////////////////////////////////////////////
 //              VocalTractConfig
 
-type WaveForm int32
-
-const (
-  Pulse = iota
-  Sine
-)
-
-//go:generate stringer -type=WaveForm
-
 type VocalTractConfig struct {
   Temp         float32
   Loss         float32
