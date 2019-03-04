@@ -23,19 +23,19 @@
 // This file was copied from Gnuspeech and modified by Marcelo Y. Matuda.
 
 // 2019-02
-// This is a port of the Gnuspeech port to C++ by Marcelo Y. Matuda
+// This is a port to golang of the C++ Gnuspeech port by Marcelo Y. Matuda
 
 package trm
 
 type RadiationFilter struct {
-	A20        float32
-	A21        float32
-	B21        float32
-	RadiationX float32
-	RadiationY float32
+	A20        float64
+	A21        float64
+	B21        float64
+	RadiationX float64
+	RadiationY float64
 }
 
-func (rf *RadiationFilter) Init(apertureCoef float32) {
+func (rf *RadiationFilter) Init(apertureCoef float64) {
 	rf.RadiationX = 0.0
 	rf.RadiationY = 0.0
 	rf.A20 = apertureCoef
@@ -48,7 +48,7 @@ func (rf *RadiationFilter) Reset() {
 	rf.RadiationY = 0.0
 }
 
-func (rf *RadiationFilter) Filter(input float32) float32 {
+func (rf *RadiationFilter) Filter(input float64) float64 {
 	output := (rf.A20 * input) + (rf.A21 * rf.RadiationX) - (rf.B21 * rf.RadiationY)
 	rf.RadiationX = input
 	rf.RadiationY = output

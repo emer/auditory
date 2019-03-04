@@ -23,18 +23,18 @@
 // This file was copied from Gnuspeech and modified by Marcelo Y. Matuda.
 
 // 2019-02
-// This is a port of the Gnuspeech port to C++ by Marcelo Y. Matuda
+// This is a port to golang of the C++ Gnuspeech port by Marcelo Y. Matuda
 
 package trm
 
 type NoiseFilter struct {
-	NoiseX float32
+	NoiseX float64
 }
 
 func (nf *NoiseFilter) Reset() {
 	nf.NoiseX = 0.0
 }
 
-func (nf *NoiseFilter) Filter(input float32) float32 {
+func (nf *NoiseFilter) Filter(input float64) float64 {
 	return input + nf.NoiseX
 }

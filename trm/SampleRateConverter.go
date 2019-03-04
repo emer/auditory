@@ -23,19 +23,19 @@
 // This file was copied from Gnuspeech and modified by Marcelo Y. Matuda.
 
 // 2019-02
-// This is a port of the Gnuspeech port to C++ by Marcelo Y. Matuda
+// This is a port to golang of the C++ Gnuspeech port by Marcelo Y. Matuda
 
 package trm
 
 import "math"
 
 // kaiser window params
-const Beta = float32(5.658)
+const Beta = float64(5.658)
 const IZeroEpsilon = 1E-21
 
 // Sample rate conversion constants
 const ZeroCrossings = 13              // SRC CUTOFF FRQ
-const LpCutoff = float32(11.0 / 13.0) // 0.846 OF NYQUIST
+const LpCutoff = float64(11.0 / 13.0) // 0.846 OF NYQUIST
 const FilterLength = ZeroCrossings * LRange
 
 //const N_BITS                    16
@@ -54,7 +54,7 @@ const FractionMask uint32 = 0x0000FFFF
 const BufferSize = 1024 // ring buffer size
 
 type SampleRateConverter struct {
-	SampleRateRatio       float32
+	SampleRateRatio       float64
 	FillPtr               uint32
 	EmptyPtr              uint32
 	PadSize               uint32
@@ -67,17 +67,17 @@ type SampleRateConverter struct {
 	MaximumSampleValue    float64
 	NumberSamples         int64
 
-	H      [FilterLength]float32
-	DeltaH [FilterLength]float32
-	Buffer [BufferSize]float32
+	H      [FilterLength]float64
+	DeltaH [FilterLength]float64
+	Buffer [BufferSize]float64
 	// ToDo - is this correct?
-	OutputData []float32
+	OutputData []float64
 	//std::vector<float>& outputData_;
 }
 
-func (src *SampleRateConverter) Init(sampleRate int, outputRate int, outputData *[]float32) {
+func (src *SampleRateConverter) Init(sampleRate int, outputRate int, outputData *[]float64) {
 	src.OutputData = append(src.OutputData, *outputData...)
-	src.InitConversion(sampleRate, float32(outputRate))
+	src.InitConversion(sampleRate, float64(outputRate))
 }
 
 // SampleRateConverter resets various values of the converter
@@ -87,15 +87,14 @@ func (src *SampleRateConverter) Reset() {
 	src.FillCounter = 0
 	src.MaximumSampleValue = 0.0
 	src.NumberSamples = 0
-
 	src.InitBuffer()
 }
 
 // InitConversion initializes all the sample rate conversion functions
-func (src *SampleRateConverter) InitConversion(sampleRate int, outputRate float32) {
+func (src *SampleRateConverter) InitConversion(sampleRate int, outputRate float64) {
 	src.InitFilter() // initialize filter impulse response
 
-	src.SampleRateRatio = outputRate / float32(sampleRate)
+	src.SampleRateRatio = outputRate / float64(sampleRate)
 
 	src.TimeRegisterIncrement = uint(math.Round(math.Pow(2.0, float64(FractionBits)) / float64(src.SampleRateRatio)))
 
@@ -117,15 +116,15 @@ func (src *SampleRateConverter) InitConversion(sampleRate int, outputRate float3
 }
 
 // IZero Returns the value for the modified Bessel function of the first kind, order 0, as a float
-func (src *SampleRateConverter) IZero(x float32) float32 {
-	var sum float32 = 1.0
-	var u float32 = 1.0
-	var halfx float32 = x / 2.0
+func (src *SampleRateConverter) IZero(x float64) float64 {
+	var sum float64 = 1.0
+	var u float64 = 1.0
+	var halfx float64 = x / 2.0
 
 	n := 1
 
 	for {
-		temp := halfx / float32(n)
+		temp := halfx / float64(n)
 		n += 1
 		temp *= temp
 		u *= temp
@@ -150,19 +149,19 @@ func (src *SampleRateConverter) InitBuffer() {
 // InitFilter Initializes filter impulse response and impulse delta values
 func (src *SampleRateConverter) InitFilter() {
 	src.H[0] = LpCutoff
-	x := math.Pi / float32(LRange)
+	x := math.Pi / float64(LRange)
 
 	// initialize the filter impulse response
 	for i := 1; i < FilterLength; i++ {
-		y := float32(i) * x
-		src.H[i] = float32(math.Sin(float64(y)*float64(LpCutoff))) / y
+		y := float64(i) * x
+		src.H[i] = math.Sin(float64(y)*float64(LpCutoff)) / y
 	}
 
 	// apply a kaiser window to the impulse response
 	iBeta := 1.0 / src.IZero(Beta)
 	for i := 0; i < FilterLength; i++ {
 		temp := float64(i / FilterLength)
-		src.H[i] = float32(src.IZero(float32(math.Sqrt(float64(1.0)-(temp*temp))))) * iBeta
+		src.H[i] = src.IZero(math.Sqrt(float64(1.0)-(temp*temp))) * iBeta
 	}
 
 	for i := 0; i < FilterLimit; i++ {
@@ -173,7 +172,7 @@ func (src *SampleRateConverter) InitFilter() {
 
 // DataFill fills the ring buffer with a single sample, increments the counters and pointers,
 // and empties the buffer when full
-func (src *SampleRateConverter) DataFill(data float32) {
+func (src *SampleRateConverter) DataFill(data float64) {
 	src.Buffer[src.FillPtr] = data
 	SrIncrement(&src.FillPtr, BufferSize)
 	src.FillCounter += 1
@@ -197,8 +196,8 @@ func (src *SampleRateConverter) DataEmpty() {
 	// upsample loop (slightly more efficient than downsampling
 	if src.SampleRateRatio >= 1.0 {
 		for src.EmptyPtr < endPtr {
-			output := float32(0.0)
-			interpolation := float32(MValue(src.TimeRegister)) / float32(MRange)
+			output := float64(0.0)
+			interpolation := float64(MValue(src.TimeRegister)) / float64(MRange)
 
 			// compute the left side of the filter convolution
 			index := src.EmptyPtr
@@ -209,7 +208,7 @@ func (src *SampleRateConverter) DataEmpty() {
 
 			// adjust values for right side calculation
 			src.TimeRegister ^= src.TimeRegister // inverse of each bit
-			interpolation = float32(MValue(src.TimeRegister)) / float32(MRange)
+			interpolation = float64(MValue(src.TimeRegister)) / float64(MRange)
 
 			// compute the right side of the filter convolution
 			index = src.EmptyPtr

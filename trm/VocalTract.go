@@ -36,13 +36,13 @@
 ******************************************************************************/
 
 // 2019-02
-// This is a port of the Gnuspeech port to C++ by Marcelo Y. Matuda
+// This is a port to golang of the C++ Gnuspeech port by Marcelo Y. Matuda
 
 package trm
 
 import (
-  "github.com/emer/emergent/etensor"
-  "github.com/emer/emergent/dtable"
+	"github.com/emer/emergent/dtable"
+	"github.com/emer/emergent/etensor"
 )
 
 /*  COMPILE SO THAT INTERPOLATION NOT DONE FOR SOME CONTROL RATE PARAMETERS  */
@@ -57,7 +57,7 @@ const PitchBase = 220.0
 const PitchOffset = 3
 const VolMax = 60
 const VtScale = 0.125
-const OutputScale= 0.95
+const OutputScale = 0.95
 const Top = 0
 const Bottom = 1
 
@@ -65,35 +65,35 @@ const Bottom = 1
 //              VocalTractConfig
 
 type VocalTractConfig struct {
-  Temp         float32
-  Loss         float32
-  MouthCoef    float32
-  NoseCoef     float32
-  ThroatCutoff float32
-  ThroatVol    float32
-  VtlOff       float32
-  WaveForm     WaveForm
-  NoiseMod     bool
-  MixOff       float32
+	Temp         float64
+	Loss         float64
+	MouthCoef    float64
+	NoseCoef     float64
+	ThroatCutoff float64
+	ThroatVol    float64
+	VtlOff       float64
+	WaveForm     WaveForm
+	NoiseMod     bool
+	MixOff       float64
 }
 
 // Init calls Defaults to set the initial values
 func (vtc *VocalTractConfig) Init() {
-  vtc.Defaults()
+	vtc.Defaults()
 }
 
 // Defaults sets the default values for the vocal tract
 func (vtc *VocalTractConfig) Defaults() {
-  vtc.Temp = 32.0
-  vtc.Loss = 0.8
-  vtc.MouthCoef= 5000.0
-  vtc.NoseCoef = 5000.0
-  vtc.ThroatCutoff = 1500.0
-  vtc.ThroatVol = 6.0
-  vtc.VtlOff = 0.0
-  vtc.WaveForm = Pulse
-  vtc.NoiseMod = true
-  vtc.MixOff = 48.0
+	vtc.Temp = 32.0
+	vtc.Loss = 0.8
+	vtc.MouthCoef = 5000.0
+	vtc.NoseCoef = 5000.0
+	vtc.ThroatCutoff = 1500.0
+	vtc.ThroatVol = 6.0
+	vtc.VtlOff = 0.0
+	vtc.WaveForm = Pulse
+	vtc.NoiseMod = true
+	vtc.MixOff = 48.0
 }
 
 /////////////////////////////////////////////////////
@@ -102,112 +102,112 @@ func (vtc *VocalTractConfig) Defaults() {
 type Voices int32
 
 const (
-  Male = iota
-  Female
-  ChildLg
-  ChildSm
-  Baby
+	Male = iota
+	Female
+	ChildLg
+	ChildSm
+	Baby
 )
 
 //go:generate stringer -type=Voices
 
 // Init sets the voice to female
 func (vp *VoiceParams) Init() {
-  vp.Female();
+	vp.Female()
 }
 
 // VoiceParams are the parameters that control the quality of the voice
 type VoiceParams struct {
-  TractLength      float32
-  GlotPulseFallMin float32
-  GlotPulseFallMax float32
-  GlotPitchRef     float32
-  Breathiness      float32
-  GlotPulseRise    float32
-  ApertureRadius   float32
-  NoseRadius1      float32
-  NoseRadius2      float32
-  NoseRadius3      float32
-  NoseRadius4      float32
-  NoseRadius5      float32
-  Radius1          float32
-  NoseRadiusCoef   float32
-  RadiusCoef       float32
+	TractLength      float64
+	GlotPulseFallMin float64
+	GlotPulseFallMax float64
+	GlotPitchRef     float64
+	Breathiness      float64
+	GlotPulseRise    float64
+	ApertureRadius   float64
+	NoseRadius1      float64
+	NoseRadius2      float64
+	NoseRadius3      float64
+	NoseRadius4      float64
+	NoseRadius5      float64
+	Radius1          float64
+	NoseRadiusCoef   float64
+	RadiusCoef       float64
 }
 
 // DefaultParams are the defaults, some of which don't change
 func (vp *VoiceParams) DefaultParams() {
-  vp.GlotPulseRise = 40.0
-  vp.ApertureRadius = 3.05
-  vp.NoseRadius1 = 1.35
-  vp.NoseRadius2 = 1.96
-  vp.NoseRadius3 = 1.91
-  vp.NoseRadius4 = 1.3
-  vp.NoseRadius5 = 0.73
-  vp.Radius1 = 0.8
-  vp.NoseRadiusCoef = 1.0
-  vp.RadiusCoef = 1.0
+	vp.GlotPulseRise = 40.0
+	vp.ApertureRadius = 3.05
+	vp.NoseRadius1 = 1.35
+	vp.NoseRadius2 = 1.96
+	vp.NoseRadius3 = 1.91
+	vp.NoseRadius4 = 1.3
+	vp.NoseRadius5 = 0.73
+	vp.Radius1 = 0.8
+	vp.NoseRadiusCoef = 1.0
+	vp.RadiusCoef = 1.0
 
 }
 
 func (vp *VoiceParams) Male() {
-  vp.DefaultParams();
-  vp.TractLength = 17.5
-  vp.GlotPulseFallMin = 24.0
-  vp.GlotPulseFallMax = 24.0
-  vp.GlotPitchRef = -12.0
-  vp.Breathiness = 0.5
+	vp.DefaultParams()
+	vp.TractLength = 17.5
+	vp.GlotPulseFallMin = 24.0
+	vp.GlotPulseFallMax = 24.0
+	vp.GlotPitchRef = -12.0
+	vp.Breathiness = 0.5
 }
 
 func (vp *VoiceParams) Female() {
-  vp.DefaultParams();
-  vp.TractLength = 15.0
-  vp.GlotPulseFallMin = 32.0
-  vp.GlotPulseFallMax = 32.0
-  vp.GlotPitchRef = 0.0
-  vp.Breathiness = 1.5
+	vp.DefaultParams()
+	vp.TractLength = 15.0
+	vp.GlotPulseFallMin = 32.0
+	vp.GlotPulseFallMax = 32.0
+	vp.GlotPitchRef = 0.0
+	vp.Breathiness = 1.5
 }
 
 func (vp *VoiceParams) ChildLg() {
-  vp.DefaultParams();
-  vp.TractLength = 12.5
-  vp.GlotPulseFallMin = 24.0
-  vp.GlotPulseFallMax = 24.0
-  vp.GlotPitchRef = 2.5
-  vp.Breathiness = 1.5
+	vp.DefaultParams()
+	vp.TractLength = 12.5
+	vp.GlotPulseFallMin = 24.0
+	vp.GlotPulseFallMax = 24.0
+	vp.GlotPitchRef = 2.5
+	vp.Breathiness = 1.5
 }
 
 func (vp *VoiceParams) ChildSm() {
-  vp.DefaultParams();
-  vp.TractLength = 10.0
-  vp.GlotPulseFallMin = 24.0
-  vp.GlotPulseFallMax = 24.0
-  vp.GlotPitchRef = 5.0
-  vp.Breathiness = 1.5
+	vp.DefaultParams()
+	vp.TractLength = 10.0
+	vp.GlotPulseFallMin = 24.0
+	vp.GlotPulseFallMax = 24.0
+	vp.GlotPitchRef = 5.0
+	vp.Breathiness = 1.5
 }
 
 func (vp *VoiceParams) Baby() {
-  vp.DefaultParams();
-  vp.TractLength = 7.5
-  vp.GlotPulseFallMin = 24.0
-  vp.GlotPulseFallMax = 24.0
-  vp.GlotPitchRef = 7.5
-  vp.Breathiness = 1.5
+	vp.DefaultParams()
+	vp.TractLength = 7.5
+	vp.GlotPulseFallMin = 24.0
+	vp.GlotPulseFallMax = 24.0
+	vp.GlotPitchRef = 7.5
+	vp.Breathiness = 1.5
 }
 
 func (vp *VoiceParams) SetDefault(voice Voices) {
-  switch voice {
-  case Male:
-    vp.Male();
-  case Female:
-    vp.Female()
-  case ChildLg:
-    vp.ChildLg()
-  case ChildSm:
-    vp.ChildSm()
-  case Baby:
-    vp.Baby()
-  }
+	switch voice {
+	case Male:
+		vp.Male()
+	case Female:
+		vp.Female()
+	case ChildLg:
+		vp.ChildLg()
+	case ChildSm:
+		vp.ChildSm()
+	case Baby:
+		vp.Baby()
+	}
 }
 
 /////////////////////////////////////////////////////
@@ -216,60 +216,60 @@ func (vp *VoiceParams) SetDefault(voice Voices) {
 type CtrlParamIdxs int32
 
 const (
-  GlotPitchIdx = iota
-  GlotVolIdx
-  AspVolIdx
-  FricVolIdx
-  FricPosIdx
-  FricCfIdx
-  FricBwIdx
-  Radius2Idx
-  Radius3Idx
-  Radius4Idx
-  Radius5Idx
-  Radius6Idx
-  Radius7Idx
-  Radius8Idx
-  VelumIdx
-  NCtrlParams
+	GlotPitchIdx = iota
+	GlotVolIdx
+	AspVolIdx
+	FricVolIdx
+	FricPosIdx
+	FricCfIdx
+	FricBwIdx
+	Radius2Idx
+	Radius3Idx
+	Radius4Idx
+	Radius5Idx
+	Radius6Idx
+	Radius7Idx
+	Radius8Idx
+	VelumIdx
+	NCtrlParams
 )
 
 //go:generate stringer -type=CtrlParamIdxs
 
 type VocalTractCtrl struct {
-  GlotPitch float32
-  GlotVol   float32
-  AspVol    float32
-  FricVol   float32
-  FricPos   float32
-  FricCf    float32
-  FricBw    float32
-  Radius2   float32
-  Radius3   float32
-  Radius4   float32
-  Radius5   float32
-  Radius6   float32
-  Radius7   float32
-  Radius8   float32
-  Velum     float32
+	GlotPitch float64
+	GlotVol   float64
+	AspVol    float64
+	FricVol   float64
+	FricPos   float64
+	FricCf    float64
+	FricBw    float64
+	Radius2   float64
+	Radius3   float64
+	Radius4   float64
+	Radius5   float64
+	Radius6   float64
+	Radius7   float64
+	Radius8   float64
+	Velum     float64
 }
 
 func (vtc *VocalTractCtrl) Init() {
-  vtc.GlotPitch = 0.0
-  vtc.GlotVol = 0.0
-  vtc.AspVol = 0.0
-  vtc.FricVol = 0.0
-  vtc.FricPos = 4.0
-  vtc.FricCf = 2500.0
-  vtc.FricBw = 2000.0
-  vtc.Radius2 = 1.0
-  vtc.Radius3 = 1.0
-  vtc.Radius4 = 1.0
-  vtc.Radius5 = 1.0
-  vtc.Radius6 = 1.0
-  vtc.Radius7 = 1.0
-  vtc.Radius8 = 1.0
-  vtc.Velum = 0.1
+	vtc.GlotPitch = 0.0
+	vtc.GlotVol = 0.0
+	vtc.AspVol = 0.0
+	vtc.FricVol = 0.0
+	vtc.FricPos = 4.0
+	vtc.FricCf = 2500.0
+	vtc.FricBw = 2000.0
+	vtc.Radius2 = 1.0
+	vtc.Radius3 = 1.0
+	vtc.Radius4 = 1.0
+	vtc.Radius5 = 1.0
+	vtc.Radius6 = 1.0
+	vtc.Radius7 = 1.0
+	vtc.Radius8 = 1.0
+	vtc.Velum = 0.1
 }
 
 //void VocalTractCtrl::ComputeDeltas(const VocalTractCtrl& cur, const VocalTractCtrl& prv,
@@ -371,8 +371,6 @@ func (vtc *VocalTractCtrl) Init() {
 
 func (vt *VocalTractCtrl) SetFromDataTable(table dtable.Table, col etensor.Tensor, row int, normalized bool) {
 
-
-
 }
 
 //void VocalTractCtrl::SetFromDataTable(const DataTable& table, const Variant& col, int row,
@@ -386,7 +384,6 @@ func (vt *VocalTractCtrl) SetFromDataTable(table dtable.Table, col etensor.Tenso
 //}
 //
 
-
 /////////////////////////////////////////////////////
 //              VocalTract
 
@@ -394,15 +391,15 @@ func (vt *VocalTractCtrl) SetFromDataTable(table dtable.Table, col etensor.Tenso
 type OroPharynxRegions int32
 
 const (
-  OroPharynxReg1 = iota // S1
-  OroPharynxReg2  // S2
-  OroPharynxReg3  // S3
-  OroPharynxReg4  // S4 & S5
-  OroPharynxReg5  // S6 & S7
-  OroPharynxReg6  // S8
-  OroPharynxReg7  // S9
-  OroPharynxReg8  // S10
-  OroPharynxRegCount
+	OroPharynxReg1 = iota // S1
+	OroPharynxReg2        // S2
+	OroPharynxReg3        // S3
+	OroPharynxReg4        // S4 & S5
+	OroPharynxReg5        // S6 & S7
+	OroPharynxReg6        // S8
+	OroPharynxReg7        // S9
+	OroPharynxReg8        // S10
+	OroPharynxRegCount
 )
 
 //go:generate stringer -type=OroPharynxRegions
@@ -411,16 +408,16 @@ const (
 type NasalTractSections int32
 
 const (
-  NasalTractSect1 = iota
-  NasalTractSect2
-  NasalTractSect3
-  NasalTractSect4
-  NasalTractSect5
-  NasalTractSect6
-  NasalTractSect7
-  NasalTractSect8
-  NasalTractSectCount
-  Velum = NasalTractSect1
+	NasalTractSect1 = iota
+	NasalTractSect2
+	NasalTractSect3
+	NasalTractSect4
+	NasalTractSect5
+	NasalTractSect6
+	NasalTractSect7
+	NasalTractSect8
+	NasalTractSectCount
+	Velum = NasalTractSect1
 )
 
 //go:generate stringer -type=NasalTractSections
@@ -429,15 +426,15 @@ const (
 type OroPharynxCoefs int32
 
 const (
-  OroPharynxCoef1 = OroPharynxReg1 // R1-R2 (S1-S2)
-  OroPharynxCoef2  // R2-R3 (S2-S3)
-  OroPharynxCoef3  // R3-R4 (S3-S4)
-  OroPharynxCoef4  // R4-R5 (S5-S6)
-  OroPharynxCoef5  // R5-R6 (S7-S8)
-  OroPharynxCoef6  // R6-R7 (S8-S9)
-  OroPharynxCoef7  // R7-R8 (S9-S10)
-  OroPharynxCoef8  // R8-Air (S10-Air)
-  OroPharynxCoefCount = OroPharynxRegCount
+	OroPharynxCoef1     = OroPharynxReg1 // R1-R2 (S1-S2)
+	OroPharynxCoef2                      // R2-R3 (S2-S3)
+	OroPharynxCoef3                      // R3-R4 (S3-S4)
+	OroPharynxCoef4                      // R4-R5 (S5-S6)
+	OroPharynxCoef5                      // R5-R6 (S7-S8)
+	OroPharynxCoef6                      // R6-R7 (S8-S9)
+	OroPharynxCoef7                      // R7-R8 (S9-S10)
+	OroPharynxCoef8                      // R8-Air (S10-Air)
+	OroPharynxCoefCount = OroPharynxRegCount
 )
 
 //go:generate stringer -type=OroPharynxCoefs
@@ -446,17 +443,17 @@ const (
 type OroPharynxSects int32
 
 const (
-  OroPharynxSect1 = iota // OroPharynxReg1
-  OroPharynxSect2  // OroPharynxReg2
-  OroPharynxSect3  // OroPharynxReg3
-  OroPharynxSect4  // OroPharynxReg4
-  OroPharynxSect5  // OroPharynxReg4
-  OroPharynxSect6  // OroPharynxReg5
-  OroPharynxSect7  // OroPharynxReg5
-  OroPharynxSect8  // OroPharynxReg6
-  OroPharynxSect9  // OroPharynxReg7
-  OroPharynxSect10  // OroPharynxReg8
-  OroPharynxSectCount = OroPharynxRegCount
+	OroPharynxSect1     = iota // OroPharynxReg1
+	OroPharynxSect2            // OroPharynxReg2
+	OroPharynxSect3            // OroPharynxReg3
+	OroPharynxSect4            // OroPharynxReg4
+	OroPharynxSect5            // OroPharynxReg4
+	OroPharynxSect6            // OroPharynxReg5
+	OroPharynxSect7            // OroPharynxReg5
+	OroPharynxSect8            // OroPharynxReg6
+	OroPharynxSect9            // OroPharynxReg7
+	OroPharynxSect10           // OroPharynxReg8
+	OroPharynxSectCount = OroPharynxRegCount
 )
 
 //go:generate stringer -type=OroPharynxSects
@@ -465,13 +462,13 @@ const (
 type NasalTractCoefs int32
 
 const (
-  NasalTractCoef1 = NasalTractSect1 // N1-N2
-  NasalTractCoef2 = NasalTractSect2 // N2-N3
-  NasalTractCoef3 = NasalTractSect3 // N3-N4
-  NasalTractCoef4 = NasalTractSect4 // N4-N5
-  NasalTractCoef5 = NasalTractSect5 // N5-N6
-  NasalTractCoef6 = NasalTractSect6 // N6-Air
-  NasalTractCoefCount = NasalTractSectCount
+	NasalTractCoef1     = NasalTractSect1 // N1-N2
+	NasalTractCoef2     = NasalTractSect2 // N2-N3
+	NasalTractCoef3     = NasalTractSect3 // N3-N4
+	NasalTractCoef4     = NasalTractSect4 // N4-N5
+	NasalTractCoef5     = NasalTractSect5 // N5-N6
+	NasalTractCoef6     = NasalTractSect6 // N6-Air
+	NasalTractCoefCount = NasalTractSectCount
 )
 
 //go:generate stringer -type=NasalTractCoefs
@@ -480,10 +477,10 @@ const (
 type ThreeWayJunction int32
 
 const (
- ThreeWayLeft = iota
- ThreeWayRight
- ThreeWayUpper
- ThreeWayCount
+	ThreeWayLeft = iota
+	ThreeWayRight
+	ThreeWayUpper
+	ThreeWayCount
 )
 
 //go:generate stringer -type=ThreeWayJunction
@@ -492,39 +489,39 @@ const (
 type FricationInjCoefs int32
 
 const (
-  FricationInjCoef1 = iota // S3
-  FricationInjCoef2        // S4
-  FricationInjCoef3        // S5
-  FricationInjCoef4        // S6
-  FricationInjCoef5        // S7
-  FricationInjCoef6        // S8
-  FricationInjCoef7        // S9
-  FricationInjCoef8        // S10
-  FricationInjCoefCount
+	FricationInjCoef1 = iota // S3
+	FricationInjCoef2        // S4
+	FricationInjCoef3        // S5
+	FricationInjCoef4        // S6
+	FricationInjCoef5        // S7
+	FricationInjCoef6        // S8
+	FricationInjCoef7        // S9
+	FricationInjCoef8        // S10
+	FricationInjCoefCount
 )
 
 //go:generate stringer -type=FricationInjCoefs
 
 type VocalTract struct {
-  Volume        float32
-  Balance       float32
-  SynthDuration float32
-  Config        VocalTractConfig
-  Voice         VoiceParams
-  CurControl    VocalTractCtrl
-  PrevControl   VocalTractCtrl
-  DeltaControl  VocalTractCtrl
-  PhoneTable    dtable.Table
-  DictTable     dtable.Table
+	Volume        float64
+	Balance       float64
+	SynthDuration float64
+	Config        VocalTractConfig
+	Voice         VoiceParams
+	CurControl    VocalTractCtrl
+	PrevControl   VocalTractCtrl
+	DeltaControl  VocalTractCtrl
+	PhoneTable    dtable.Table
+	DictTable     dtable.Table
 }
 
 func (vt *VocalTract) ControlFromFloats() {
 
 }
 
-void VocalTract::CtrlFromFloats(const float* vals, bool normalized) {
-cur_ctrl.SetFromFloats(vals, normalized);
-}
+//void VocalTract::CtrlFromFloats(const float* vals, bool normalized) {
+//cur_ctrl.SetFromFloats(vals, normalized);
+//}
 
 //void VocalTract::CtrlFromMatrix(const float_Matrix& matrix, bool normalized) {
 // cur_ctrl.SetFromMatrix(matrix, normalized);
@@ -532,7 +529,7 @@ cur_ctrl.SetFromFloats(vals, normalized);
 //
 
 func (vt *VocalTract) ControlFromDataTable(table dtable.Table, col etensor.Tensor, row int, normalized bool) {
-  vt.CurControl.SetFromDataTable(table, col, row, normalized)
+	vt.CurControl.SetFromDataTable(table, col, row, normalized)
 }
 
 //void VocalTract::SynthFromDataTable(const DataTable& table, const Variant& col, int row,

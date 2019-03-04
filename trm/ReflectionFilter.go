@@ -29,26 +29,27 @@ package trm
 
 import "math"
 
-const Factor = 377.0
-const InitialSeed = 0.7892347
-
-type NoiseSource struct {
-	seed float64
+type ReflectionFilter struct {
+	A10         float64
+	B11         float64
+	ReflectionY float64
 }
 
-func (ns *NoiseSource) Init() {
-	ns.Reset()
+// Init initializes all of the filters struct fields
+func (rf *ReflectionFilter) Init(apertureCoef float64) {
+	rf.ReflectionY = 0.0
+	rf.B11 = -apertureCoef
+	rf.A10 = 1.0 - math.Abs(rf.B11)
 }
 
-func (ns *NoiseSource) Reset() {
-	ns.seed = InitialSeed
+// Reset set ReflectionY to 0
+func (rf *ReflectionFilter) Reset() {
+	rf.ReflectionY = 0.0
 }
 
-func (ns *NoiseSource) GetSample() float64 {
-	product := ns.seed * Factor
-	// C++ code was "seed_ = product - static_cast<int>(product);"
-	var product64 float64
-	product64 = float64(product)
-	ns.seed = product64 - math.Trunc(product64+.5)
-	return ns.seed - 0.5
+// Filter calculates the output based on input on current values
+func (rf *ReflectionFilter) Filter(input float64) float64 {
+	output := rf.A10*float64(input) - rf.B11*rf.ReflectionY
+	rf.ReflectionY = output
+	return output
 }

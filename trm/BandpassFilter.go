@@ -23,7 +23,7 @@
 // This file was copied from Gnuspeech and modified by Marcelo Y. Matuda.
 
 // 2019-02
-// This is a port of the Gnuspeech port to C++ by Marcelo Y. Matuda
+// This is a port to golang of the C++ Gnuspeech port by Marcelo Y. Matuda
 
 package trm
 
