@@ -27,19 +27,22 @@
 
 package trm
 
-import "math"
+import (
+	"github.com/chewxy/math32"
+	"math"
+)
 
 // compile with oversampling or plain oscillator
-const OversamplingOscillator = 1
+// const OversamplingOscillator = 1
 
 // glottal source oscillator table variables
 const TableLength = 512
 const TableModulus = TableLength - 1
 
 //  oversampling fir filter characteristics
-const FirBeta = .2
-const FirGamma = .1
-const FirCutoff = .00000001
+//const FirBeta = .2
+//const FirGamma = .1
+//const FirCutoff = .00000001
 
 type WaveForm int32
 
@@ -53,27 +56,27 @@ const (
 type WavetableGlottalSource struct {
 	TableDiv1       int
 	TableDiv2       int
-	TnLength        float64
-	TnDelta         float64
-	BasicIncrement  float64
-	CurrentPosition float64
-	Wavetable       [TableLength]float64
+	TnLength        float32
+	TnDelta         float32
+	BasicIncrement  float32
+	CurrentPosition float32
+	Wavetable       [TableLength]float32
 	FirFilter       *FirFilter
 }
 
 // Init calculates the initial glottal pulse and stores it in the wavetable, for use in the oscillator.
-func (wgs *WavetableGlottalSource) Init(wType WaveForm, sampleRate, tp, tnMin, tnMax float64) {
+func (wgs *WavetableGlottalSource) Init(wType WaveForm, sampleRate, tp, tnMin, tnMax float32) {
 	wgs.TableDiv1 = int(math.Round(float64(TableLength * (tp / 100.0))))
 	wgs.TableDiv2 = int(math.Round(float64(TableLength * ((tp + tnMax) / 100.0))))
-	wgs.TnLength = float64(wgs.TableDiv2 - wgs.TableDiv1)
-	wgs.TnDelta = math.Round(float64(TableLength * (tnMax - tnMin) / 100.0))
-	wgs.BasicIncrement = float64(TableLength) / sampleRate
+	wgs.TnLength = float32(wgs.TableDiv2 - wgs.TableDiv1)
+	wgs.TnDelta = float32(math.Round(float64(TableLength * (tnMax - tnMin) / 100.0)))
+	wgs.BasicIncrement = float32(TableLength) / sampleRate
 
 	// initialize the wavetable with either a glottal pulse or sine tone
 	if wType == Pulse {
 		// calculate rise portion of wave table
 		for i := 0; i < wgs.TableDiv1; i++ {
-			x := float64(i) / float64(wgs.TableDiv1)
+			x := float32(i) / float32(wgs.TableDiv1)
 			x2 := x * x
 			x3 := x2 * x
 			wgs.Wavetable[i] = (3.0 * x2) - (2.0 * x3)
@@ -82,7 +85,7 @@ func (wgs *WavetableGlottalSource) Init(wType WaveForm, sampleRate, tp, tnMin, t
 		// calculate fall portion of wave table
 		j := 0
 		for i := wgs.TableDiv1; i < wgs.TableDiv2; i++ {
-			x := float64(j) / wgs.TnLength
+			x := float32(j) / wgs.TnLength
 			wgs.Wavetable[i] = 1.0 - (x * x)
 			j++
 		}
@@ -94,7 +97,7 @@ func (wgs *WavetableGlottalSource) Init(wType WaveForm, sampleRate, tp, tnMin, t
 	} else {
 		// sine wave
 		for i := 0; i < TableLength; i++ {
-			wgs.Wavetable[i] = math.Sin((float64(i) / float64(TableLength) * 2.0 * math.Pi))
+			wgs.Wavetable[i] = math32.Sin((float32(i) / float32(TableLength) * 2.0 * math.Pi))
 		}
 	}
 }
@@ -111,16 +114,16 @@ func (wgs *WavetableGlottalSource) Reset() {
 }
 
 // Update rewrites the changeable part of the glottal pulse according to the amplitude
-func (wgs *WavetableGlottalSource) Update(amplitude float64) {
+func (wgs *WavetableGlottalSource) Update(amplitude float32) {
 	// calculate new closure point, based on amplitude
-	newDiv2 := float64(wgs.TableDiv2) - math.Round(float64(amplitude)*float64(wgs.TnDelta))
-	invNewTnLength := 1.0 / (newDiv2 - float64(wgs.TableDiv1))
+	newDiv2 := float32(wgs.TableDiv2) - float32(math.Round(float64(amplitude)*float64(wgs.TnDelta)))
+	invNewTnLength := 1.0 / (newDiv2 - float32(wgs.TableDiv1))
 
 	//  recalculate the falling portion of the glottal pulse
-	x := 0.0
+	x := float32(0.0)
 	end := int(newDiv2)
 	for i := wgs.TableDiv1; i < end; i++ {
-		wgs.Wavetable[i] = float64(1.0) - float64(x*x)
+		wgs.Wavetable[i] = float32(1.0) - float32(x*x)
 		x += invNewTnLength
 	}
 
@@ -132,7 +135,7 @@ func (wgs *WavetableGlottalSource) Update(amplitude float64) {
 }
 
 // IncrementTablePosition increments the position in the wavetable according to the desired frequency
-func (wgs *WavetableGlottalSource) IncrementTablePos(frequency float64) {
+func (wgs *WavetableGlottalSource) IncrementTablePos(frequency float32) {
 	wgs.CurrentPosition = Mod0(wgs.CurrentPosition + (frequency * wgs.BasicIncrement))
 }
 
@@ -176,23 +179,23 @@ func (wgs *WavetableGlottalSource) IncrementTablePos(frequency float64) {
 // #endif
 
 // Get sample from plain oscillator
-func (wgs *WavetableGlottalSource) GetSample(frequency float64) float64 {
+func (wgs *WavetableGlottalSource) GetSample(frequency float32) float32 {
 	// first increment the table position, depending on frequency
 	wgs.IncrementTablePos(frequency)
 
 	// Find surrounding integer table positions
 	lowerPosition := int(wgs.CurrentPosition)
-	upperPosition := int(Mod0(float64(lowerPosition + 1)))
+	upperPosition := int(Mod0(float32(lowerPosition + 1)))
 
 	// return interpolated table value
 	value := wgs.Wavetable[lowerPosition] +
-		((wgs.CurrentPosition - float64(lowerPosition)) * (wgs.Wavetable[upperPosition] - wgs.Wavetable[lowerPosition]))
+		((wgs.CurrentPosition - float32(lowerPosition)) * (wgs.Wavetable[upperPosition] - wgs.Wavetable[lowerPosition]))
 
 	return value
 }
 
 // Mod0 eturns the modulus of 'value', keeping it in the range 0 -> TableModulus
-func Mod0(value float64) float64 {
+func Mod0(value float32) float32 {
 	if value > TableModulus {
 		value -= TableLength
 	}

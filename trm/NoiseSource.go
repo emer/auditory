@@ -27,13 +27,15 @@
 
 package trm
 
-import "math"
+import (
+	"github.com/chewxy/math32"
+)
 
 const Factor = 377.0
 const InitialSeed = 0.7892347
 
 type NoiseSource struct {
-	seed float64
+	seed float32
 }
 
 func (ns *NoiseSource) Init() {
@@ -44,11 +46,9 @@ func (ns *NoiseSource) Reset() {
 	ns.seed = InitialSeed
 }
 
-func (ns *NoiseSource) GetSample() float64 {
+func (ns *NoiseSource) GetSample() float32 {
 	product := ns.seed * Factor
 	// C++ code was "seed_ = product - static_cast<int>(product);"
-	var product64 float64
-	product64 = float64(product)
-	ns.seed = product64 - math.Trunc(product64+.5)
+	ns.seed = product - math32.Trunc(product+.5)
 	return ns.seed - 0.5
 }

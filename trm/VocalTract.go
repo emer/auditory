@@ -41,6 +41,7 @@
 package trm
 
 import (
+	"github.com/chewxy/math32"
 	"github.com/emer/emergent/dtable"
 	"github.com/emer/emergent/etensor"
 )
@@ -65,16 +66,16 @@ const Bottom = 1
 //              VocalTractConfig
 
 type VocalTractConfig struct {
-	Temp         float64
-	Loss         float64
-	MouthCoef    float64
-	NoseCoef     float64
-	ThroatCutoff float64
-	ThroatVol    float64
-	VtlOff       float64
+	Temp         float32
+	Loss         float32
+	MouthCoef    float32
+	NoseCoef     float32
+	ThroatCutoff float32
+	ThroatVol    float32
+	VtlOff       float32
 	WaveForm     WaveForm
 	NoiseMod     bool
-	MixOff       float64
+	MixOff       float32
 }
 
 // Init calls Defaults to set the initial values
@@ -118,21 +119,21 @@ func (vp *VoiceParams) Init() {
 
 // VoiceParams are the parameters that control the quality of the voice
 type VoiceParams struct {
-	TractLength      float64
-	GlotPulseFallMin float64
-	GlotPulseFallMax float64
-	GlotPitchRef     float64
-	Breathiness      float64
-	GlotPulseRise    float64
-	ApertureRadius   float64
-	NoseRadius1      float64
-	NoseRadius2      float64
-	NoseRadius3      float64
-	NoseRadius4      float64
-	NoseRadius5      float64
-	Radius1          float64
-	NoseRadiusCoef   float64
-	RadiusCoef       float64
+	TractLength      float32
+	GlotPulseFallMin float32
+	GlotPulseFallMax float32
+	GlotPitchRef     float32
+	Breathiness      float32
+	GlotPulseRise    float32
+	ApertureRadius   float32
+	NoseRadius1      float32
+	NoseRadius2      float32
+	NoseRadius3      float32
+	NoseRadius4      float32
+	NoseRadius5      float32
+	Radius1          float32
+	NoseRadiusCoef   float32
+	RadiusCoef       float32
 }
 
 // DefaultParams are the defaults, some of which don't change
@@ -237,21 +238,21 @@ const (
 //go:generate stringer -type=CtrlParamIdxs
 
 type VocalTractCtrl struct {
-	GlotPitch float64
-	GlotVol   float64
-	AspVol    float64
-	FricVol   float64
-	FricPos   float64
-	FricCf    float64
-	FricBw    float64
-	Radius2   float64
-	Radius3   float64
-	Radius4   float64
-	Radius5   float64
-	Radius6   float64
-	Radius7   float64
-	Radius8   float64
-	Velum     float64
+	GlotPitch float32
+	GlotVol   float32
+	AspVol    float32
+	FricVol   float32
+	FricPos   float32
+	FricCf    float32
+	FricBw    float32
+	Radius2   float32
+	Radius3   float32
+	Radius4   float32
+	Radius5   float32
+	Radius6   float32
+	Radius7   float32
+	Radius8   float32
+	Velum     float32
 }
 
 func (vtc *VocalTractCtrl) Init() {
@@ -414,8 +415,6 @@ const (
 	NasalTractSect4
 	NasalTractSect5
 	NasalTractSect6
-	NasalTractSect7
-	NasalTractSect8
 	NasalTractSectCount
 	Velum = NasalTractSect1
 )
@@ -503,19 +502,74 @@ const (
 //go:generate stringer -type=FricationInjCoefs
 
 type VocalTract struct {
-	Volume        float64
-	Balance       float64
-	SynthDuration float64
+	Volume        float32
+	Balance       float32
+	SynthDuration float32
 	Config        VocalTractConfig
 	Voice         VoiceParams
 	CurControl    VocalTractCtrl
 	PrevControl   VocalTractCtrl
 	DeltaControl  VocalTractCtrl
+	DeltaMax      VocalTractCtrl
 	PhoneTable    dtable.Table
 	DictTable     dtable.Table
+
+	// derived values
+	ControlRate      float32 // 1.0-1000.0 input tables/second (Hz)
+	ControlPeriod    int
+	SampleRate       int
+	ActualTubeLength float32 // actual length in cm
+
+	CurrentData VocalTractCtrl // current control data
+
+	// memory for tube and tube coefficients
+	Oropharynx      [OroPharynxSectCount][2][2]float32
+	OropharynxCoefs [OroPharynxCoefCount]float32
+	Nasal           [NasalTractSectCount][2][2]float32
+	NasalCoefs      [NasalTractCoefCount]float32
+	Alpha           [ThreeWayCount]float32
+	CurPtr          int
+	PrevPtr         int
+
+	// memory for frication taps
+	FricationTap [FricationInjCoefCount]float32
+
+	DampingFactor     float32 /*  calculated damping factor  */
+	CrossmixFactor    float32 /*  calculated crossmix factor  */
+	BreathinessFactor float32
+	PrevGlotAmplitude float32
+
+	OutputData []float32
+	//std::auto_ptr<SampleRateConverter> srConv_;
+	//std::auto_ptr<RadiationFilter> mouthRadiationFilter_;
+	//std::auto_ptr<ReflectionFilter> mouthReflectionFilter_;
+	//std::auto_ptr<RadiationFilter> nasalRadiationFilter_;
+	//std::auto_ptr<ReflectionFilter> nasalReflectionFilter_;
+	//std::auto_ptr<Throat> throat_;
+	//std::auto_ptr<WavetableGlottalSource> glottalSource_;
+	//std::auto_ptr<BandpassFilter> bandpassFilter_;
+	//std::auto_ptr<NoiseFilter> noiseFilter_;
+	//std::auto_ptr<NoiseSource> noiseSource_;
+
 }
 
-func (vt *VocalTract) ControlFromFloats() {
+func (vt *VocalTract) InitSynth() {
+	vt.SynthInitBuffer()
+	vt.Reset()
+	ctrlRate := 1.0 / (vt.SynthDuration / 1000.0)
+	vt.ControlRate = ctrlRate
+	vt.InitializeSynthesizer()
+	vt.PrevControl.SetFromParams(vt.CurControl) // no deltas if reset
+	vt.CurrentData.SetFromParams(vt.CurControl)
+	// ToDo:
+	//SigEmitUpdated();
+}
+
+func (vt *VocalTract) ControlFromFloats(vals []float32, normalized bool) {
+
+}
+
+func (vt *VocalTract) ControlFromMatrix(vals xxx, normalized bool) {
 
 }
 
@@ -576,79 +630,90 @@ func (vt *VocalTract) ControlFromDataTable(table dtable.Table, col etensor.Tenso
 // return true;
 //}
 //
-//bool VocalTract::SynthPhone(const String& phon, bool stress, bool double_stress,
-//                           bool syllable, bool reset) {
-// if(phone_table.rows == 0)
-//   LoadEnglishPhones();
-// String act = phon;
-// if(stress)
-//   act = act + "'";
-// int idx = phone_table.FindVal(act, "phone", 0, true);
-// if(idx < 0) return false;
-// float duration = phone_table.GetVal("duration", idx).toFloat();
-// float transition = phone_table.GetVal("transition", idx).toFloat();
-// float tot_time = (duration + transition) * 1.5f;
-// int n_reps = taMath_float::ceil(tot_time / synth_dur_msec);
-// n_reps = MAX(n_reps, 1);
-// CtrlFromDataTable(phone_table, "phone_data", idx, false);
-// // todo: syllable, double_stress, qsss other params??
-// // taMisc::Info("saying:", phon, "dur:", String(tot_time), "n_reps:", String(n_reps),
-// //              "start pos:", String(outputData_.size()));
-// if(reset)
-//   SynthReset();               // MUST reset *AFTER* setting the new ctrls!
-// for(int i=0; i<n_reps; i++) {
-//   Synthesize(false);
-// }
-// return true;
+
+// SynthPhone
+func (vt *VocalTract) SynthPhone(phon string, stress, doubleStress, syllable, reset bool) bool {
+	if vt.PhoneTable.rows == 0 {
+		vt.LoadEnglishPhones()
+	}
+	act := phon
+	if stress {
+		act = act + "'"
+	}
+	idx = vt.PhoneTable.FindVal(act, "phone", 0, true)
+	if idx < 0 {
+		return false
+	}
+	duration := vt.PhoneTable.GetVal("duration", idx).toFloat()
+	transition := vt.PhoneTable.GetVal("transition", idx).toFloat()
+	totalTime := (duration + transition) * 1.5
+	nReps := math32.Ceil(totalTime / vt.SynthDuration)
+	nReps = math32.Max(nReps, 1.0)
+	vt.ControlFromDataTable(vt.PhoneTable, "phone_data", idx, false)
+	// todo: syllable, double_stress, qsss other params??
+	// fmt.Println("saying:", phon, "dur:", String(tot_time), "n_reps:", String(n_reps),
+	//              "start pos:", String(outputData_.size()));
+	if reset {
+		vt.SynthReset()
+	}
+	for i := 0; i < int(nReps); i++ {
+		vt.Synthesize(false)
+	}
+	return true
+}
+
+// SynthPhones
+func (vt *VocalTract) SynthPhones(phones string, resetFirst, play bool) bool {
+
+}
+
+//bool VocalTract::SynthPhones(const String& phones, bool reset_first, bool play) {
+//int len = phones.length();
+//String phon;
+//bool stress = false;
+//bool double_stress = false;
+//bool syllab = false;
+//bool first = true;
+//for(int pos = 0; pos < len; pos++) {
+//int c = phones[pos];
+//if(c == '\'') { // stress
+//stress = true;
+//continue;
+//}
+//if(c == '\"') { // double stress
+//double_stress = true;
+//continue;
+//}
+//if(c == '%') { // double stress
+//SynthPhone(phon, stress, double_stress, syllab, reset_first && first);
+//phon = "";
+//first = false;
+//break;                    // done
+//}
+//if(c == '.') { // syllable
+//syllab = true;
+//SynthPhone(phon, stress, double_stress, syllab, reset_first && first);
+//stress = false; double_stress = false; syllab = false;
+//phon = "";
+//first = false;
+//continue;
+//}
+//if(c == '_') { // reg separator
+//SynthPhone(phon, stress, double_stress, syllab, reset_first && first);
+//stress = false; double_stress = false; syllab = false;
+//phon = "";
+//first = false;
+//continue;
+//}
+//phon += (char)c;
+//}
+//if(phon.nonempty()) {
+//SynthPhone(phon, stress, double_stress, syllab, reset_first && first);
 //}
 //
-//bool VocalTract::SynthPhones(const String& phones, bool reset_first, bool play) {
-// int len = phones.length();
-// String phon;
-// bool stress = false;
-// bool double_stress = false;
-// bool syllab = false;
-// bool first = true;
-// for(int pos = 0; pos < len; pos++) {
-//   int c = phones[pos];
-//   if(c == '\'') { // stress
-//     stress = true;
-//     continue;
-//   }
-//   if(c == '\"') { // double stress
-//     double_stress = true;
-//     continue;
-//   }
-//   if(c == '%') { // double stress
-//     SynthPhone(phon, stress, double_stress, syllab, reset_first && first);
-//     phon = "";
-//     first = false;
-//     break;                    // done
-//   }
-//   if(c == '.') { // syllable
-//     syllab = true;
-//     SynthPhone(phon, stress, double_stress, syllab, reset_first && first);
-//     stress = false; double_stress = false; syllab = false;
-//     phon = "";
-//     first = false;
-//     continue;
-//   }
-//   if(c == '_') { // reg separator
-//     SynthPhone(phon, stress, double_stress, syllab, reset_first && first);
-//     stress = false; double_stress = false; syllab = false;
-//     phon = "";
-//     first = false;
-//     continue;
-//   }
-//   phon += (char)c;
-// }
-// if(phon.nonempty()) {
-//   SynthPhone(phon, stress, double_stress, syllab, reset_first && first);
-// }
-//
-// if(play)
-//   PlaySound();
-// return true;
+//if(play)
+//PlaySound();
+//return true;
 //}
 //
 //bool VocalTract::SynthWord(const String& word, bool reset_first, bool play) {
