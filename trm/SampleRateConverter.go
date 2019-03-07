@@ -55,7 +55,8 @@ const NMask uint32 = 0xFFFF0000
 const LMask uint32 = 0x0000FF00
 const MMask uint32 = 0x000000FF
 const FractionMask uint32 = 0x0000FFFF
-const BufferSize = 1024 // ring buffer size
+const BufferSize = 1024  // ring buffer size
+const OutputRate = 44100 // output sample rate (22.05, 44.1 KHz)
 
 type SampleRateConverter struct {
 	SampleRateRatio       float32
@@ -248,6 +249,10 @@ func (src *SampleRateConverter) DataEmpty() {
 			src.TimeRegister &= ^NMask
 		}
 	}
+}
+
+func (src *SampleRateConverter) MaxSampleVal() float32 {
+	return src.MaximumSampleValue
 }
 
 // SrIncrement increments the buffer position keeping it within the range 0 to (modulus - 1)
