@@ -47,6 +47,7 @@ import (
 	"github.com/emer/emergent/etensor"
 	"github.com/goki/gi/gi"
 	"math"
+	"strings"
 )
 
 /*  COMPILE SO THAT INTERPOLATION NOT DONE FOR SOME CONTROL RATE PARAMETERS  */
@@ -540,7 +541,7 @@ type VocalTract struct {
 
 	CurrentData VocalTractCtrl // current control data
 
-	// memory for tube and tube coefficients
+	// tube and tube coefficients
 	Oropharynx      [OroPharynxSectCount][2][2]float32
 	OropharynxCoefs [OroPharynxCoefCount]float32
 	Nasal           [NasalTractSectCount][2][2]float32
@@ -643,7 +644,7 @@ func (vt VocalTract) LoadEnglishPhones() {
 // LoadEnglishDict loads the English dictionary of words composed of phones and transitions
 func (vt VocalTract) LoadEnglishDict() {
 	fn := gi.FileName("VocalTractEnglishDict.dat")
-	err := vt.PhoneTable.OpenCSV(fn, '\t')
+	err := vt.DictTable.OpenCSV(fn, '\t')
 	if err != nil {
 		fmt.Printf("File not found or error opengin file: %s (%s)", fn, err)
 		return
@@ -652,14 +653,14 @@ func (vt VocalTract) LoadEnglishDict() {
 
 // SynthPhone
 func (vt *VocalTract) SynthPhone(phon string, stress, doubleStress, syllable, reset bool) bool {
-	if vt.PhoneTable.rows == 0 {
+	if vt.PhoneTable.Rows == 0 {
 		vt.LoadEnglishPhones()
 	}
 	act := phon
 	if stress {
 		act = act + "'"
 	}
-	idx = vt.PhoneTable.FindVal(act, "phone", 0, true)
+	idx := vt.PhoneTable.FindVal(act, "phone", 0, true)
 	if idx < 0 {
 		return false
 	}
@@ -673,7 +674,7 @@ func (vt *VocalTract) SynthPhone(phon string, stress, doubleStress, syllable, re
 	// fmt.Println("saying:", phon, "dur:", String(tot_time), "n_reps:", String(n_reps),
 	//              "start pos:", String(outputData_.size()));
 	if reset {
-		vt.SynthReset()
+		vt.SynthReset(true)
 	}
 	for i := 0; i < int(nReps); i++ {
 		vt.Synthesize(false)
@@ -683,138 +684,175 @@ func (vt *VocalTract) SynthPhone(phon string, stress, doubleStress, syllable, re
 
 // SynthPhones
 func (vt *VocalTract) SynthPhones(phones string, resetFirst, play bool) bool {
+	//count := len(phones)
+	var phone string
+	stress := false
+	doubleStress := false
+	syllable := false
+	first := true
 
+	for _, r := range phones {
+		c := string(r)
+		if c == "'" {
+			stress = true
+			continue
+		}
+		if c == "\"" {
+			doubleStress = true
+			continue
+		}
+		if c == "%" {
+			vt.SynthPhone(phone, stress, doubleStress, syllable, resetFirst && first)
+			phone = ""
+			first = false
+			break              // done
+		}
+		if c == "." { // syllable
+			syllable = true;
+			vt.SynthPhone(phone, stress, doubleStress, syllable, resetFirst && first);
+			stress = false
+			doubleStress = false
+			syllable = false;
+			phone = "";
+			first = false;
+			continue;
+		}
+		if c == "_" { // reg separator
+			vt.SynthPhone(phone, stress, doubleStress, syllable, resetFirst && first);
+			stress = false
+			doubleStress = false
+			syllable = false;
+			phone = "";
+			first = false;
+			continue;
+		}
+		phone += c
+	}
+	if len(phone) > 0 {
+		vt.SynthPhone(phone, stress, doubleStress, syllable, resetFirst && first);
+	}
+
+	if play {
+		PlaySound()
+	}
+		return true
 }
 
-//bool VocalTract::SynthPhones(const String& phones, bool reset_first, bool play) {
-//int len = phones.length();
-//String phon;
-//bool stress = false;
-//bool double_stress = false;
-//bool syllab = false;
-//bool first = true;
-//for(int pos = 0; pos < len; pos++) {
-//int c = phones[pos];
-//if(c == '\'') { // stress
-//stress = true;
-//continue;
-//}
-//if(c == '\"') { // double stress
-//double_stress = true;
-//continue;
-//}
-//if(c == '%') { // double stress
-//SynthPhone(phon, stress, double_stress, syllab, reset_first && first);
-//phon = "";
-//first = false;
-//break;                    // done
-//}
-//if(c == '.') { // syllable
-//syllab = true;
-//SynthPhone(phon, stress, double_stress, syllab, reset_first && first);
-//stress = false; double_stress = false; syllab = false;
-//phon = "";
-//first = false;
-//continue;
-//}
-//if(c == '_') { // reg separator
-//SynthPhone(phon, stress, double_stress, syllab, reset_first && first);
-//stress = false; double_stress = false; syllab = false;
-//phon = "";
-//first = false;
-//continue;
-//}
-//phon += (char)c;
-//}
-//if(phon.nonempty()) {
-//SynthPhone(phon, stress, double_stress, syllab, reset_first && first);
-//}
-//
-//if(play)
-//PlaySound();
-//return true;
-//}
-//
-//bool VocalTract::SynthWord(const String& word, bool reset_first, bool play) {
-// if(dict_table.rows == 0)
-//   LoadEnglishDict();
-// int idx = dict_table.FindVal(word, "word", 0, true);
-// if(idx < 0) return false;
-// String phones = dict_table.GetVal("phones", idx).toString();
-// return SynthPhones(phones, reset_first, play);
-//}
-//
-//bool VocalTract::SynthWords(const String& words, bool reset_first, bool play) {
-// String_Array sary;
-// sary.Split(words, " ");
-// bool rval = true;
-// for(int i=0; i < sary.size; i++) {
-//   rval = SynthWord(sary[i], (reset_first && (i == 0)), false);
-//   if(!rval) break;
-//   if(i < sary.size-1) {
-//     SynthPhone("#");
-//   }
-// }
-// if(play)
-//   PlaySound();
-// return rval;
-//}
-//
-//void VocalTract::Initialize() {
-// volume = 60.0f;
-// balance = 0.0f;
-// synth_dur_msec = 25.0f;
-// controlRate_ = 0.0;
-// del_max.DefaultMaxDeltas();
-// reset();
-// outputData_.reserve(OUTPUT_VECTOR_RESERVE);
-//}
-//
-//void
-//VocalTract::reset()
-//{
-// controlPeriod_    = 0;
-// actualTubeLength_ = 0.0;
-// memset(&oropharynx_[0][0][0], 0, sizeof(float) * TOTAL_SECTIONS * 2 * 2);
-// memset(oropharynxCoeff_,      0, sizeof(float) * TOTAL_COEFFICIENTS);
-// memset(&nasal_[0][0][0],      0, sizeof(float) * TOTAL_NASAL_SECTIONS * 2 * 2);
-// memset(nasalCoeff_,           0, sizeof(float) * TOTAL_NASAL_COEFFICIENTS);
-// memset(alpha_,                0, sizeof(float) * TOTAL_ALPHA_COEFFICIENTS);
-// currentPtr_ = 1;
-// prevPtr_    = 0;
-// memset(fricationTap_, 0, sizeof(float) * TOTAL_FRIC_COEFFICIENTS);
-// dampingFactor_     = 0.0;
-// crossmixFactor_    = 0.0;
-// breathinessFactor_ = 0.0;
-// prevGlotAmplitude_ = -1.0;
-// outputData_.resize(0);
-//
-// if (srConv_.get() != NULL) srConv_->reset();
-// if (mouthRadiationFilter_.get() != NULL) mouthRadiationFilter_->reset();
-// if (mouthReflectionFilter_.get() != NULL) mouthReflectionFilter_->reset();
-// if (nasalRadiationFilter_.get() != NULL) nasalRadiationFilter_->reset();
-// if (nasalReflectionFilter_.get() != NULL) nasalReflectionFilter_->reset();
-// if (throat_.get() != NULL) throat_->reset();
-// if (glottalSource_.get() != NULL) glottalSource_->reset();
-// if (bandpassFilter_.get() != NULL) bandpassFilter_->reset();
-// if (noiseFilter_.get() != NULL) noiseFilter_->reset();
-// if (noiseSource_.get() != NULL) noiseSource_->reset();
-//}
-//
-///******************************************************************************
-//*
-//*  function:  speedOfSound
-//*
-//*  purpose:   Returns the speed of sound according to the value of
-//*             the temperature (in Celsius degrees).
-//*
-//******************************************************************************/
-//float
-//VocalTract::speedOfSound(float temperature)
-//{
-// return 331.4 + (0.6 * temperature);
-//}
-//
+
+// SynthWord
+func (vt *VocalTract) SynthWord(word string, resetFirst bool, play bool) bool {
+	if vt.DictTable.Rows == 0 {
+		vt.LoadEnglishDict()
+	}
+	col := vt.DictTable.ColByName("word")
+	if col == nil {
+		fmt.Printf("Column name 'word' not found")
+		return false
+	}
+
+	var idx = -1
+	for i, w := range col {
+		if w == word {
+			idx = i
+		}
+	}
+	if idx == -1 {
+		return false
+	}
+	col = vt.DictTable.ColByName("phones")
+	if col == nil {
+		fmt.Printf("Column name 'phones' not found")
+		return false
+	}
+	phones := col.StringVal1D(idx)
+	return vt.SynthPhones(phones, resetFirst, play)
+}
+
+// SynthWords
+func (vt *VocalTract) SynthWords(ws string, resetFirst bool, play bool) bool {
+	words := strings.Split(ws, " ")
+	rval := true
+	for i := 0; i < len(words); i++ {
+		rval := vt.SynthWord(words[i], (resetFirst && (i == 0)), false)
+		if !rval {
+			break
+		}
+		if i < len(words)-1 {
+			vt.SynthPhone("#")
+		}
+	}
+	if play {
+		PlaySound()
+	}
+	return rval
+}
+
+// Initialize
+func (vt *VocalTract) Initialize() {
+	vt.Volume = 60.0
+	vt.Balance = 0.0
+	vt.SynthDuration = 25.0
+	vt.ControlRate = 0.0
+	vt.DeltaMax.DefaultMaxDeltas()
+	// outputData_.reserve(OUTPUT_VECTOR_RESERVE);
+}
+
+// Reset reset all vocal tract values
+func (vt *VocalTract) Reset() {
+	vt.ControlPeriod = 0
+	vt.ActualTubeLength = 0.0
+	for i := 0; i < OroPharynxSectCount; i++ {
+		for j := 0; j < 2; j++ {
+			for k := 0; k < 2; k++ {
+				vt.Oropharynx[i][j][k] = 0.0
+			}
+		}
+	}
+	for i := 0; i < OroPharynxCoefCount; i++ {
+		vt.OropharynxCoefs[i] = 0.0
+	}
+
+	for i := 0; i < NasalTractSectCount; i++ {
+		for j := 0; j < 2; j++ {
+			for k := 0; k < 2; k++ {
+				vt.Nasal[i][j][k] = 0.0
+			}
+		}
+	}
+	for i := 0; i < NasalTractCoefCount; i++ {
+		vt.NasalCoefs[i] = 0.0
+	}
+	for i := 0; i < ThreeWayCount; i++ {
+		vt.Alpha[i] = 0.0
+	}
+	for i := 0; i < FricationInjCoefCount; i++ {
+		vt.FricationTap[i] = 0.0
+	}
+
+	vt.CurPtr = 1
+	vt.PrevPtr = 0
+	vt.DampingFactor = 0.0
+	vt.CrossmixFactor = 0.0
+	vt.BreathinessFactor = 0.0
+	vt.PrevGlotAmplitude = -1.0
+	vt.OutputData = vt.OutputData[:0]
+
+	vt.SampleRateConverter.Reset()
+	vt.MouthRadiationFilter.Reset()
+	vt.MouthReflectionFilter.Reset()
+	vt.NasalRadiationFilter.Reset()
+	vt.NasalReflectionFilter.Reset()
+	vt.Throat.Reset()
+	vt.GlottalSource.Reset()
+	vt.BandpassFilter.Reset()
+	vt.NoiseFilter.Reset()
+	vt.NoiseSource.Reset()
+}
+
+// SpeedOfSound returns the speed of sound according to the value of the temperature (in Celsius degrees)
+func SpeedOfSound(temp float32) float32 {
+	return 331.4 + (0.6 * temp)
+}
 
 //InitializeSynthesizer initializes all variables so that the synthesis can be run
 func (vt *VocalTract) InitializeSynthesizer() {
@@ -823,9 +861,9 @@ func (vt *VocalTract) InitializeSynthesizer() {
 	// calculate the sample rate, based on nominal tube length and speed of sound
 	if vt.Voice.TractLength > 0.0 {
 		c := SpeedOfSound(vt.Config.Temp)
-		vt.ControlPeriod = int(math.Round((c * OroPharynxSectCount * 100.0) / vt.Voice.TractLength * vt.ControlRate))
+		vt.ControlPeriod = int(math.Round(float(c * OroPharynxSectCount * 100.0) / vt.Voice.TractLength * vt.ControlRate))
 		vt.SampleRate = int(vt.ControlRate * float32(vt.ControlPeriod))
-		vt.ActualTubeLength = (c * OroPharynxSectCount * 100.0) / vt.SampleRate;
+		vt.ActualTubeLength = float(c * OroPharynxSectCount * 100.0) / vt.SampleRate;
 		nyquist = float32(vt.SampleRate) / 2.0
 		return
 	} else {
@@ -834,7 +872,7 @@ func (vt *VocalTract) InitializeSynthesizer() {
 	}
 
 	vt.BreathinessFactor = vt.Voice.Breathiness / 100.0
-	vt.CrossmixFactor = 1.0 / vt.Amplitude(vt.Config.MixOff)
+	vt.CrossmixFactor = 1.0 / Amplitude(vt.Config.MixOff)
 	vt.DampingFactor = (1.0 - (vt.Config.Loss / 100.0))
 
 	// initialize the wave table
@@ -862,7 +900,7 @@ func (vt *VocalTract) InitializeSynthesizer() {
 
 	vt.SampleRateConverter.Init(vt.SampleRate, OutputRate, &vt.OutputData)
 	vt.SampleRateConverter.Reset()
-	vt.OutputData.Clear()
+	vt.OutputData = vt.OutputData[:0]
 
 	vt.BandpassFilter.Reset()
 	vt.NoiseFilter.Reset()
@@ -1211,14 +1249,18 @@ func Amplitude(decibelLevel float32) float32 {
 		return 0
 	}
 
-if decibelLevel >= 0.0{
-return 1.0
-}
+	if decibelLevel >= 0.0 {
+		return 1.0
+	}
 
-return math32.Pow(10.0, decibelLevel/20.0)
+	return math32.Pow(10.0, decibelLevel/20.0)
 }
 
 // Frequency converts a given pitch (0 = middle C) to the corresponding frequency
 func Frequency(pitch float32) float32 {
 	return PitchBase * math32.Pow(2.0, (pitch+PitchOffset)/12.0)
+}
+
+func PlaySound() {
+
 }
