@@ -434,15 +434,6 @@ func (mc *MelCepstrumSpec) Initialize() {
 }
 
 type AuditoryProc struct {
-	//	enum SaveMode {               // how to add new data to the data table
-	//	NONE_SAVE,                  // don't save anything at all -- overrides any more specific save guys and prevents any addition or modification to the data table
-	//	FIRST_ROW,                  // always overwrite the first row -- does EnforceRows(1) if rows = 0
-	//	ADD_ROW,                    // always add a new row and write to that, preserving a history of inputs over time -- should be reset at some interval!
-	//};
-	//
-	//
-	//	DataTableRef  data_table;     // data table for saving filter results for viewing and applying to networks etc
-	//	SaveMode      save_mode;      // how to add new data to the data table
 	Input       AudInputSpec    `desc:"specifications of the raw auditory input"`
 	Dft         AudDftSpec      `desc:"specifications for how to compute the discrete fourier transform (DFT, using FFT)"`
 	MelFBank    MelFBankSpec    `desc:"specifications of the mel feature bank frequency sampling of the DFT (FFT) of the input sound"`
@@ -469,18 +460,18 @@ type AuditoryProc struct {
 	Gabor3Filters etensor.Float32 `desc:"#READ_ONLY #NO_SAVE full gabor filters"`
 
 	// Outputs
-	FirstStep     bool        `desc:"#READ_ONLY #NO_SAVE #SHOW is this the first step of processing -- turns of prv smoothing of dft power"`
-	InputPos      uint32      `desc:"#READ_ONLY #NO_SAVE #SHOW current position in the sound_full input -- in terms of sample number"`
-	TrialStartPos uint32      `desc:" #READ_ONLY #NO_SAVE #SHOW starting position of the current trial -- in terms of sample number"`
-	TrialEndPos   uint32      `desc:"#READ_ONLY #NO_SAVE #SHOW ending position of the current trial -- in terms of sample number"`
-	XYNGeom       gabor1_geom // #CONDSHOW_ON_gabor1.on #READ_ONLY #SHOW overall geometry of gabor1 output (group-level geometry -- feature / unit level geometry is n_features, 2)
-	XYNGeom       gabor2_geom // #CONDSHOW_ON_gabor2.on #READ_ONLY #SHOW overall geometry of gabor1 output (group-level geometry -- feature / unit level geometry is n_features, 2)
-	XYNGeom       gabor3_geom // #CONDSHOW_ON_gabor3.on #READ_ONLY #SHOW overall geometry of gabor1 output (group-level geometry -- feature / unit level geometry is n_features, 2)
+	FirstStep     bool   `desc:"#READ_ONLY #NO_SAVE #SHOW is this the first step of processing -- turns of prv smoothing of dft power"`
+	InputPos      uint32 `desc:"#READ_ONLY #NO_SAVE #SHOW current position in the sound_full input -- in terms of sample number"`
+	TrialStartPos uint32 `desc:" #READ_ONLY #NO_SAVE #SHOW starting position of the current trial -- in terms of sample number"`
+	TrialEndPos   uint32 `desc:"#READ_ONLY #NO_SAVE #SHOW ending position of the current trial -- in terms of sample number"`
+	//XYNGeom       gabor1_geom // #CONDSHOW_ON_gabor1.on #READ_ONLY #SHOW overall geometry of gabor1 output (group-level geometry -- feature / unit level geometry is n_features, 2)
+	//XYNGeom       gabor2_geom // #CONDSHOW_ON_gabor2.on #READ_ONLY #SHOW overall geometry of gabor1 output (group-level geometry -- feature / unit level geometry is n_features, 2)
+	//XYNGeom       gabor3_geom // #CONDSHOW_ON_gabor3.on #READ_ONLY #SHOW overall geometry of gabor1 output (group-level geometry -- feature / unit level geometry is n_features, 2)
 
 	SoundFull etensor.Float32 `desc:"#READ_ONLY #NO_SAVE the full sound input obtained from the sound input"`
 	WindowIn  etensor.Float32 `desc:"#READ_ONLY #NO_SAVE [input.win_samples] the raw sound input, one channel at a time"`
 
-	DftOut etensor.ComplexFloat32 `desc:"#READ_ONLY #NO_SAVE [2, dft_size] discrete fourier transform (fft) output complex representation"`
+	//DftOut etensor.ComplexFloat32 `desc:"#READ_ONLY #NO_SAVE [2, dft_size] discrete fourier transform (fft) output complex representation"`
 
 	DftPowerOut         etensor.Float32 `desc:"#READ_ONLY #NO_SAVE [dft_use] power of the dft, up to the nyquist limit frequency (1/2 input.win_samples)"`
 	DftLogPowerOut      etensor.Float32 `desc:"#READ_ONLY #NO_SAVE [dft_use] log power of the dft, up to the nyquist limit frequency (1/2 input.win_samples)"`
@@ -510,9 +501,10 @@ func (ap *AuditoryProc) LoadSound(snd *Sound) bool {
 		return false
 	}
 
-	if snd.SampleRate() != ap.Input.SampleRate {
-		fmt.Printf("LoadSound: sample rate does not match sound -- re-initializing with new rate of: %v", strconv.Itoa(int(snd.SampleRate())))
-		ap.Input.SampleRate = snd.SampleRate()
+	sr := snd.SampleRate()
+	if sr != ap.Input.SampleRate {
+		fmt.Printf("LoadSound: sample rate does not match sound -- re-initializing with new rate of: %v", strconv.Itoa(int(sr)))
+		ap.Input.SampleRate = sr
 		needsInit = true
 	}
 
@@ -521,43 +513,43 @@ func (ap *AuditoryProc) LoadSound(snd *Sound) bool {
 	}
 
 	if ap.Input.Channels > 1 {
-		snd.SoundToMatrix(soundFull, -1)
+		snd.SoundToMatrix(&ap.SoundFull, -1)
 	} else {
-		snd.SoundToMatrix(soundFull, Input.Channel)
+		snd.SoundToMatrix(&ap.SoundFull, int(ap.Input.Channel))
 	}
-	snd.StartNewSound()
+	ap.StartNewSound()
 	return true
 }
 
 func (ap *AuditoryProc) StartNewSound() bool {
-	ap.FirstStep = true
-	ap.InputPos = 0
-	ap.TrialStartPos = 0
-	ap.TrialEndPos = ap.TrialStartPos + ap.Input.TrialSamples
-	ap.DftPowerTrialOut.InitVals(0.0)
-	if ap.Dft.LogPow {
-		ap.DftLogPowerTrialOut.InitVals(0.0)
-	}
-
-	if ap.MelFBank.On {
-		ap.MelFBankTrialOut.InitVals(0.0)
-		if ap.Gabor1.On {
-			ap.Gabor1TrialRaw.InitVals(0.0)
-			ap.Gabor1TrialOut.InitVals(0.0)
-		}
-		if ap.Gabor2.On {
-			ap.Gabor2TrialRaw.InitVals(0.0)
-			ap.Gabor2TrialOut.InitVals(0.0)
-
-		}
-		if ap.Gabor3.On {
-			ap.Gabor3TrialRaw.InitVals(0.0)
-			ap.Gabor3TrialOut.InitVals(0.0)
-		}
-		if ap.Mfcc.On {
-			ap.MfccDctTrialOut.InitVals(0.0)
-		}
-	}
+	//ap.FirstStep = true
+	//ap.InputPos = 0
+	//ap.TrialStartPos = 0
+	//ap.TrialEndPos = ap.TrialStartPos + ap.Input.TrialSamples
+	//ap.DftPowerTrialOut.InitVals(0.0)
+	//if ap.Dft.LogPow {
+	//	ap.DftLogPowerTrialOut.InitVals(0.0)
+	//}
+	//
+	//if ap.MelFBank.On {
+	//	ap.MelFBankTrialOut.InitVals(0.0)
+	//	if ap.Gabor1.On {
+	//		ap.Gabor1TrialRaw.InitVals(0.0)
+	//		ap.Gabor1TrialOut.InitVals(0.0)
+	//	}
+	//	if ap.Gabor2.On {
+	//		ap.Gabor2TrialRaw.InitVals(0.0)
+	//		ap.Gabor2TrialOut.InitVals(0.0)
+	//
+	//	}
+	//	if ap.Gabor3.On {
+	//		ap.Gabor3TrialRaw.InitVals(0.0)
+	//		ap.Gabor3TrialOut.InitVals(0.0)
+	//	}
+	//	if ap.Mfcc.On {
+	//		ap.MfccDctTrialOut.InitVals(0.0)
+	//	}
+	//}
 	return true
 }
 
@@ -570,10 +562,10 @@ func (ap *AuditoryProc) NeedsInit() bool {
 }
 
 func (ap *AuditoryProc) Init() bool {
-	ap.UpdateConfig()
-	ap.InitFilters()
-	ap.InitOutMatrix()
-	ap.InitDataTable()
-	ap.InitSound()
+	//ap.UpdateConfig()
+	//ap.InitFilters()
+	//ap.InitOutMatrix()
+	//ap.InitDataTable()
+	//ap.InitSound()
 	return true
 }
