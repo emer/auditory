@@ -5,11 +5,12 @@ package audio
 
 import (
 	"fmt"
-	"github.com/emer/emergent/etensor"
 	"math"
 	"strconv"
 
 	"github.com/chewxy/math32"
+	"github.com/emer/emergent/dtable"
+	"github.com/emer/emergent/etensor"
 )
 
 // AudInputSpec defines the sound input parameters for auditory processing
@@ -439,10 +440,10 @@ type AuditoryProc struct {
 	//	FIRST_ROW,                  // always overwrite the first row -- does EnforceRows(1) if rows = 0
 	//	ADD_ROW,                    // always add a new row and write to that, preserving a history of inputs over time -- should be reset at some interval!
 	//};
-	//
-	//
-	//	DataTableRef  data_table;     // data table for saving filter results for viewing and applying to networks etc
 	//	SaveMode      save_mode;      // how to add new data to the data table
+	//	V1KwtaSpec    gabor_kwta;     // #CONDSHOW_ON_gabor1.on k-winner-take-all inhibitory dynamics for the time-gabor output
+
+	Data        *dtable.Table   `desc:"data table for saving filter results for viewing and applying to networks etc"`
 	Input       AudInputSpec    `desc:"specifications of the raw auditory input"`
 	Dft         AudDftSpec      `desc:"specifications for how to compute the discrete fourier transform (DFT, using FFT)"`
 	MelFBank    MelFBankSpec    `desc:"specifications of the mel feature bank frequency sampling of the DFT (FFT) of the input sound"`
@@ -451,7 +452,6 @@ type AuditoryProc struct {
 	Gabor2      AudGaborSpec    `desc:"#CONDSHOW_ON_mel_fbank.on full set of frequency / time gabor filters -- second size"`
 	Gabor3      AudGaborSpec    `desc:"#CONDSHOW_ON_mel_fbank.on full set of frequency / time gabor filters -- third size"`
 	Mfcc        MelCepstrumSpec `desc:"#CONDSHOW_ON_mel_fbank.on specifications of the mel cepstrum discrete cosine transform of the mel fbank filter features"`
-	//	V1KwtaSpec    gabor_kwta;     // #CONDSHOW_ON_gabor1.on k-winner-take-all inhibitory dynamics for the time-gabor output
 
 	// Filters
 	DftSize        uint32 `desc:"#READ_ONLY #NO_SAVE full size of fft output -- should be input.win_samples"`
@@ -573,7 +573,244 @@ func (ap *AuditoryProc) Init() bool {
 	ap.UpdateConfig()
 	ap.InitFilters()
 	ap.InitOutMatrix()
+	ap.Data = &dtable.Table{}
 	ap.InitDataTable()
 	ap.InitSound()
+	return true
+}
+
+func (ap *AuditoryProc) InitDataTable() bool {
+	if ap.Data == nil {
+		fmt.Printf("InitDataTable: ap.Data is nil")
+		return false
+	}
+	if ap.Input.Channels > 1 {
+		for ch := 0; ch < int(ap.Input.Channels); ch++ {
+			ap.InitDataTableChan(ch)
+		}
+	} else {
+		ap.InitDataTableChan(int(ap.Input.Channel))
+	}
+	return true
+}
+
+func (ap *AuditoryProc) InitDataTableChan(ch int) bool {
+	if ap.MelFBank.On {
+		ap.MelOutputToTable(ap.Data, ch, true)
+	}
+	return true
+}
+
+// InputStepsLeft returns the number of steps left to process in the current input sound
+func (ap *AuditoryProc) InputStepsLeft() int {
+	samplesLeft = ap.SoundFull.Frames() - ap.InputPos
+	return samplesLeft / ap.Input.StepSamples
+}
+
+// ProcessTrial processes a full trial worth of sound -- iterates over steps to fill a trial's worth of sound data
+func (ap *AuditoryProc) ProcessTrial() bool {
+	if ap.NeedsInit() {
+		ap.Init()
+	}
+	ap.Data.AddRows(1)
+
+	if ap.InputStepsLeft() < 1 {
+		fmt.Printf("ProcessTrial: no steps worth of input sound available -- load a new sound")
+		return false
+	}
+
+	startPos := ap.InputPos
+	if ap.InputPos == 0 { // just starting out -- fill whole buffer..
+		border := 2 * ap.Input.BorderSteps // full amount to wrap
+		ap.TrialStartPos = ap.InputPos
+		ap.TrialEndPos = ap.TrialStartPos + ap.Input.TrialSamples + 2*border*ap.Input.StepSamples
+
+		for ch := 0; ch < int(ap.Input.Channels); ch++ {
+			ap.InputPos = startPos // always start at same place per channel
+			for s := 0; s < int(ap.Input.TotalSteps); s++ {
+				ap.ProcessStep(ch, s)
+			}
+			ap.FilterTrial(ch)
+			ap.OutputToTable(ch)
+		}
+	} else {
+		border := 2 * ap.Input.BorderSteps // full amount to wrap
+		ap.TrialStartPos = ap.InputPos - ap.Input.TrialSamples*ap.Input.BorderSteps
+		ap.TrialEndPos = ap.TrialStartPos + ap.Input.TrialSamples
+
+		for ch := 0; ch < int(ap.Input.Channels); ch++ {
+			ap.InputPos = startPos // always start at same place per channel
+			ap.WrapBorder(ch)
+			for s := border; s < ap.Input.TotalSteps; s++ {
+				ap.ProcessStep(ch, s)
+			}
+			ap.FilterTrial(ch)
+			ap.OutputToTable(ch)
+		}
+	}
+	return true
+}
+
+// MelOutputToTable mel filter bank to output table
+func (ap *AuditoryProc) MelOutputToTable(dt *dtable.Table, ch int, fmtOnly bool) bool {
+	//DataCol* col;
+	//int idx;
+	//String col_sufx;
+	//if(input.channels > 1) {
+	//	col_sufx = "_ch" + String(chan);
+	//}
+	//col = data_table->FindMakeColName(name + "_dft_pow" + col_sufx, idx,
+	//	DataTable::VT_FLOAT, 2,
+	//	input.total_steps, dft_use);
+	//if(!fmt_only) {
+	//	float_MatrixPtr dout; dout = (float_Matrix*)col->GetValAsMatrix(-1);
+	//	for(int stp = 0; stp < input.total_steps; stp++) {
+	//		for(int i=0; i< dft_use; i++) {
+	//			if(dft.log_pow) {
+	//				dout->FastEl2d(stp, i) = dft_log_power_trial_out.FastEl3d(i, stp, chan);
+	//			}
+	//			else {
+	//				dout->FastEl2d(stp, i) = dft_power_trial_out.FastEl3d(i, stp, chan);
+	//			}
+	//		}
+	//	}
+	//}
+	//
+	//if(mel_fbank.on) {
+	//	col = data_table->FindMakeColName(name + "_mel_fbank" + col_sufx, idx,
+	//		DataTable::VT_FLOAT, 2,
+	//		input.total_steps, mel_fbank.n_filters);
+	//	if(!fmt_only) {
+	//		float_MatrixPtr dout; dout = (float_Matrix*)col->GetValAsMatrix(-1);
+	//		for(int stp = 0; stp < input.total_steps; stp++) {
+	//			for(int i=0; i< mel_fbank.n_filters; i++) {
+	//				dout->FastEl2d(stp, i) = mel_fbank_trial_out.FastEl3d(i, stp, chan);
+	//			}
+	//		}
+	//	}
+	//
+	//	if(gabor1.on) {
+	//		col = data_table->FindMakeColName(name + "_mel_gabor1_raw" + col_sufx, idx,
+	//			DataTable::VT_FLOAT, 4,
+	//			gabor1.n_filters, 2,
+	//			gabor1_geom.x, gabor1_geom.y);
+	//		if(!fmt_only) {
+	//			float_MatrixPtr dout; dout = (float_Matrix*)col->GetValAsMatrix(-1);
+	//			const int nf = gabor1.n_filters;
+	//			for(int stp = 0; stp < gabor1_geom.x; stp++) {
+	//				for(int i=0; i< gabor1_geom.y; i++) {
+	//					for(int ti=0; ti < nf; ti++) {
+	//						dout->FastEl4d(ti, 0, stp, i) = gabor1_trial_raw.FastEl(ti, 0, i, stp, chan);
+	//						dout->FastEl4d(ti, 1, stp, i) = gabor1_trial_raw.FastEl(ti, 1, i, stp, chan);
+	//					}
+	//				}
+	//			}
+	//		}
+	//
+	//		col = data_table->FindMakeColName(name + "_mel_gabor1" + col_sufx, idx,
+	//			DataTable::VT_FLOAT, 4,
+	//			gabor1.n_filters, 2,
+	//			gabor1_geom.x, gabor1_geom.y);
+	//		if(!fmt_only) {
+	//			float_MatrixPtr dout; dout = (float_Matrix*)col->GetValAsMatrix(-1);
+	//			const int nf = gabor1.n_filters;
+	//			for(int stp = 0; stp < gabor1_geom.x; stp++) {
+	//				for(int i=0; i< gabor1_geom.y; i++) {
+	//					for(int ti=0; ti < nf; ti++) {
+	//						dout->FastEl4d(ti, 0, stp, i) = gabor1_trial_out.FastEl(ti, 0, i, stp, chan);
+	//						dout->FastEl4d(ti, 1, stp, i) = gabor1_trial_out.FastEl(ti, 1, i, stp, chan);
+	//					}
+	//				}
+	//			}
+	//		}
+	//	}
+	//
+	//	if(gabor2.on) {
+	//		col = data_table->FindMakeColName(name + "_mel_gabor2_raw" + col_sufx, idx,
+	//			DataTable::VT_FLOAT, 4,
+	//			gabor2.n_filters, 2,
+	//			gabor2_geom.x, gabor2_geom.y);
+	//		if(!fmt_only) {
+	//			float_MatrixPtr dout; dout = (float_Matrix*)col->GetValAsMatrix(-1);
+	//			const int nf = gabor2.n_filters;
+	//			for(int stp = 0; stp < gabor2_geom.x; stp++) {
+	//				for(int i=0; i< gabor2_geom.y; i++) {
+	//					for(int ti=0; ti < nf; ti++) {
+	//						dout->FastEl4d(ti, 0, stp, i) = gabor2_trial_raw.FastEl(ti, 0, i, stp, chan);
+	//						dout->FastEl4d(ti, 1, stp, i) = gabor2_trial_raw.FastEl(ti, 1, i, stp, chan);
+	//					}
+	//				}
+	//			}
+	//		}
+	//
+	//		col = data_table->FindMakeColName(name + "_mel_gabor2" + col_sufx, idx,
+	//			DataTable::VT_FLOAT, 4,
+	//			gabor2.n_filters, 2,
+	//			gabor2_geom.x, gabor2_geom.y);
+	//		if(!fmt_only) {
+	//			float_MatrixPtr dout; dout = (float_Matrix*)col->GetValAsMatrix(-1);
+	//			const int nf = gabor2.n_filters;
+	//			for(int stp = 0; stp < gabor2_geom.x; stp++) {
+	//				for(int i=0; i< gabor2_geom.y; i++) {
+	//					for(int ti=0; ti < nf; ti++) {
+	//						dout->FastEl4d(ti, 0, stp, i) = gabor2_trial_out.FastEl(ti, 0, i, stp, chan);
+	//						dout->FastEl4d(ti, 1, stp, i) = gabor2_trial_out.FastEl(ti, 1, i, stp, chan);
+	//					}
+	//				}
+	//			}
+	//		}
+	//	}
+	//
+	//	if(gabor3.on) {
+	//		col = data_table->FindMakeColName(name + "_mel_gabor3_raw" + col_sufx, idx,
+	//			DataTable::VT_FLOAT, 4,
+	//			gabor3.n_filters, 2,
+	//			gabor3_geom.x, gabor3_geom.y);
+	//		if(!fmt_only) {
+	//			float_MatrixPtr dout; dout = (float_Matrix*)col->GetValAsMatrix(-1);
+	//			const int nf = gabor3.n_filters;
+	//			for(int stp = 0; stp < gabor3_geom.x; stp++) {
+	//				for(int i=0; i< gabor3_geom.y; i++) {
+	//					for(int ti=0; ti < nf; ti++) {
+	//						dout->FastEl4d(ti, 0, stp, i) = gabor3_trial_raw.FastEl(ti, 0, i, stp, chan);
+	//						dout->FastEl4d(ti, 1, stp, i) = gabor3_trial_raw.FastEl(ti, 1, i, stp, chan);
+	//					}
+	//				}
+	//			}
+	//		}
+	//
+	//		col = data_table->FindMakeColName(name + "_mel_gabor3" + col_sufx, idx,
+	//			DataTable::VT_FLOAT, 4,
+	//			gabor3.n_filters, 2,
+	//			gabor3_geom.x, gabor3_geom.y);
+	//		if(!fmt_only) {
+	//			float_MatrixPtr dout; dout = (float_Matrix*)col->GetValAsMatrix(-1);
+	//			const int nf = gabor3.n_filters;
+	//			for(int stp = 0; stp < gabor3_geom.x; stp++) {
+	//				for(int i=0; i< gabor3_geom.y; i++) {
+	//					for(int ti=0; ti < nf; ti++) {
+	//						dout->FastEl4d(ti, 0, stp, i) = gabor3_trial_out.FastEl(ti, 0, i, stp, chan);
+	//						dout->FastEl4d(ti, 1, stp, i) = gabor3_trial_out.FastEl(ti, 1, i, stp, chan);
+	//					}
+	//				}
+	//			}
+	//		}
+	//	}
+	//}
+	//
+	//if(mfcc.on) {
+	//	col = data_table->FindMakeColName(name + "_mel_mfcc" + col_sufx, idx,
+	//		DataTable::VT_FLOAT, 2,
+	//		input.total_steps, mfcc.n_coeff);
+	//	if(!fmt_only) {
+	//		float_MatrixPtr dout; dout = (float_Matrix*)col->GetValAsMatrix(-1);
+	//		for(int stp = 0; stp < input.total_steps; stp++) {
+	//			for(int i=0; i< mfcc.n_coeff; i++) {
+	//				dout->FastEl2d(stp, i) = mfcc_dct_trial_out.FastEl3d(i, stp, chan);
+	//			}
+	//		}
+	//	}
+	//}
+	//
 	return true
 }
