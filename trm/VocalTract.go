@@ -130,11 +130,7 @@ type VoiceParams struct {
 	Breathiness      float32
 	GlotPulseRise    float32
 	ApertureRadius   float32
-	NoseRadius1      float32
-	NoseRadius2      float32
-	NoseRadius3      float32
-	NoseRadius4      float32
-	NoseRadius5      float32
+	NoseRadii        [5]float32
 	Radius1          float32
 	NoseRadiusCoef   float32
 	RadiusCoef       float32
@@ -144,11 +140,11 @@ type VoiceParams struct {
 func (vp *VoiceParams) DefaultParams() {
 	vp.GlotPulseRise = 40.0
 	vp.ApertureRadius = 3.05
-	vp.NoseRadius1 = 1.35
-	vp.NoseRadius2 = 1.96
-	vp.NoseRadius3 = 1.91
-	vp.NoseRadius4 = 1.3
-	vp.NoseRadius5 = 0.73
+	vp.NoseRadii[0] = 1.35
+	vp.NoseRadii[1] = 1.96
+	vp.NoseRadii[2] = 1.91
+	vp.NoseRadii[3] = 1.3
+	vp.NoseRadii[4] = 0.73
 	vp.Radius1 = 0.8
 	vp.NoseRadiusCoef = 1.0
 	vp.RadiusCoef = 1.0
@@ -215,6 +211,13 @@ func (vp *VoiceParams) SetDefault(voice Voices) {
 	}
 }
 
+// NoseRadiusVal gets nose radius value, using *zero-based* index value
+func (vp *VoiceParams) NoseRadiusVal(idx int) float32 {
+	return vp.NoseRadii[idx]
+}
+
+// get nose radius value, using *zero-based* index value (= radius_1, etc)
+
 /////////////////////////////////////////////////////
 //              VocalTractCtrl
 
@@ -228,13 +231,13 @@ const (
 	FricPosIdx
 	FricCfIdx
 	FricBwIdx
-	Radius2Idx
-	Radius3Idx
-	Radius4Idx
-	Radius5Idx
-	Radius6Idx
-	Radius7Idx
-	Radius8Idx
+	//Radius2Idx
+	//Radius3Idx
+	//Radius4Idx
+	//Radius5Idx
+	//Radius6Idx
+	//Radius7Idx
+	//Radius8Idx
 	VelumIdx
 	NCtrlParams
 )
@@ -249,13 +252,7 @@ type VocalTractCtrl struct {
 	FricPos   float32
 	FricCf    float32
 	FricBw    float32
-	Radius2   float32
-	Radius3   float32
-	Radius4   float32
-	Radius5   float32
-	Radius6   float32
-	Radius7   float32
-	Radius8   float32
+	Radii     [7]float32 // Radii 2-8
 	Velum     float32
 }
 
@@ -267,77 +264,75 @@ func (vtc *VocalTractCtrl) Init() {
 	vtc.FricPos = 4.0
 	vtc.FricCf = 2500.0
 	vtc.FricBw = 2000.0
-	vtc.Radius2 = 1.0
-	vtc.Radius3 = 1.0
-	vtc.Radius4 = 1.0
-	vtc.Radius5 = 1.0
-	vtc.Radius6 = 1.0
-	vtc.Radius7 = 1.0
-	vtc.Radius8 = 1.0
+	vtc.Radii[0] = 1.0 // Radius2
+	vtc.Radii[1] = 1.0
+	vtc.Radii[2] = 1.0
+	vtc.Radii[3] = 1.0
+	vtc.Radii[4] = 1.0
+	vtc.Radii[5] = 1.0
+	vtc.Radii[6] = 1.0 // Radius8
 	vtc.Velum = 0.1
 }
 
-// ParamVal returns
-func (vtc *VocalTractCtrl) ParamVal(idx int) float32 {
-	return vtc.GlotPitch[idx]
+// ComputeDeltas
+func (vtc *VocalTractCtrl) ComputeDeltas(curCtrl *VocalTractCtrl, prvCtrl *VocalTractCtrl, deltaMax *VocalTractCtrl, ctrlFreq float32) {
+	// todo:
+	// for(int i=0; i< N_PARAMS; i++) {
+	//  float cval = cur.ParamVal(i);
+	//  float pval = prv.ParamVal(i);
+	//  float dmax = del_max.ParamVal(i);
+	//  float& nval = ParamVal(i);
+	//  nval = (cval - pval) * ctrl_freq;
+	//  // if(nval > dmax) nval = dmax;
+	//  // else if (nval < -dmax) nval = -dmax;
+	// }
 }
 
-const float& ParamVal(int idx) const
-{ return (&glot_pitch)[idx]; }
-// get parameter value using *zero-based* index value (e.g., ParamIndex)
-float& ParamVal(int idx)
-{ return (&glot_pitch)[idx]; }
-// get parameter value using *zero-based* index value (e.g., ParamIndex)
-float RadiusVal(int idx)
-{ if (idx <= 0) return 0.8f; return (&radius_2)[idx-1]; }
-// get radius value using *zero-based* index value
+// UpdateFromDeltas
+func (vtc *VocalTractCtrl) UpdateFromDeltas(deltas *VocalTractCtrl) {
+	// todo:
+	//  for(int i=0; i< N_PARAMS; i++) {
+	//    float dval = del.ParamVal(i);
+	//    float& nval = ParamVal(i);
+	//    nval += dval;
+	//  }
+}
 
-//void VocalTractCtrl::ComputeDeltas(const VocalTractCtrl& cur, const VocalTractCtrl& prv,
-//                                  const VocalTractCtrl& del_max, float ctrl_freq) {
-// for(int i=0; i< N_PARAMS; i++) {
-//   float cval = cur.ParamVal(i);
-//   float pval = prv.ParamVal(i);
-//   float dmax = del_max.ParamVal(i);
-//   float& nval = ParamVal(i);
-//   nval = (cval - pval) * ctrl_freq;
-//   // if(nval > dmax) nval = dmax;
-//   // else if (nval < -dmax) nval = -dmax;
-// }
-//}
-//
-//void VocalTractCtrl::UpdateFromDeltas(const VocalTractCtrl& del) {
-//  for(int i=0; i< N_PARAMS; i++) {
-//    float dval = del.ParamVal(i);
-//    float& nval = ParamVal(i);
-//    nval += dval;
-//  }
-//}
-//
-//void VocalTractCtrl::DefaultMaxDeltas() {
-//  float ctrl_freq = 1.0f / 501.0f; // default
-//  // default to entire range ok here for now.. fix when glitches encountered..
-//  glot_pitch = 10.0f * ctrl_freq;
-//  glot_vol = 60.0f * ctrl_freq;
-//  asp_vol = 10.0f * ctrl_freq;
-//  fric_vol = 24.0f * ctrl_freq;
-//  fric_pos = 7.0f * ctrl_freq;
-//  fric_cf = 3000.0f * ctrl_freq;
-//  fric_bw = 4000.0f * ctrl_freq;
-//  radius_2 = 3.0f * ctrl_freq;
-//  radius_3 = 3.0f * ctrl_freq;
-//  radius_4 = 3.0f * ctrl_freq;
-//  radius_5 = 3.0f * ctrl_freq;
-//  radius_6 = 3.0f * ctrl_freq;
-//  radius_7 = 3.0f * ctrl_freq;
-//  radius_8 = 3.0f * ctrl_freq;
-//  velum = 1.5f * ctrl_freq;
-//}
+// DefaultMaxDeltas
+func (vtc *VocalTractCtrl) DefaultMaxDeltas() {
+	// todo:
+	//  float ctrl_freq = 1.0f / 501.0f; // default
+	//  // default to entire range ok here for now.. fix when glitches encountered..
+	//  glot_pitch = 10.0f * ctrl_freq;
+	//  glot_vol = 60.0f * ctrl_freq;
+	//  asp_vol = 10.0f * ctrl_freq;
+	//  fric_vol = 24.0f * ctrl_freq;
+	//  fric_pos = 7.0f * ctrl_freq;
+	//  fric_cf = 3000.0f * ctrl_freq;
+	//  fric_bw = 4000.0f * ctrl_freq;
+	//  radius_2 = 3.0f * ctrl_freq;
+	//  radius_3 = 3.0f * ctrl_freq;
+	//  radius_4 = 3.0f * ctrl_freq;
+	//  radius_5 = 3.0f * ctrl_freq;
+	//  radius_6 = 3.0f * ctrl_freq;
+	//  radius_7 = 3.0f * ctrl_freq;
+	//  radius_8 = 3.0f * ctrl_freq;
+	//  velum = 1.5f * ctrl_freq;
+
+}
+
 //
 //void VocalTractCtrl::SetFromParams(const VocalTractCtrl& oth) {
 //  for(int i=0; i< N_PARAMS; i++) {
 //    ParamVal(i) = oth.ParamVal(i);
 //  }
 //}
+
+// SetFromParams
+func (vtc *VocalTractCtrl) SetFromParams(vtcOther *VocalTractCtrl) {
+
+}
+
 //
 //void VocalTractCtrl::SetFromFloat(float val, ParamIndex param, bool normalized) {
 //  TypeDef* td = GetTypeDef();
@@ -389,7 +384,7 @@ float RadiusVal(int idx)
 //}
 //
 
-func (vt *VocalTractCtrl) SetFromDataTable(table dtable.Table, col etensor.Tensor, row int, normalized bool) {
+func (vtc *VocalTractCtrl) SetFromDataTable(table dtable.Table, col etensor.Tensor, row int, normalized bool) {
 
 }
 
@@ -403,6 +398,15 @@ func (vt *VocalTractCtrl) SetFromDataTable(table dtable.Table, col etensor.Tenso
 //  SetFromMatrix(*(mtx.ptr()), normalized);
 //}
 //
+
+func (vtc *VocalTractCtrl) RadiusVal(idx int) float32 {
+	if idx <= 0 {
+		return 0.8
+	}
+	return vtc.Radii[idx-1]
+	//return (&radius_2)[idx-1]; }
+	// get radius value using *zero-based* index value
+}
 
 /////////////////////////////////////////////////////
 //              VocalTract
@@ -579,8 +583,8 @@ func (vt *VocalTract) Init() {
 	ctrlRate := 1.0 / (vt.SynthDuration / 1000.0)
 	vt.ControlRate = ctrlRate
 	vt.InitializeSynthesizer()
-	vt.PrevControl.SetFromParams(vt.CurControl) // no deltas if reset
-	vt.CurrentData.SetFromParams(vt.CurControl)
+	vt.PrevControl.SetFromParams(&vt.CurControl) // no deltas if reset
+	vt.CurrentData.SetFromParams(&vt.CurControl)
 	// ToDo:
 	//SigEmitUpdated();
 }
@@ -589,7 +593,7 @@ func (vt *VocalTract) ControlFromFloats(vals []float32, normalized bool) {
 
 }
 
-func (vt *VocalTract) ControlFromMatrix(vals xxx, normalized bool) {
+func (vt *VocalTract) ControlFromMatrix(vals etensor.Tensor, normalized bool) {
 
 }
 
@@ -604,6 +608,10 @@ func (vt *VocalTract) ControlFromMatrix(vals xxx, normalized bool) {
 
 func (vt *VocalTract) ControlFromDataTable(table dtable.Table, col etensor.Tensor, row int, normalized bool) {
 	vt.CurControl.SetFromDataTable(table, col, row, normalized)
+}
+
+func (vt *VocalTract) SynthFromDataTable(table dtable.Table, col etensor.Tensor, row int, normalized bool, resetFirst bool) {
+
 }
 
 //void VocalTract::SynthFromDataTable(const DataTable& table, const Variant& col, int row,
@@ -632,7 +640,7 @@ func (vt *VocalTract) ControlFromDataTable(table dtable.Table, col etensor.Tenso
 //
 
 // LoadEnglishPhones loads the file of English phones
-func (vt VocalTract) LoadEnglishPhones() {
+func (vt *VocalTract) LoadEnglishPhones() {
 	fn := gi.FileName("VocalTractEnglishPhones.dat")
 	err := vt.PhoneTable.OpenCSV(fn, '\t')
 	if err != nil {
@@ -642,8 +650,8 @@ func (vt VocalTract) LoadEnglishPhones() {
 }
 
 // LoadEnglishDict loads the English dictionary of words composed of phones and transitions
-func (vt VocalTract) LoadEnglishDict() {
-	fn := gi.FileName("VocalTractEnglishDict.dat")
+func (vt *VocalTract) LoadEnglishDict() {
+	fn := gi.FileName("VocalTractEnglishDict.dtbl")
 	err := vt.DictTable.OpenCSV(fn, '\t')
 	if err != nil {
 		fmt.Printf("File not found or error opengin file: %s (%s)", fn, err)
@@ -653,32 +661,32 @@ func (vt VocalTract) LoadEnglishDict() {
 
 // SynthPhone
 func (vt *VocalTract) SynthPhone(phon string, stress, doubleStress, syllable, reset bool) bool {
-	if vt.PhoneTable.Rows == 0 {
-		vt.LoadEnglishPhones()
-	}
-	act := phon
-	if stress {
-		act = act + "'"
-	}
-	idx := vt.PhoneTable.FindVal(act, "phone", 0, true)
-	if idx < 0 {
-		return false
-	}
-	duration := vt.PhoneTable.GetVal("duration", idx).toFloat()
-	transition := vt.PhoneTable.GetVal("transition", idx).toFloat()
-	totalTime := (duration + transition) * 1.5
-	nReps := math32.Ceil(totalTime / vt.SynthDuration)
-	nReps = math32.Max(nReps, 1.0)
-	vt.ControlFromDataTable(vt.PhoneTable, "phone_data", idx, false)
-	// todo: syllable, double_stress, qsss other params??
-	// fmt.Println("saying:", phon, "dur:", String(tot_time), "n_reps:", String(n_reps),
-	//              "start pos:", String(outputData_.size()));
-	if reset {
-		vt.SynthReset(true)
-	}
-	for i := 0; i < int(nReps); i++ {
-		vt.Synthesize(false)
-	}
+	//if vt.PhoneTable.Rows == 0 {
+	//	vt.LoadEnglishPhones()
+	//}
+	//act := phon
+	//if stress {
+	//	act = act + "'"
+	//}
+	//idx := vt.PhoneTable.FindVal(act, "phone", 0, true)
+	//if idx < 0 {
+	//	return false
+	//}
+	//duration := vt.PhoneTable.GetVal("duration", idx).toFloat()
+	//transition := vt.PhoneTable.GetVal("transition", idx).toFloat()
+	//totalTime := (duration + transition) * 1.5
+	//nReps := math32.Ceil(totalTime / vt.SynthDuration)
+	//nReps = math32.Max(nReps, 1.0)
+	//vt.ControlFromDataTable(vt.PhoneTable, "phone_data", idx, false)
+	//// todo: syllable, double_stress, qsss other params??
+	//// fmt.Println("saying:", phon, "dur:", String(tot_time), "n_reps:", String(n_reps),
+	////              "start pos:", String(outputData_.size()));
+	//if reset {
+	//	vt.SynthReset(true)
+	//}
+	//for i := 0; i < int(nReps); i++ {
+	//	vt.Synthesize(false)
+	//}
 	return true
 }
 
@@ -705,39 +713,38 @@ func (vt *VocalTract) SynthPhones(phones string, resetFirst, play bool) bool {
 			vt.SynthPhone(phone, stress, doubleStress, syllable, resetFirst && first)
 			phone = ""
 			first = false
-			break              // done
+			break // done
 		}
 		if c == "." { // syllable
-			syllable = true;
-			vt.SynthPhone(phone, stress, doubleStress, syllable, resetFirst && first);
+			syllable = true
+			vt.SynthPhone(phone, stress, doubleStress, syllable, resetFirst && first)
 			stress = false
 			doubleStress = false
-			syllable = false;
-			phone = "";
-			first = false;
-			continue;
+			syllable = false
+			phone = ""
+			first = false
+			continue
 		}
 		if c == "_" { // reg separator
-			vt.SynthPhone(phone, stress, doubleStress, syllable, resetFirst && first);
+			vt.SynthPhone(phone, stress, doubleStress, syllable, resetFirst && first)
 			stress = false
 			doubleStress = false
-			syllable = false;
-			phone = "";
-			first = false;
-			continue;
+			syllable = false
+			phone = ""
+			first = false
+			continue
 		}
 		phone += c
 	}
 	if len(phone) > 0 {
-		vt.SynthPhone(phone, stress, doubleStress, syllable, resetFirst && first);
+		vt.SynthPhone(phone, stress, doubleStress, syllable, resetFirst && first)
 	}
 
 	if play {
 		PlaySound()
 	}
-		return true
+	return true
 }
-
 
 // SynthWord
 func (vt *VocalTract) SynthWord(word string, resetFirst bool, play bool) bool {
@@ -751,8 +758,8 @@ func (vt *VocalTract) SynthWord(word string, resetFirst bool, play bool) bool {
 	}
 
 	var idx = -1
-	for i, w := range col {
-		if w == word {
+	for i := 0; i < col.Len(); i++ {
+		if col.StringVal1D(i) == word {
 			idx = i
 		}
 	}
@@ -778,7 +785,7 @@ func (vt *VocalTract) SynthWords(ws string, resetFirst bool, play bool) bool {
 			break
 		}
 		if i < len(words)-1 {
-			vt.SynthPhone("#")
+			vt.SynthPhone("#", false, false, false, false)
 		}
 	}
 	if play {
@@ -861,9 +868,9 @@ func (vt *VocalTract) InitializeSynthesizer() {
 	// calculate the sample rate, based on nominal tube length and speed of sound
 	if vt.Voice.TractLength > 0.0 {
 		c := SpeedOfSound(vt.Config.Temp)
-		vt.ControlPeriod = int(math.Round(float(c * OroPharynxSectCount * 100.0) / vt.Voice.TractLength * vt.ControlRate))
+		vt.ControlPeriod = int(math.Round(float64(c*OroPharynxSectCount*100.0) / float64(vt.Voice.TractLength*vt.ControlRate)))
 		vt.SampleRate = int(vt.ControlRate * float32(vt.ControlPeriod))
-		vt.ActualTubeLength = float(c * OroPharynxSectCount * 100.0) / vt.SampleRate;
+		vt.ActualTubeLength = float32(c*OroPharynxSectCount*100.0) / float32(vt.SampleRate)
 		nyquist = float32(vt.SampleRate) / 2.0
 		return
 	} else {
@@ -878,7 +885,7 @@ func (vt *VocalTract) InitializeSynthesizer() {
 	// initialize the wave table
 	vt.Voice.SetDefault(Female)
 	gs := WavetableGlottalSource{}
-	vt.GlottalSource = &gs
+	vt.GlottalSource = gs
 	vt.GlottalSource.Init(GlottalSourcePulse, float32(vt.SampleRate), vt.Voice.GlotPulseRise, vt.Voice.GlotPulseFallMin, vt.Voice.GlotPulseFallMax)
 	vt.GlottalSource.Reset()
 
@@ -894,7 +901,7 @@ func (vt *VocalTract) InitializeSynthesizer() {
 	vt.NasalReflectionFilter.Init(nasalApertureCoef)
 	vt.NasalReflectionFilter.Reset()
 
-	InitializeNasalCavity();
+	vt.InitializeNasalCavity()
 	vt.Throat.Init(float32(vt.SampleRate), vt.Config.ThroatCutoff, Amplitude(vt.Config.ThroatVol))
 	vt.Throat.Reset()
 
@@ -912,8 +919,8 @@ func (vt *VocalTract) InitSynth() {
 	vt.Reset()
 	vt.ControlRate = 1.0 / (vt.SynthDuration / 1000.0)
 	vt.InitializeSynthesizer()
-	vt.PrevControl.SetFromParams(vt.CurControl)
-	vt.CurrentData.SetFromParams(vt.CurControl)
+	vt.PrevControl.SetFromParams(&vt.CurControl)
+	vt.CurrentData.SetFromParams(&vt.CurControl)
 	// SigEmitUpdated()
 }
 
@@ -928,7 +935,8 @@ func (vt *VocalTract) InitSynth() {
 
 // SynthInitBuffer
 func (vt *VocalTract) SynthInitBuffer() {
-	InitBuffer((vt.SynthDuration/1000.0)*44100.0, 44100.0)
+	// todo:
+	//InitBuffer((vt.SynthDuration/1000.0)*44100.0, 44100.0)
 }
 
 // SynthReset
@@ -953,20 +961,24 @@ func (vt *VocalTract) Synthesize(resetFirst bool) {
 	controlFreq := 1.0 / vt.ControlPeriod
 	fmt.Printf("control period:", vt.ControlPeriod, "freq:", controlFreq)
 
-	vt.DeltaControl.ComputeDeltas(vt.CurControl, vt.PrevControl, vt.DeltaMax, controlFreq)
+	vt.DeltaControl.ComputeDeltas(&vt.CurControl, &vt.PrevControl, &vt.DeltaMax, float32(controlFreq))
 
 	for j := 0; j < vt.ControlPeriod; j++ {
-		vt.SynthesizeImpl
-		vt.CurrentData.UpdateFromDeltas(vt.DeltaControl)
-		vt.PrevControl.SetFromParams(vt.CurrentData) // prev is where we actually got, not where we wanted to get..
-		sampleSize = SampleSize()
-		sType := SampleType()
+		vt.SynthesizeImpl()
+		vt.CurrentData.UpdateFromDeltas(&vt.DeltaControl)
+		vt.PrevControl.SetFromParams(&vt.CurrentData) // prev is where we actually got, not where we wanted to get..
+		// todo:
+		//sampleSize = SampleSize()
+		//sType := SampleType()
 
-		nFrames := len(vt.OutputData)
-		if FrameCount() < nFrames {
-			InitBuffer(nFrames, SampleRate(), ChannelCount(), sampleSize, sType)
-		}
-		scale = CalculateMonoScale()
+		// todo:
+		// nFrames := len(vt.OutputData
+		//if FrameCount() < nFrames {
+		//	InitBuffer(nFrames, SampleRate(), ChannelCount(), sampleSize, sType)
+		//}
+
+		// todo:
+		// scale := vt.CalculateMonoScale()
 
 		//#if (QT_VERSION >= 0x050000)
 		// void* buf = q_buf.data();
@@ -979,7 +991,7 @@ func (vt *VocalTract) Synthesize(resetFirst bool) {
 }
 
 // SynthesizeImpl
-func (vt *VocalTract) Synthesize_impl() {
+func (vt *VocalTract) SynthesizeImpl() {
 	// convert parameters here
 	f0 := Frequency(vt.CurrentData.GlotPitch)
 	ax := Amplitude(vt.CurrentData.GlotVol)
@@ -1009,25 +1021,25 @@ func (vt *VocalTract) Synthesize_impl() {
 
 	var signal float32
 	// cross-mix pure noise with pulsed noise
-	if (vt.Config.NoiseMod) {
+	if vt.Config.NoiseMod {
 		crossmix := ax * vt.CrossmixFactor
 		if crossmix >= 1.0 {
 			crossmix = 1.0
 			signal = (pulsedNoise * crossmix) + (lpNoise * (1.0 - crossmix))
 		} else {
-			signal = lpNoise;
+			signal = lpNoise
 		}
 
 		// put signal through vocal tract
-		signal = vt.VocalTractUpdate(((pulse + (ah1 * signal)) * VtScale), vt.BandpassFilter.Filter(signal));
+		signal = vt.VocalTractUpdate(((pulse + (ah1 * signal)) * VtScale), vt.BandpassFilter.Filter(signal))
 
 		// put pulse through throat
-		signal += vt.Throat.Process(pulse * VtScale);
+		signal += vt.Throat.Process(pulse * VtScale)
 
 		// output sample here
 		vt.SampleRateConverter.DataFill(signal)
 
-		vt.PrevGlotAmplitude = ax;
+		vt.PrevGlotAmplitude = ax
 	}
 }
 
@@ -1056,35 +1068,35 @@ func (vt *VocalTract) CalculateTubeCoefficients() {
 	var radA2, radB2 float32
 	// calculate coefficients for the oropharynx
 	for i := 0; i < OroPharynxRegCount-1; i++ {
-		radA2 = vt.CurrentData.RadiusVal(i);
-		radA2 *= radA2;
-		radB2 = vt.CurrentData.RadiusVal(i + 1);
-		radB2 *= radB2;
-		vt.OropharynxCoefs[i] = (radA2 - radB2) / (radA2 + radB2);
+		radA2 = vt.CurrentData.RadiusVal(i)
+		radA2 *= radA2
+		radB2 = vt.CurrentData.RadiusVal(i + 1)
+		radB2 *= radB2
+		vt.OropharynxCoefs[i] = (radA2 - radB2) / (radA2 + radB2)
 	}
 
 	// calculate the coefficient for the mouth aperture
 	radA2 = vt.CurrentData.RadiusVal(OroPharynxReg8)
-	radA2 *= radA2;
+	radA2 *= radA2
 	radB2 = vt.Voice.ApertureRadius * vt.Voice.ApertureRadius
 	vt.OropharynxCoefs[OroPharynxCoef8] = (radA2 - radB2) / (radA2 + radB2)
 
 	// calculate alpha coefficients for 3-way junction
 	// note:  since junction is in middle of region 4, r0_2 = r1_2
-	r0_2 := vt.CurrentData.RadiusVal(OroPharynxReg4);
-	r0_2 *= r0_2;
-	r1_2 := r0_2;
-	r2_2 := vt.CurrentData.Velum * vt.CurrentData.Velum;
-	sum := 2.0 / (r0_2 + r1_2 + r2_2);
-	vt.Alpha[ThreeWayLeft] = sum * r0_2;
-	vt.Alpha[ThreeWayRight] = sum * r1_2;
-	vt.Alpha[ThreeWayUpper] = sum * r2_2;
+	r0_2 := vt.CurrentData.RadiusVal(OroPharynxReg4)
+	r0_2 *= r0_2
+	r1_2 := r0_2
+	r2_2 := vt.CurrentData.Velum * vt.CurrentData.Velum
+	sum := 2.0 / (r0_2 + r1_2 + r2_2)
+	vt.Alpha[ThreeWayLeft] = sum * r0_2
+	vt.Alpha[ThreeWayRight] = sum * r1_2
+	vt.Alpha[ThreeWayUpper] = sum * r2_2
 
 	// and 1st nasal passage coefficient
 	radA2 = vt.CurrentData.Velum * vt.CurrentData.Velum
-	radB2 = vt.Voice.NoseRadiusVal(NasalTractSect2);
-	radB2 *= radB2;
-	vt.NasalCoefs[NasalTractCoef1] = (radA2 - radB2) / (radA2 + radB2);
+	radB2 = vt.Voice.NoseRadiusVal(NasalTractSect2)
+	radB2 *= radB2
+	vt.NasalCoefs[NasalTractCoef1] = (radA2 - radB2) / (radA2 + radB2)
 }
 
 // SetFricationTaps Sets tfrication taps according to the current position and amplitude of frication
@@ -1100,10 +1112,10 @@ func (vt *VocalTract) SetFricationTaps() {
 			vt.FricationTap[i] = remainder * fricationAmplitude
 			if (i + 1) < FricationInjCoefCount {
 				i += 1
-				vt.FricationTap[i] = complement * fricationAmplitude;
+				vt.FricationTap[i] = complement * fricationAmplitude
 			}
 		} else {
-			vt.FricationTap[i] = 0.0;
+			vt.FricationTap[i] = 0.0
 		}
 	}
 	//#if 0
@@ -1130,7 +1142,7 @@ func (vt *VocalTract) VocalTractUpdate(input, frication float32) float32 {
 	}
 	// input to top of tube
 	vt.Oropharynx[OroPharynxSect1][Top][vt.CurPtr] =
-		(vt.Oropharynx[OroPharynxSect1][Bottom][vt.PrevPtr] * vt.DampingFactor) + input;
+		(vt.Oropharynx[OroPharynxSect1][Bottom][vt.PrevPtr] * vt.DampingFactor) + input
 
 	// calculate the scattering junctions for s1-s2
 	delta := vt.OropharynxCoefs[OroPharynxCoef1] *
@@ -1181,7 +1193,7 @@ func (vt *VocalTract) VocalTractUpdate(input, frication float32) float32 {
 	// calculate last 3 internal junctions (S7-S8, S8-S9, S9-S10)
 	for i, j, k := OroPharynxSect7, OroPharynxCoef5, FricationInjCoef6; i < OroPharynxSect10; i, j, k = i+1, j+1, k+1 {
 		delta = vt.OropharynxCoefs[j] *
-			(vt.Oropharynx[i][Top][vt.PrevPtr] - vt.Oropharynx[i+1][Bottom][vt.PrevPtr]);
+			(vt.Oropharynx[i][Top][vt.PrevPtr] - vt.Oropharynx[i+1][Bottom][vt.PrevPtr])
 		vt.Oropharynx[i+1][Top][vt.CurPtr] =
 			((vt.Oropharynx[i][Top][vt.PrevPtr] + delta) * vt.DampingFactor) +
 				(vt.FricationTap[k] * frication)
@@ -1191,7 +1203,7 @@ func (vt *VocalTract) VocalTractUpdate(input, frication float32) float32 {
 
 	// reflected signal at mouth goes through a lowpass filter
 	vt.Oropharynx[OroPharynxSect10][Bottom][vt.CurPtr] = vt.DampingFactor *
-		vt.MouthReflectionFilter.Filter(vt.OropharynxCoefs[OroPharynxCoef8] *
+		vt.MouthReflectionFilter.Filter(vt.OropharynxCoefs[OroPharynxCoef8]*
 			vt.Oropharynx[OroPharynxSect10][Top][vt.PrevPtr])
 
 	// output from mouth goes through a highpass filter
@@ -1227,7 +1239,7 @@ func (vt *VocalTract) CalculateMonoScale() float32 {
 
 // CalculateStereoScale
 func (vt *VocalTract) CalculateStereoScale(leftScale,
-rightScale *float32) {
+	rightScale *float32) {
 	*leftScale = (-((vt.Balance / 2.0) - 0.5))
 	*rightScale = (-((vt.Balance / 2.0) + 0.5))
 

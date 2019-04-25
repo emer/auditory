@@ -8,6 +8,7 @@ import (
 	"github.com/emer/emergent/etensor"
 	"math"
 	"strconv"
+	"unsafe"
 
 	"github.com/chewxy/math32"
 	"github.com/emer/emergent/dtable"
@@ -20,8 +21,8 @@ type AudInputSpec struct {
 	TrialMsec    float32 `desc:"#DEF_100 length of a full trial's worth of input -- total number of milliseconds to accumulate into a complete trial of activations to present to a network -- must be a multiple of step_msec -- input will be trial_msec / step_msec = trial_steps wide in the X axis, and number of filters in the Y axis"`
 	BorderSteps  uint32  `desc:"number of steps before and after the trial window to preserve -- this is important when applying temporal filters that have greater temporal extent"`
 	SampleRate   uint32  `desc:"rate of sampling in our sound input (e.g., 16000 = 16Khz) -- can initialize this from a taSound object using InitFromSound method"`
-	Channels     uint16  `desc:"total number of channels to process"`
-	Channel      uint16  `desc:"#CONDSHOW_ON_channels:1 specific channel to process, if input has multiple channels, and we only process one of them (-1 = process all)"`
+	Channels     uint32  `desc:"total number of channels to process"`
+	Channel      uint32  `desc:"#CONDSHOW_ON_channels:1 specific channel to process, if input has multiple channels, and we only process one of them (-1 = process all)"`
 	WinSamples   uint32  `desc:"#READ_ONLY #SHOW total number of samples to process (win_msec * .001 * sample_rate)"`
 	StepSamples  uint32  `desc:"#READ_ONLY #SHOW total number of samples to step input by (step_msec * .001 * sample_rate)"`
 	TrialSamples uint32  `desc:"#READ_ONLY #SHOW total number of samples in a trial  (trail_msec * .001 * sample_rate)"`
@@ -152,238 +153,8 @@ func (ag *AudGaborSpec) Initialize() {
 
 // RenderFilters generates filters into the given matrix, which is formatted as: [sz_time_steps][sz_freq][n_filters]
 func (ag *AudGaborSpec) RenderFilters(filters *etensor.Float32) {
-	//fltrs.SetGeom(3, sz_time, sz_freq, n_filters);
-	//float
-	//ctr_t = (float)(sz_time-1) / 2.0
-	//f;
-	//float
-	//ctr_f = (float)(sz_freq-1) / 2.0
-	//f;
-	//float
-	//ang_inc = taMath_float::pi / (float)
-	//4.0
-	//f;
-	//float
-	//radius_t = (float)(sz_time) / 2.0
-	//f;
-	//float
-	//radius_f = (float)(sz_freq) / 2.0
-	//f;
-	//float
-	//len_norm = 1.0
-	//f / (2.0
-	//f * sig_len * sig_len);
-	//float
-	//wd_norm = 1.0
-	//f / (2.0
-	//f * sig_wd * sig_wd);
-	//float
-	//hor_len_norm = 1.0
-	//f / (2.0
-	//f * sig_hor_len * sig_hor_len);
-	//float
-	//hor_wd_norm = 1.0
-	//f / (2.0
-	//f * sig_hor_wd * sig_hor_wd);
-	//float
-	//twopinorm = (2.0
-	//f * taMath_float::pi) / wvlen;
-	//float
-	//hctr_inc = (float)(sz_freq-1) / (float)(n_horiz+1);
-	//int
-	//fli = 0;
-	//for
-	//(int
-	//hi = 0;
-	//hi < n_horiz;
-	//hi++, fli++) {
-	//
-	//	float
-	//	hctr_f = hctr_inc * (float)(hi+1);
-	//	float
-	//	angf = -2.0
-	//	f * ang_inc;
-	//	for
-	//	(int
-	//	y = 0;
-	//	y < sz_freq;
-	//	y++) {
-	//		for
-	//		(int
-	//		x = 0;
-	//		x < sz_time;
-	//		x++) {
-	//			float
-	//			xf = (float)
-	//			x - ctr_t;
-	//			float
-	//			yf = (float)
-	//			y - hctr_f;
-	//			float
-	//			xfn = xf / radius_t;
-	//			float
-	//			yfn = yf / radius_f;
-	//			float
-	//			dist = taMath_float::hypot(xfn, yfn);
-	//			float
-	//			val = 0.0
-	//			f;
-	//			if (!(circle_edge && (dist > 1.0f))) {
-	//			float nx = xfn * cosf(angf) - yfn * sinf(angf);
-	//			float ny = yfn * cosf(angf) + xfn * sinf(angf);
-	//			float gauss = expf(-(hor_wd_norm * (nx * nx) + hor_len_norm * (ny * ny)));
-	//			float sin_val = sinf(twopinorm * ny + phase_off);
-	//			val = gauss * sin_val;
-	//			}
-	//			fltrs.FastEl3d(x, y, fli) = val;
-	//		}
-	//	}
-	//}
-	//for
-	//(int
-	//ang = 1;
-	//ang < 4;
-	//ang++, fli++) {
-	//	float
-	//	angf = -(float)
-	//	ang * ang_inc;
-	//	for
-	//	(int
-	//	y = 0;
-	//	y < sz_freq;
-	//	y++) {
-	//		for
-	//		(int
-	//		x = 0;
-	//		x < sz_time;
-	//		x++) {
-	//			float
-	//			xf = (float)
-	//			x - ctr_t;
-	//			float
-	//			yf = (float)
-	//			y - ctr_f;
-	//			float
-	//			xfn = xf / radius_t;
-	//			float
-	//			yfn = yf / radius_f;
-	//			float
-	//			dist = taMath_float::hypot(xfn, yfn);
-	//			float
-	//			val = 0.0
-	//			f;
-	//			if (!(circle_edge && (dist > 1.0f))) {
-	//			float nx = xfn * cosf(angf) - yfn * sinf(angf);
-	//			float ny = yfn * cosf(angf) + xfn * sinf(angf);
-	//			float gauss = expf(-(len_norm * (nx * nx) + wd_norm * (ny * ny)));
-	//			float sin_val = sinf(twopinorm * ny + phase_off);
-	//			val = gauss * sin_val;
-	//			}
-	//			fltrs.FastEl3d(x, y, fli) = val;
-	//		}
-	//	}
-	//}
-	//
-	//// renorm each half
-	//for (fli = 0; fli < n_filters; fli++) {
-	//	float
-	//	pos_sum = 0.0
-	//	f;
-	//	float
-	//	neg_sum = 0.0
-	//	f;
-	//	for
-	//	(int
-	//	y = 0;
-	//	y < sz_freq;
-	//	y++) {
-	//		for
-	//		(int
-	//		x = 0;
-	//		x < sz_time;
-	//		x++) {
-	//			float & val = fltrs.FastEl3d(x, y, fli);
-	//			if (val > 0.0f)          {
-	//				pos_sum += val;
-	//			}
-	//			else if (val < 0.0f)     {
-	//				neg_sum += val;
-	//			}
-	//		}
-	//	}
-	//	float
-	//	pos_norm = 1.0
-	//	f / pos_sum;
-	//	float
-	//	neg_norm = -1.0
-	//	f / neg_sum;
-	//	for
-	//	(int
-	//	y = 0;
-	//	y < sz_freq;
-	//	y++) {
-	//		for
-	//		(int
-	//		x = 0;
-	//		x < sz_time;
-	//		x++) {
-	//			float & val = fltrs.FastEl3d(x, y, fli);
-	//			if (val > 0.0f)          {
-	//				val *= pos_norm;
-	//			}
-	//			else if (val < 0.0f)     {
-	//				val *= neg_norm;
-	//			}
-	//		}
-	//	}
-	//}
-}
 
-// GridFilters #BUTTON #NULL_OK_0 #NULL_TEXT_0_NewDataTable plot the filters into data table and generate a grid view (reset any existing data first)
-//func (ag *AudGaborSpec) GridFilters(filters *etensor.Float32, graphData *DataTable, reset bool) {
-//
-//	RenderFilters(fltrs); // just to make sure
-//
-//	String
-//	name;
-//	if (owner) name = owner- > GetName();
-//	taProject * proj = GetMyProj();
-//	if (!graph_data) {
-//		graph_data = proj- > GetNewAnalysisDataTable(name+"_V1Gabor_GridFilters", true);
-//	}
-//	graph_data- > StructUpdate(true);
-//	if (reset)
-//	graph_data- > ResetData();
-//	int
-//	idx;
-//	DataCol * nmda = graph_data- > FindMakeColName("Name", idx, VT_STRING);
-//	//   nmda->SetUserData("WIDTH", 10);
-//	DataCol * matda = graph_data- > FindMakeColName("Filter", idx, VT_FLOAT, 2, sz_time,
-//		sz_freq);
-//	float
-//	maxv = taMath_float::vec_abs_max(&fltrs, idx);
-//	graph_data- > SetUserData("N_ROWS", n_filters);
-//	graph_data- > SetUserData("SCALE_MIN", -maxv);
-//	graph_data- > SetUserData("SCALE_MAX", maxv);
-//	graph_data- > SetUserData("BLOCK_HEIGHT", 0.0
-//	f);
-//	for
-//	(int
-//	i = 0;
-//	i < n_filters;
-//	i++) {
-//		graph_data- > AddBlankRow();
-//		float_MatrixPtr
-//		frm;
-//		frm = (float_Matrix *)
-//		fltrs.GetFrameSlice(i);
-//		matda- > SetValAsMatrix(frm, -1);
-//		nmda- > SetValAsString("Filter: "+String(i), -1);
-//	}
-//
-//	graph_data- > StructUpdate(false);
-//	graph_data- > FindMakeGridView();
-//}
+}
 
 // MelFBankSpec contains mel frequency feature bank sampling parameters
 type MelFBankSpec struct {
@@ -435,6 +206,7 @@ func (mc *MelCepstrumSpec) Initialize() {
 }
 
 type AuditoryProc struct {
+	// From C++ version not ported
 	//	enum SaveMode {               // how to add new data to the data table
 	//	NONE_SAVE,                  // don't save anything at all -- overrides any more specific save guys and prevents any addition or modification to the data table
 	//	FIRST_ROW,                  // always overwrite the first row -- does EnforceRows(1) if rows = 0
@@ -452,7 +224,6 @@ type AuditoryProc struct {
 	Gabor2      AudGaborSpec    `desc:"#CONDSHOW_ON_mel_fbank.on full set of frequency / time gabor filters -- second size"`
 	Gabor3      AudGaborSpec    `desc:"#CONDSHOW_ON_mel_fbank.on full set of frequency / time gabor filters -- third size"`
 	Mfcc        MelCepstrumSpec `desc:"#CONDSHOW_ON_mel_fbank.on specifications of the mel cepstrum discrete cosine transform of the mel fbank filter features"`
-	//	V1KwtaSpec    gabor_kwta;     // #CONDSHOW_ON_gabor1.on k-winner-take-all inhibitory dynamics for the time-gabor output
 
 	// Filters
 	DftSize        uint32 `desc:"#READ_ONLY #NO_SAVE full size of fft output -- should be input.win_samples"`
@@ -604,8 +375,9 @@ func (ap *AuditoryProc) InitDataTableChan(ch int) bool {
 
 // InputStepsLeft returns the number of steps left to process in the current input sound
 func (ap *AuditoryProc) InputStepsLeft() int {
-	samplesLeft = ap.SoundFull.Frames() - ap.InputPos
-	return samplesLeft / ap.Input.StepSamples
+	samplesLeft := ap.SoundFull.NumDims() - ap.InputPos
+	//samplesLeft = ap.SoundFull.Frames() - ap.InputPos
+	return samplesLeft / int(ap.Input.StepSamples)
 }
 
 // ProcessTrial processes a full trial worth of sound -- iterates over steps to fill a trial's worth of sound data
@@ -651,6 +423,76 @@ func (ap *AuditoryProc) ProcessTrial() bool {
 	}
 	return true
 }
+
+
+// SoundToWindow gets sound from sound_full at given position and channel, into window_in -- pads with zeros for any amount not available in the sound_full input
+func (ap *AuditoryProc) SoundToWindow(inPos int, ch int) bool {
+	int samp_avail = sound_full.Frames() - in_pos;
+	int samp_cpy = MIN(samp_avail, input.win_samples);
+
+	if(samp_cpy > 0) {
+		int sz = samp_cpy * sizeof(float);
+		if(sound_full.dims() == 1) {
+			memcpy(window_in.el, sound_full.el + in_pos, sz);
+		}
+		else {
+			// todo: this is not right:
+			memcpy(window_in.el, (void*)&(sound_full.FastEl2d(chan, in_pos)), sz);
+		}
+	}
+
+	samp_cpy = MAX(samp_cpy, 0);  // prevent negatives here -- otherwise overflows
+	// pad remainder with zero
+	int zero_n = input.win_samples - samp_cpy;
+	if(zero_n > 0) {
+		int sz = zero_n * sizeof(float);
+		memset(window_in.el + samp_cpy, 0, sz);
+	}
+
+	available := ap.SoundFull.Frames() - inPos
+	sampleCopy := math32.Min(available, float32(ap.Input.WinSamples))
+	if sampleCopy > 0 {
+		sz := sampleCopy * 4 // todo: this was sizeof(float) in c++ version
+		if ap.SoundFull.NumDims() == 1 {
+
+		}
+
+	}
+
+
+
+
+	return true;
+
+}
+
+
+// ProcessStep process a step worth of sound input from current input_pos, and increment input_pos by input.step_samples
+func (ap *AuditoryProc) ProcessStep(ch int, step int) bool {
+	ap.SoundToWindow(ap.InputPos, ch)
+	ap.FilterWindow(ch, step)
+	ap.InputPos = ap.InputPos + ap.Input.StepSamples
+	ap.FirstStep = false
+	return true;
+}
+
+void AuditoryProc::DftInput(int chan, int step) {
+taMath_float::fft_real(&dft_out, &window_in);
+}
+
+// FilterWindow filters the current window_in input data according to current settings -- called by ProcessStep, but can be called separately
+func (ap *AuditoryProc) FilterWindow(ch int, step int) bool {
+	ap.DftInput(ch, step)
+	if ap.MelFBank.On {
+		ap.PowerOfDft(ch, step)
+		ap.MelFilterDft(ch, step)
+		if ap.Mfcc.On {
+			ap.CepstrumDctMel(ch, step)
+		}
+	}
+	return true;
+}
+
 
 // MelOutputToTable mel filter bank to output table
 func (ap *AuditoryProc) MelOutputToTable(dt *dtable.Table, ch int, fmtOnly bool) bool {
