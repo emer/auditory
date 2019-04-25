@@ -5,12 +5,12 @@ package audio
 
 import (
 	"fmt"
+	"github.com/emer/emergent/etensor"
 	"math"
 	"strconv"
 
 	"github.com/chewxy/math32"
 	"github.com/emer/emergent/dtable"
-	"github.com/emer/emergent/etensor"
 )
 
 // AudInputSpec defines the sound input parameters for auditory processing
@@ -452,6 +452,7 @@ type AuditoryProc struct {
 	Gabor2      AudGaborSpec    `desc:"#CONDSHOW_ON_mel_fbank.on full set of frequency / time gabor filters -- second size"`
 	Gabor3      AudGaborSpec    `desc:"#CONDSHOW_ON_mel_fbank.on full set of frequency / time gabor filters -- third size"`
 	Mfcc        MelCepstrumSpec `desc:"#CONDSHOW_ON_mel_fbank.on specifications of the mel cepstrum discrete cosine transform of the mel fbank filter features"`
+	//	V1KwtaSpec    gabor_kwta;     // #CONDSHOW_ON_gabor1.on k-winner-take-all inhibitory dynamics for the time-gabor output
 
 	// Filters
 	DftSize        uint32 `desc:"#READ_ONLY #NO_SAVE full size of fft output -- should be input.win_samples"`
