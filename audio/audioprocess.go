@@ -5,13 +5,12 @@ package audio
 
 import (
 	"fmt"
-	"github.com/emer/emergent/etensor"
 	"math"
 	"strconv"
-	"unsafe"
 
 	"github.com/chewxy/math32"
-	"github.com/emer/emergent/dtable"
+	"github.com/emer/dtable/dtable"
+	"github.com/emer/dtable/etensor"
 )
 
 // AudInputSpec defines the sound input parameters for auditory processing
@@ -424,48 +423,46 @@ func (ap *AuditoryProc) ProcessTrial() bool {
 	return true
 }
 
-
 // SoundToWindow gets sound from sound_full at given position and channel, into window_in -- pads with zeros for any amount not available in the sound_full input
 func (ap *AuditoryProc) SoundToWindow(inPos int, ch int) bool {
-	int samp_avail = sound_full.Frames() - in_pos;
-	int samp_cpy = MIN(samp_avail, input.win_samples);
+	//int samp_avail = sound_full.Frames() - in_pos;
+	//int samp_cpy = MIN(samp_avail, input.win_samples);
+	//
+	//if(samp_cpy > 0) {
+	//	int sz = samp_cpy * sizeof(float);
+	//	if(sound_full.dims() == 1) {
+	//		memcpy(window_in.el, sound_full.el + in_pos, sz);
+	//	}
+	//	else {
+	//		// todo: this is not right:
+	//		memcpy(window_in.el, (void*)&(sound_full.FastEl2d(chan, in_pos)), sz);
+	//	}
+	//}
+	//
+	//samp_cpy = MAX(samp_cpy, 0);  // prevent negatives here -- otherwise overflows
+	//// pad remainder with zero
+	//int zero_n = input.win_samples - samp_cpy;
+	//if(zero_n > 0) {
+	//	int sz = zero_n * sizeof(float);
+	//	memset(window_in.el + samp_cpy, 0, sz);
+	//}
+	//
+	//available := ap.SoundFull.Frames() - inPos
+	//sampleCopy := math32.Min(available, float32(ap.Input.WinSamples))
+	//if sampleCopy > 0 {
+	//	sz := sampleCopy * 4 // todo: this was sizeof(float) in c++ version
+	//	if ap.SoundFull.NumDims() == 1 {
+	//
+	//	}
+	//
+	//}
+	//
+	//
+	//
 
-	if(samp_cpy > 0) {
-		int sz = samp_cpy * sizeof(float);
-		if(sound_full.dims() == 1) {
-			memcpy(window_in.el, sound_full.el + in_pos, sz);
-		}
-		else {
-			// todo: this is not right:
-			memcpy(window_in.el, (void*)&(sound_full.FastEl2d(chan, in_pos)), sz);
-		}
-	}
-
-	samp_cpy = MAX(samp_cpy, 0);  // prevent negatives here -- otherwise overflows
-	// pad remainder with zero
-	int zero_n = input.win_samples - samp_cpy;
-	if(zero_n > 0) {
-		int sz = zero_n * sizeof(float);
-		memset(window_in.el + samp_cpy, 0, sz);
-	}
-
-	available := ap.SoundFull.Frames() - inPos
-	sampleCopy := math32.Min(available, float32(ap.Input.WinSamples))
-	if sampleCopy > 0 {
-		sz := sampleCopy * 4 // todo: this was sizeof(float) in c++ version
-		if ap.SoundFull.NumDims() == 1 {
-
-		}
-
-	}
-
-
-
-
-	return true;
+	return true
 
 }
-
 
 // ProcessStep process a step worth of sound input from current input_pos, and increment input_pos by input.step_samples
 func (ap *AuditoryProc) ProcessStep(ch int, step int) bool {
@@ -473,11 +470,12 @@ func (ap *AuditoryProc) ProcessStep(ch int, step int) bool {
 	ap.FilterWindow(ch, step)
 	ap.InputPos = ap.InputPos + ap.Input.StepSamples
 	ap.FirstStep = false
-	return true;
+	return true
 }
 
-void AuditoryProc::DftInput(int chan, int step) {
-taMath_float::fft_real(&dft_out, &window_in);
+// DftInput applies dft (fft) to input
+func (ap *AuditoryProc) DftInput(ch int, step int) {
+	//taMath_float::fft_real(&dft_out, &window_in);
 }
 
 // FilterWindow filters the current window_in input data according to current settings -- called by ProcessStep, but can be called separately
@@ -490,170 +488,243 @@ func (ap *AuditoryProc) FilterWindow(ch int, step int) bool {
 			ap.CepstrumDctMel(ch, step)
 		}
 	}
-	return true;
+	return true
 }
 
-
 // MelOutputToTable mel filter bank to output table
-func (ap *AuditoryProc) MelOutputToTable(dt *dtable.Table, ch int, fmtOnly bool) bool {
-	//DataCol* col;
-	//int idx;
-	//String col_sufx;
-	//if(input.channels > 1) {
-	//	col_sufx = "_ch" + String(chan);
-	//}
-	//col = data_table->FindMakeColName(name + "_dft_pow" + col_sufx, idx,
-	//	DataTable::VT_FLOAT, 2,
-	//	input.total_steps, dft_use);
-	//if(!fmt_only) {
-	//	float_MatrixPtr dout; dout = (float_Matrix*)col->GetValAsMatrix(-1);
-	//	for(int stp = 0; stp < input.total_steps; stp++) {
-	//		for(int i=0; i< dft_use; i++) {
-	//			if(dft.log_pow) {
-	//				dout->FastEl2d(stp, i) = dft_log_power_trial_out.FastEl3d(i, stp, chan);
-	//			}
-	//			else {
-	//				dout->FastEl2d(stp, i) = dft_power_trial_out.FastEl3d(i, stp, chan);
-	//			}
-	//		}
-	//	}
-	//}
-	//
-	//if(mel_fbank.on) {
-	//	col = data_table->FindMakeColName(name + "_mel_fbank" + col_sufx, idx,
-	//		DataTable::VT_FLOAT, 2,
-	//		input.total_steps, mel_fbank.n_filters);
-	//	if(!fmt_only) {
-	//		float_MatrixPtr dout; dout = (float_Matrix*)col->GetValAsMatrix(-1);
-	//		for(int stp = 0; stp < input.total_steps; stp++) {
-	//			for(int i=0; i< mel_fbank.n_filters; i++) {
-	//				dout->FastEl2d(stp, i) = mel_fbank_trial_out.FastEl3d(i, stp, chan);
-	//			}
-	//		}
-	//	}
-	//
-	//	if(gabor1.on) {
-	//		col = data_table->FindMakeColName(name + "_mel_gabor1_raw" + col_sufx, idx,
-	//			DataTable::VT_FLOAT, 4,
-	//			gabor1.n_filters, 2,
-	//			gabor1_geom.x, gabor1_geom.y);
-	//		if(!fmt_only) {
-	//			float_MatrixPtr dout; dout = (float_Matrix*)col->GetValAsMatrix(-1);
-	//			const int nf = gabor1.n_filters;
-	//			for(int stp = 0; stp < gabor1_geom.x; stp++) {
-	//				for(int i=0; i< gabor1_geom.y; i++) {
-	//					for(int ti=0; ti < nf; ti++) {
-	//						dout->FastEl4d(ti, 0, stp, i) = gabor1_trial_raw.FastEl(ti, 0, i, stp, chan);
-	//						dout->FastEl4d(ti, 1, stp, i) = gabor1_trial_raw.FastEl(ti, 1, i, stp, chan);
-	//					}
-	//				}
-	//			}
-	//		}
-	//
-	//		col = data_table->FindMakeColName(name + "_mel_gabor1" + col_sufx, idx,
-	//			DataTable::VT_FLOAT, 4,
-	//			gabor1.n_filters, 2,
-	//			gabor1_geom.x, gabor1_geom.y);
-	//		if(!fmt_only) {
-	//			float_MatrixPtr dout; dout = (float_Matrix*)col->GetValAsMatrix(-1);
-	//			const int nf = gabor1.n_filters;
-	//			for(int stp = 0; stp < gabor1_geom.x; stp++) {
-	//				for(int i=0; i< gabor1_geom.y; i++) {
-	//					for(int ti=0; ti < nf; ti++) {
-	//						dout->FastEl4d(ti, 0, stp, i) = gabor1_trial_out.FastEl(ti, 0, i, stp, chan);
-	//						dout->FastEl4d(ti, 1, stp, i) = gabor1_trial_out.FastEl(ti, 1, i, stp, chan);
-	//					}
-	//				}
-	//			}
-	//		}
-	//	}
-	//
-	//	if(gabor2.on) {
-	//		col = data_table->FindMakeColName(name + "_mel_gabor2_raw" + col_sufx, idx,
-	//			DataTable::VT_FLOAT, 4,
-	//			gabor2.n_filters, 2,
-	//			gabor2_geom.x, gabor2_geom.y);
-	//		if(!fmt_only) {
-	//			float_MatrixPtr dout; dout = (float_Matrix*)col->GetValAsMatrix(-1);
-	//			const int nf = gabor2.n_filters;
-	//			for(int stp = 0; stp < gabor2_geom.x; stp++) {
-	//				for(int i=0; i< gabor2_geom.y; i++) {
-	//					for(int ti=0; ti < nf; ti++) {
-	//						dout->FastEl4d(ti, 0, stp, i) = gabor2_trial_raw.FastEl(ti, 0, i, stp, chan);
-	//						dout->FastEl4d(ti, 1, stp, i) = gabor2_trial_raw.FastEl(ti, 1, i, stp, chan);
-	//					}
-	//				}
-	//			}
-	//		}
-	//
-	//		col = data_table->FindMakeColName(name + "_mel_gabor2" + col_sufx, idx,
-	//			DataTable::VT_FLOAT, 4,
-	//			gabor2.n_filters, 2,
-	//			gabor2_geom.x, gabor2_geom.y);
-	//		if(!fmt_only) {
-	//			float_MatrixPtr dout; dout = (float_Matrix*)col->GetValAsMatrix(-1);
-	//			const int nf = gabor2.n_filters;
-	//			for(int stp = 0; stp < gabor2_geom.x; stp++) {
-	//				for(int i=0; i< gabor2_geom.y; i++) {
-	//					for(int ti=0; ti < nf; ti++) {
-	//						dout->FastEl4d(ti, 0, stp, i) = gabor2_trial_out.FastEl(ti, 0, i, stp, chan);
-	//						dout->FastEl4d(ti, 1, stp, i) = gabor2_trial_out.FastEl(ti, 1, i, stp, chan);
-	//					}
-	//				}
-	//			}
-	//		}
-	//	}
-	//
-	//	if(gabor3.on) {
-	//		col = data_table->FindMakeColName(name + "_mel_gabor3_raw" + col_sufx, idx,
-	//			DataTable::VT_FLOAT, 4,
-	//			gabor3.n_filters, 2,
-	//			gabor3_geom.x, gabor3_geom.y);
-	//		if(!fmt_only) {
-	//			float_MatrixPtr dout; dout = (float_Matrix*)col->GetValAsMatrix(-1);
-	//			const int nf = gabor3.n_filters;
-	//			for(int stp = 0; stp < gabor3_geom.x; stp++) {
-	//				for(int i=0; i< gabor3_geom.y; i++) {
-	//					for(int ti=0; ti < nf; ti++) {
-	//						dout->FastEl4d(ti, 0, stp, i) = gabor3_trial_raw.FastEl(ti, 0, i, stp, chan);
-	//						dout->FastEl4d(ti, 1, stp, i) = gabor3_trial_raw.FastEl(ti, 1, i, stp, chan);
-	//					}
-	//				}
-	//			}
-	//		}
-	//
-	//		col = data_table->FindMakeColName(name + "_mel_gabor3" + col_sufx, idx,
-	//			DataTable::VT_FLOAT, 4,
-	//			gabor3.n_filters, 2,
-	//			gabor3_geom.x, gabor3_geom.y);
-	//		if(!fmt_only) {
-	//			float_MatrixPtr dout; dout = (float_Matrix*)col->GetValAsMatrix(-1);
-	//			const int nf = gabor3.n_filters;
-	//			for(int stp = 0; stp < gabor3_geom.x; stp++) {
-	//				for(int i=0; i< gabor3_geom.y; i++) {
-	//					for(int ti=0; ti < nf; ti++) {
-	//						dout->FastEl4d(ti, 0, stp, i) = gabor3_trial_out.FastEl(ti, 0, i, stp, chan);
-	//						dout->FastEl4d(ti, 1, stp, i) = gabor3_trial_out.FastEl(ti, 1, i, stp, chan);
-	//					}
-	//				}
-	//			}
-	//		}
-	//	}
-	//}
-	//
-	//if(mfcc.on) {
-	//	col = data_table->FindMakeColName(name + "_mel_mfcc" + col_sufx, idx,
-	//		DataTable::VT_FLOAT, 2,
-	//		input.total_steps, mfcc.n_coeff);
-	//	if(!fmt_only) {
-	//		float_MatrixPtr dout; dout = (float_Matrix*)col->GetValAsMatrix(-1);
-	//		for(int stp = 0; stp < input.total_steps; stp++) {
-	//			for(int i=0; i< mfcc.n_coeff; i++) {
-	//				dout->FastEl2d(stp, i) = mfcc_dct_trial_out.FastEl3d(i, stp, chan);
-	//			}
-	//		}
-	//	}
-	//}
-	//
+func (ap *AuditoryProc) MelOutputToTable(dt *dtable.Table, ch int, fmtOnly bool) bool { // ch is channel
+	//var idx int
+	var colSfx string
+
+	if ap.Input.Channels > 1 {
+		colSfx = "_ch" + strconv.Itoa(ch)
+	}
+
+	var err error
+	cn := "AudProc" + "_dft_pow" + colSfx // column name
+	col := dt.ColByName(cn)
+	if col == nil {
+		err = dt.AddCol(etensor.NewFloat32([]int{int(ap.Input.TotalSteps), int(ap.DftUse)}, nil, nil), cn)
+		if err != nil {
+			fmt.Printf("MelOutputToTable: column not found or failed to be created")
+			return false
+		}
+	}
+
+	col = dt.ColByName(cn)
+	if fmtOnly == false {
+		dout := col.CloneTensor()
+		for s := 0; s < int(ap.Input.TotalSteps); s++ {
+			for i := 0; i < int(ap.DftUse); i++ {
+				if ap.Dft.LogPow {
+					val := ap.DftLogPowerTrialOut.FloatVal([]int{i, s, ch})
+					dout.SetFloat([]int{s, i}, val)
+				} else {
+					val := ap.DftPowerTrialOut.FloatVal([]int{i, s, ch})
+					dout.SetFloat([]int{s, i}, val)
+				}
+			}
+		}
+	}
+
+	if ap.MelFBank.On {
+		cn := "AudProc" + "_mel_fbank" + colSfx // column name
+		col := dt.ColByName(cn)
+		if col == nil {
+			err = dt.AddCol(etensor.NewFloat32([]int{int(ap.Input.TotalSteps), int(ap.MelFBank.NFilters)}, nil, nil), cn)
+			if err != nil {
+				fmt.Printf("MelOutputToTable: column not found or failed to be created")
+				return false
+			}
+		}
+		col = dt.ColByName(cn)
+		if fmtOnly == false {
+			dout := col.CloneTensor()
+			for s := 0; s < ap.Input.TotalSteps; s++ {
+				for i := 0; i < ap.MelFBank.NFilters; i++ {
+					val := ap.MelFBankTrialOut.FloatVal([]int{i, s, ch})
+					dout.SetFloat([]int{s, i}, val)
+				}
+			}
+		}
+	}
+
+	if ap.Gabor1.On {
+		cn := "AudProc" + "_mel_gabor1_raw" + colSfx // column name
+		col := dt.ColByName(cn)
+		if col == nil {
+			err = dt.AddCol(etensor.NewFloat32([]int{int(ap.Gabor1.NFilters), 2, ap.Gabor1Shape.x, ap.Gabor1Shape.y}, nil, nil), cn)
+			if err != nil {
+				fmt.Printf("MelOutputToTable: column not found or failed to be created")
+				return false
+			}
+		}
+		col = dt.ColByName(cn)
+		if fmtOnly == false {
+			dout := col.CloneTensor()
+			nf := ap.Gabor1.NFilters
+			for s := 0; s < int(ap.Gabor1Shape.x); s++ {
+				for i := 0; i < int(ap.Gabor1Shape.y); i++ {
+					for ti := 0; ti < nf; ti++ {
+						val0 := ap.Gabor1TrialRaw.FloatVal([]int{ti, 0, i, s, ch})
+						dout.SetFloat([]int{ti, 0, s, i}, val0)
+						val1 := ap.Gabor1TrialRaw.FloatVal([]int{ti, 1, i, s, ch})
+						dout.SetFloat([]int{ti, 1, s, i}, val1)
+					}
+				}
+			}
+		}
+
+		cn = "AudProc" + "_mel_gabor1" + colSfx // column name
+		col = dt.ColByName(cn)
+		if col == nil {
+			err = dt.AddCol(etensor.NewFloat32([]int{int(ap.Gabor1.NFilters), 2, ap.Gabor1Shape.x, ap.Gabor1Shape.y}, nil, nil), cn)
+			if err != nil {
+				fmt.Printf("MelOutputToTable: column not found or failed to be created")
+				return false
+			}
+		}
+		col = dt.ColByName(cn)
+		if fmtOnly == false {
+			dout := col.CloneTensor()
+			nf := ap.Gabor1.NFilters
+			for s := 0; s < int(ap.Gabor1Shape.x); s++ {
+				for i := 0; i < int(ap.Gabor1Shape.y); i++ {
+					for ti := 0; ti < nf; ti++ {
+						val0 := ap.Gabor1TrialOut.FloatVal([]int{ti, 0, i, s, ch})
+						dout.SetFloat([]int{ti, 0, s, i}, val0)
+						val1 := ap.Gabor1TrialOut.FloatVal([]int{ti, 1, i, s, ch})
+						dout.SetFloat([]int{ti, 1, s, i}, val1)
+					}
+				}
+			}
+		}
+	}
+
+	if ap.Gabor2.On {
+		cn := "AudProc" + "_mel_gabor2_raw" + colSfx // column name
+		col := dt.ColByName(cn)
+		if col == nil {
+			err = dt.AddCol(etensor.NewFloat32([]int{int(ap.Gabor2.NFilters), 2, ap.Gabor2Shape.x, ap.Gabor2Shape.y}, nil, nil), cn)
+			if err != nil {
+				fmt.Printf("MelOutputToTable: column not found or failed to be created")
+				return false
+			}
+		}
+		col = dt.ColByName(cn)
+		if fmtOnly == false {
+			dout := col.CloneTensor()
+			nf := ap.Gabor2.NFilters
+			for s := 0; s < int(ap.Gabor2Shape.x); s++ {
+				for i := 0; i < int(ap.Gabor2Shape.y); i++ {
+					for ti := 0; ti < nf; ti++ {
+						val0 := ap.Gabor2TrialRaw.FloatVal([]int{ti, 0, i, s, ch})
+						dout.SetFloat([]int{ti, 0, s, i}, val0)
+						val1 := ap.Gabor2TrialRaw.FloatVal([]int{ti, 1, i, s, ch})
+						dout.SetFloat([]int{ti, 1, s, i}, val1)
+					}
+				}
+			}
+		}
+
+		cn = "AudProc" + "_mel_gabor2" + colSfx // column name
+		col = dt.ColByName(cn)
+		if col == nil {
+			err = dt.AddCol(etensor.NewFloat32([]int{int(ap.Gabor2.NFilters), 2, ap.Gabor2Shape.x, ap.Gabor2Shape.y}, nil, nil), cn)
+			if err != nil {
+				fmt.Printf("MelOutputToTable: column not found or failed to be created")
+				return false
+			}
+		}
+		col = dt.ColByName(cn)
+		if fmtOnly == false {
+			dout := col.CloneTensor()
+			nf := ap.Gabor2.NFilters
+			for s := 0; s < int(ap.Gabor2Shape.x); s++ {
+				for i := 0; i < int(ap.Gabor2Shape.y); i++ {
+					for ti := 0; ti < nf; ti++ {
+						val0 := ap.Gabor2TrialOut.FloatVal([]int{ti, 0, i, s, ch})
+						dout.SetFloat([]int{ti, 0, s, i}, val0)
+						val1 := ap.Gabor2TrialOut.FloatVal([]int{ti, 1, i, s, ch})
+						dout.SetFloat([]int{ti, 1, s, i}, val1)
+					}
+				}
+			}
+		}
+	}
+
+	if ap.Gabor3.On {
+		cn := "AudProc" + "_mel_gabor3_raw" + colSfx // column name
+		col := dt.ColByName(cn)
+		if col == nil {
+			err = dt.AddCol(etensor.NewFloat32([]int{int(ap.Gabor3.NFilters), 2, ap.Gabor3Shape.x, ap.Gabor3Shape.y}, nil, nil), cn)
+			if err != nil {
+				fmt.Printf("MelOutputToTable: column not found or failed to be created")
+				return false
+			}
+		}
+		col = dt.ColByName(cn)
+		if fmtOnly == false {
+			dout := col.CloneTensor()
+			nf := ap.Gabor3.NFilters
+			for s := 0; s < int(ap.Gabor3Shape.x); s++ {
+				for i := 0; i < int(ap.Gabor3Shape.y); i++ {
+					for ti := 0; ti < nf; ti++ {
+						val0 := ap.Gabor3TrialRaw.FloatVal([]int{ti, 0, i, s, ch})
+						dout.SetFloat([]int{ti, 0, s, i}, val0)
+						val1 := ap.Gabor3TrialRaw.FloatVal([]int{ti, 1, i, s, ch})
+						dout.SetFloat([]int{ti, 1, s, i}, val1)
+					}
+				}
+			}
+		}
+
+		cn = "AudProc" + "_mel_gabor3" + colSfx // column name
+		col = dt.ColByName(cn)
+		if col == nil {
+			err = dt.AddCol(etensor.NewFloat32([]int{int(ap.Gabor3.NFilters), 2, ap.Gabor3Shape.x, ap.Gabor3Shape.y}, nil, nil), cn)
+			if err != nil {
+				fmt.Printf("MelOutputToTable: column not found or failed to be created")
+				return false
+			}
+		}
+		col = dt.ColByName(cn)
+		if fmtOnly == false {
+			dout := col.CloneTensor()
+			nf := ap.Gabor3.NFilters
+			for s := 0; s < int(ap.Gabor3Shape.x); s++ {
+				for i := 0; i < int(ap.Gabor3Shape.y); i++ {
+					for ti := 0; ti < nf; ti++ {
+						val0 := ap.Gabor3TrialOut.FloatVal([]int{ti, 0, i, s, ch})
+						dout.SetFloat([]int{ti, 0, s, i}, val0)
+						val1 := ap.Gabor3TrialOut.FloatVal([]int{ti, 1, i, s, ch})
+						dout.SetFloat([]int{ti, 1, s, i}, val1)
+					}
+				}
+			}
+		}
+	}
+
+	if ap.Mfcc.On {
+		cn = "AudProc" + "_mel_mfcc" + colSfx // column name
+		col = dt.ColByName(cn)
+		if col == nil {
+			err = dt.AddCol(etensor.NewFloat32([]int{int(ap.Input.TotalSteps), int(ap.Mfcc.NCoeff)}, nil, nil), cn)
+			if err != nil {
+				fmt.Printf("MelOutputToTable: column not found or failed to be created")
+				return false
+			}
+		}
+		col = dt.ColByName(cn)
+		if fmtOnly == false {
+			dout := col.CloneTensor()
+			for s := 0; s < ap.Input.TotalSteps; s++ {
+				for i := 0; i < ap.Mfcc.NCoeff; i++ {
+					val := ap.MfccDctTrialOut.FloatVal([]int{i, s, ch})
+					dout.SetFloat([]int{s, i}, val)
+				}
+			}
+		}
+	}
 	return true
 }

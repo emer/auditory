@@ -6,7 +6,7 @@ package audio
 import (
 	"errors"
 	"fmt"
-	"github.com/emer/emergent/etensor"
+	"github.com/emer/dtable/etensor"
 	"github.com/go-audio/wav"
 	"os"
 	"time"
