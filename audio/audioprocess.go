@@ -8,6 +8,7 @@ import (
 	"image"
 	"math"
 	"strconv"
+	"unsafe"
 
 	"github.com/chewxy/math32"
 	"github.com/emer/dtable/dtable"
@@ -422,7 +423,7 @@ func (ap *AuditoryProc) NeedsInit() bool {
 }
 
 func (ap *AuditoryProc) Init() bool {
-	ap.UpdateConfig()
+	//ap.UpdateConfig()
 	ap.InitFilters()
 	ap.InitOutMatrix()
 	ap.Data = &dtable.Table{}
@@ -506,122 +507,77 @@ func (ap *AuditoryProc) ProcessTrial() bool {
 
 // SoundToWindow gets sound from sound_full at given position and channel, into window_in -- pads with zeros for any amount not available in the sound_full input
 func (ap *AuditoryProc) SoundToWindow(inPos uint32, ch uint32) bool {
-	//int samp_avail = sound_full.Frames() - in_pos;
-	//int samp_cpy = MIN(samp_avail, input.win_samples);
-	//
-	//if(samp_cpy > 0) {
-	//	int sz = samp_cpy * sizeof(float);
-	//	if(sound_full.dims() == 1) {
-	//		memcpy(window_in.el, sound_full.el + in_pos, sz);
-	//	}
-	//	else {
-	//		// todo: this is not right:
-	//		memcpy(window_in.el, (void*)&(sound_full.FastEl2d(chan, in_pos)), sz);
-	//	}
-	//}
-	//
-	//samp_cpy = MAX(samp_cpy, 0);  // prevent negatives here -- otherwise overflows
-	//// pad remainder with zero
-	//int zero_n = input.win_samples - samp_cpy;
-	//if(zero_n > 0) {
-	//	int sz = zero_n * sizeof(float);
-	//	memset(window_in.el + samp_cpy, 0, sz);
-	//}
-	//
-	//available := ap.SoundFull.Frames() - inPos
-	//sampleCopy := math32.Min(available, float32(ap.Input.WinSamples))
-	//if sampleCopy > 0 {
-	//	sz := sampleCopy * 4 // todo: this was sizeof(float) in c++ version
-	//	if ap.SoundFull.NumDims() == 1 {
-	//
-	//	}
-	//
-	//}
-	//
-	//
-	//
+	samplesAvail := ap.SoundFull.Frames() - inPos
+	samplesCopy := math32.Min(samplesAvail, float32(ap.Input.WinSamples))
 
+
+	if samplesCopy > 0 {
+		sz := samplesCopy * sizeof(Float)
+		if ap.SoundFull.NumDims() == 1 {
+			memcpy(ap.WindowIn.el, ap.SoundFull.el+inPos, sz)
+		} else {
+			// todo: this is not right: comment from c++ version
+			memcpy(window_in.el, (void*)&(sound_full.FastEl2d(chan, in_pos)), sz);
+		}
+	}
+
+	samplesCopy = math32.Max(samplesCopy, 0) // prevent negatives here -- otherwise overflows
+	// pad remainder with zero
+	zeroN := int(ap.Input.WinSamples) - int(samplesCopy)
+	if zeroN > 0 {
+		sz := zeroN * unsafe.Sizeof(Float)
+		memset(ap.WindowIn.el, samplesCopy, 0, sz)
+	}
 	return true
 
 }
 
-//bool AuditoryProc::StepToSample(int samp_pos) {
-//if(NeedsInit()) Init();
-//NewTableRow();
-//if(TestError(InputStepsLeft() < 1, "StepToSample",
-//"no steps worth of input sound available -- load a new sound")) {
-//return false;
-//}
-//if(input_pos == 0)            // first process a trial if nothing loaded yet
-//ProcessTrial();
-//
-//if(TestError(samp_pos < trial_start_pos, "StepToSample",
-//"target sample position is earlier than current trial start position!")) {
-//return false;
-//}
-//int steps_fwd = (samp_pos - trial_start_pos) / input.step_samples;
-//
-//int end_step = input.total_steps-1;
-//
-//for(int stp = 0; stp < steps_fwd; stp++) {
-//int st_in_pos = input_pos;
-//trial_start_pos += input.step_samples;
-//trial_end_pos += input.step_samples;
-//for(int chan=0; chan < input.channels; chan++) {
-//input_pos = st_in_pos;      // always start at same place per channel
-//StepForward(chan);
-//ProcessStep(chan, end_step);
-//FilterTrial(chan);
-//}
-//}
-//
-//for(int chan=0; chan < input.channels; chan++) {
-//OutputToTable(chan);
-//}
-//return true;
-//}
-//
-//bool AuditoryProc::WrapBorder(int chan) {
-//if(input.border_steps == 0) return true;
-//int bord_eff = 2 * input.border_steps; // full amount to wrap
-//int src_st_step = input.total_steps - bord_eff;
-//for(int step=0; step < bord_eff; step++) {
-//CopyStepFromStep(step, src_st_step + step, chan);
-//}
-//return true;
-//}
-//
-//bool AuditoryProc::StepForward(int chan) {
-//int tot_m1 = input.total_steps - 1;
-//for(int step=0; step < tot_m1; step++) {
-//CopyStepFromStep(step, step+1, chan);
-//}
-//return true;
-//}
-//
-//bool AuditoryProc::CopyStepFromStep(int to_step, int fm_step, int chan) {
-//for(int i=0; i<dft_use; i++) {
-//dft_power_trial_out.FastEl3d(i, to_step, chan) =
-//dft_power_trial_out.FastEl3d(i, fm_step, chan);
-//if(dft.log_pow) {
-//dft_log_power_trial_out.FastEl3d(i, to_step, chan) =
-//dft_log_power_trial_out.FastEl3d(i, fm_step, chan);
-//}
-//}
-//if(mel_fbank.on) {
-//for(int i=0; i < mel_fbank.n_filters; i++) {
-//mel_fbank_trial_out.FastEl3d(i, to_step, chan) =
-//mel_fbank_trial_out.FastEl3d(i, fm_step, chan);
-//}
-//if(mfcc.on) {
-//for(int i=0; i < mel_fbank.n_filters; i++) {
-//mfcc_dct_trial_out.FastEl3d(i, to_step, chan) =
-//mfcc_dct_trial_out.FastEl3d(i, fm_step, chan);
-//}
-//}
-//}
-//return true;
-//}
+// WrapBorder
+func (ap *AuditoryProc) WrapBorder(ch int) bool {
+	if ap.Input.BorderSteps == 0 {
+		return true
+	}
+	borderEff := 2 * ap.Input.BorderSteps
+	srcStStep := ap.Input.TotalSteps - borderEff
+	for s := 0; s < int(borderEff); s++ {
+		ap.CopyStepFromStep(s, int(srcStStep)+s, ch)
+	}
+	return true;
+}
+
+// StepForward
+func (ap *AuditoryProc) StepForward(ch int) bool {
+	totalM1 := ap.Input.TotalSteps - 1
+	for s := 0; s < int(totalM1); s++ {
+		ap.CopyStepFromStep(s, s+1, ch)
+	}
+	return true;
+}
+
+// CopyStepFromStep
+func (ap *AuditoryProc) CopyStepFromStep(toStep, fmStep, ch int) bool {
+	for i := 0; i < int(ap.DftUse); i++ {
+		val := ap.DftPowerTrialOut.Value([]int{i, fmStep, ch})
+		ap.DftPowerTrialOut.Set([]int{i, toStep, ch}, val)
+		if ap.Dft.LogPow {
+			val := ap.DftLogPowerTrialOut.Value([]int{i, fmStep, ch})
+			ap.DftLogPowerTrialOut.Set([]int{i, toStep, ch}, val)
+		}
+	}
+	if (ap.MelFBank.On) {
+		for i := 0; i < int(ap.MelFBank.NFilters); i++ {
+			val := ap.MelFBankTrialOut.Value([]int{i, fmStep, ch})
+			ap.MelFBankTrialOut.Set([]int{i, toStep, ch}, val)
+		}
+		if ap.Mfcc.On {
+			for i := 0; i < int(ap.MelFBank.NFilters); i++ {
+				val := ap.MfccDctTrialOut.Value([]int{i, fmStep, ch})
+				ap.MfccDctTrialOut.Set([]int{i, toStep, ch}, val)
+			}
+		}
+	}
+	return true;
+}
 
 // ProcessStep process a step worth of sound input from current input_pos, and increment input_pos by input.step_samples
 func (ap *AuditoryProc) ProcessStep(ch uint32, step uint32) bool {
@@ -635,6 +591,66 @@ func (ap *AuditoryProc) ProcessStep(ch uint32, step uint32) bool {
 // DftInput applies dft (fft) to input
 func (ap *AuditoryProc) DftInput(ch int, step int) {
 	//taMath_float::fft_real(&dft_out, &window_in);
+}
+
+// PowerOfDft
+func (ap *AuditoryProc) PowerOfDft(ch, step int) {
+	// Mag() is absolute value   SqMag is square of it - r*r + i*i
+	for i := 0; i < int(ap.DftUse); i++ {
+		r := ap.DftOut.FastEl_Flat(2 * i)
+		j := ap.DftOut.FastEl_Flat(2*i + 1)
+		powr := r*r + j*j
+		if ap.FirstStep == false {
+			powr = ap.Dft.PreviousSmooth*ap.DftPowerOut.FastEl_Flat(i) + ap.Dft.CurrentSmooth*powr
+		}
+		ap.DftPowerOut.FastEl_Flat(i) = powr
+		ap.DftPowerTrialOut.SetFloat([]int{i, step, ch}, powr)
+		if ap.Dft.LogPow {
+			powr += ap.Dft.LogOff
+			var logp float32
+			if powr == 0 {
+				logp = ap.Dft.LogMin
+			} else {
+				logp = math32.Log(powr)
+			}
+			ap.DftPowerOut.FastEl_Flat(i) = logp
+			ap.DftPowerTrialOut.SetFloat([]int{i, step, ch}, logp)
+		}
+	}
+}
+
+// MelFilterDft
+func (ap *AuditoryProc) MelFilterDft(ch, step int) {
+	mi := 0
+	for flt := 0; flt < int(ap.MelFBank.NFilters); flt, mi = flt+1, mi+1 {
+		minBin := ap.MelPtsBin.Value1D(flt)
+		maxBin := ap.MelPtsBin.Value1D(flt + 2)
+
+		sum := 0
+		fi := 0
+		for bin := minBin; bin < maxBin; bin, fi = bin+1, fi+1 {
+			fVal := ap.MelFilters.Value([]int{fi, mi})
+			pVal := ap.DftPowerOut.FastEl_Flat(bin)
+			sum += fVal*pVal
+		}
+		sum += int(ap.MelFBank.LogOff)
+		var val float32
+		if sum == 0 {
+			val = ap.MelFBank.LogMin
+		} else {
+			val = math32.Log(sum)
+		}
+		if ap.FBankRenorm.On {
+			val -= ap.FBankRenorm.RenormMin
+		}
+		if val < 0 {
+			val = 0
+		}
+		val *= ap.FBankRenorm.RenormScale
+		if val > 1.0 {
+			val = 1.0
+		}
+	}
 }
 
 // FilterTrial process filters that operate over an entire trial at a time
@@ -653,6 +669,18 @@ func (ap *AuditoryProc) FilterTrial(ch int) bool {
 	}
 	return true
 }
+
+// CepstrumDctMel
+func (ap *AuditoryProc) CepstrumDctMel(ch, step int) {
+	memcpy(ap.MfccDctOut.el, ap.MelFBankOut.el, ap.MelFBank.NFilters * unsafe.Sizeof(Float))
+	//taMath_float::dct(&mfcc_dct_out);
+	//float& el0 = mfcc_dct_out.FastEl_Flat(0);
+	//el0 = logf(1.0f + el0*el0);              // replace with log energy instead..
+	//for(int i=0; i<mel_fbank.n_filters; i++) {
+	//	mfcc_dct_trial_out.FastEl3d(i, step, chan) = mfcc_dct_out.FastEl_Flat(i);
+	//}
+}
+
 
 // GaborFilter process filters that operate over an entire trial at a time
 func (ap *AuditoryProc) GaborFilter(ch int, spec *AudGaborSpec, filters *etensor.Float32, outRaw *etensor.Float32, out *etensor.Float32) {
@@ -684,7 +712,7 @@ func (ap *AuditoryProc) GaborFilter(ch int, spec *AudGaborSpec, filters *etensor
 			nf := spec.NFilters
 			for fi := 0; fi < nf; fi++ {
 				fSum := float32(0.0)
-				for  ff := 0; ff < spec.SizeFreq; ff++ {
+				for ff := 0; ff < spec.SizeFreq; ff++ {
 					for ft := 0; ft < spec.SizeTime; ft++ {
 						fVal := filters.Value([]int{ft, ff, fi})
 						iVal := ap.MelFBankTrialOut.Value([]int{flt + ff, inSt + ft, ch})
@@ -693,7 +721,7 @@ func (ap *AuditoryProc) GaborFilter(ch int, spec *AudGaborSpec, filters *etensor
 				}
 				pos := fSum >= 0.0
 				act := spec.Gain * math32.Abs(fSum)
-				if(pos) {
+				if (pos) {
 					outRaw.SetFloat([]int{fi, 0, fIdx, tIdx, ch}, float64(act))
 					outRaw.SetFloat([]int{fi, 1, fIdx, tIdx, ch}, 0)
 				} else {
@@ -705,22 +733,26 @@ func (ap *AuditoryProc) GaborFilter(ch int, spec *AudGaborSpec, filters *etensor
 	}
 
 	rawFrm :=
+		float_MatrixPtr
+	raw_frm;
+	raw_frm = (float_Matrix *)
+	out_raw.GetFrameSlice(chan);
+	float_MatrixPtr
+	out_frm;
+	out_frm = (float_Matrix *)
+	out.GetFrameSlice(chan);
+	if (gabor_kwta.On()) {
+		gabor_kwta.Compute_Inhib(*raw_frm, *out_frm, gabor_gci);
+	} else {
+		memcpy(out_frm- > el, raw_frm- > el, raw_frm- > size*sizeof(float));
+	}
+
+}
+
 float_MatrixPtr raw_frm; raw_frm = (float_Matrix*)out_raw.GetFrameSlice(chan);
 float_MatrixPtr out_frm; out_frm = (float_Matrix*)out.GetFrameSlice(chan);
 
-if(gabor_kwta.On()) {
-gabor_kwta.Compute_Inhib(*raw_frm, *out_frm, gabor_gci);
-}
-else {
-memcpy(out_frm->el, raw_frm->el, raw_frm->size * sizeof(float));
-}
-
-}
-
-float_MatrixPtr raw_frm; raw_frm = (float_Matrix*)out_raw.GetFrameSlice(chan);
-float_MatrixPtr out_frm; out_frm = (float_Matrix*)out.GetFrameSlice(chan);
-
-if(gabor_kwta.On()) {
+if (gabor_kwta.On()) {
 gabor_kwta.Compute_Inhib(*raw_frm, *out_frm, gabor_gci);
 }
 else {
@@ -742,17 +774,15 @@ func (ap *AuditoryProc) FilterWindow(ch int, step int) bool {
 }
 
 // OutputToTable
-func (ap *AuditoryProc) OutputToTable(ch int) {
-	if (!data_table || save_mode == NONE_SAVE) // bail now
-	return false;
-	data_table- > StructUpdate(true);
-	if (mel_fbank.on) {
-		MelOutputToTable(data_table, chan, false); // not fmt_only
+func (ap *AuditoryProc) OutputToTable(ch int) bool {
+	if ap.Data == nil {
+		return false
 	}
-	data_table- > StructUpdate(false);
+	if (ap.MelFBank.On) {
+		ap.MelOutputToTable(ap.Data, ch, false); // not fmt_only
+	}
 	return true;
 }
-
 
 // MelOutputToTable mel filter bank to output table
 func (ap *AuditoryProc) MelOutputToTable(dt *dtable.Table, ch int, fmtOnly bool) bool { // ch is channel
