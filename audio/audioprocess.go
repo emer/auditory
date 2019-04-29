@@ -20,15 +20,15 @@ type AudInputSpec struct {
 	WinMsec      float32 `desc:"#DEF_25 input window -- number of milliseconds worth of sound to filter at a time"`
 	StepMsec     float32 `desc:"#DEF_5;10;12.5 input step -- number of milliseconds worth of sound that the input is stepped along to obtain the next window sample"`
 	TrialMsec    float32 `desc:"#DEF_100 length of a full trial's worth of input -- total number of milliseconds to accumulate into a complete trial of activations to present to a network -- must be a multiple of step_msec -- input will be trial_msec / step_msec = trial_steps wide in the X axis, and number of filters in the Y axis"`
-	BorderSteps  uint32  `desc:"number of steps before and after the trial window to preserve -- this is important when applying temporal filters that have greater temporal extent"`
-	SampleRate   uint32  `desc:"rate of sampling in our sound input (e.g., 16000 = 16Khz) -- can initialize this from a taSound object using InitFromSound method"`
-	Channels     uint32  `desc:"total number of channels to process"`
-	Channel      uint32  `desc:"#CONDSHOW_ON_channels:1 specific channel to process, if input has multiple channels, and we only process one of them (-1 = process all)"`
-	WinSamples   uint32  `desc:"#READ_ONLY #SHOW total number of samples to process (win_msec * .001 * sample_rate)"`
-	StepSamples  uint32  `desc:"#READ_ONLY #SHOW total number of samples to step input by (step_msec * .001 * sample_rate)"`
-	TrialSamples uint32  `desc:"#READ_ONLY #SHOW total number of samples in a trial  (trail_msec * .001 * sample_rate)"`
-	TrialSteps   uint32  `desc:"#READ_ONLY #SHOW total number of steps in a trial  (trail_msec / step_msec)"`
-	TotalSteps   uint32  `desc:"#READ_ONLY #SHOW 2*border_steps + trial_steps -- total in full window"`
+	SampleRate   int  `desc:"rate of sampling in our sound input (e.g., 16000 = 16Khz) -- can initialize this from a taSound object using InitFromSound method"`
+	BorderSteps  int  `desc:"number of steps before and after the trial window to preserve -- this is important when applying temporal filters that have greater temporal extent"`
+	Channels     int  `desc:"total number of channels to process"`
+	Channel      int  `desc:"#CONDSHOW_ON_channels:1 specific channel to process, if input has multiple channels, and we only process one of them (-1 = process all)"`
+	WinSamples   int  `desc:"#READ_ONLY #SHOW total number of samples to process (win_msec * .001 * sample_rate)"`
+	StepSamples  int  `desc:"#READ_ONLY #SHOW total number of samples to step input by (step_msec * .001 * sample_rate)"`
+	TrialSamples int  `desc:"#READ_ONLY #SHOW total number of samples in a trial  (trail_msec * .001 * sample_rate)"`
+	TrialSteps   int  `desc:"#READ_ONLY #SHOW total number of steps in a trial  (trail_msec / step_msec)"`
+	TotalSteps   int  `desc:"#READ_ONLY #SHOW 2*border_steps + trial_steps -- total in full window"`
 }
 
 //Init initializes the the AudInputSpec
@@ -48,13 +48,13 @@ func (ais *AudInputSpec) ComputeSamples() {
 	ais.WinSamples = MSecToSamples(ais.WinMsec, ais.SampleRate)
 	ais.StepSamples = MSecToSamples(ais.StepMsec, ais.SampleRate)
 	ais.TrialSamples = MSecToSamples(ais.TrialMsec, ais.SampleRate)
-	ais.TrialSteps = uint32(math.Round(float64(ais.TrialMsec / ais.StepMsec)))
+	ais.TrialSteps = int(math.Round(float64(ais.TrialMsec / ais.StepMsec)))
 	ais.TotalSteps = 2*ais.BorderSteps + ais.TrialSteps
 }
 
 // MSecToSamples converts milliseconds to samples, in terms of sample_rate
-func MSecToSamples(msec float32, rate uint32) uint32 {
-	return uint32(math.Round(float64(msec) * 0.001 * float64(rate)))
+func MSecToSamples(msec float32, rate int) int {
+	return int(math.Round(float64(msec) * 0.001 * float64(rate)))
 }
 
 // SamplesToMSec converts samples to milliseconds, in terms of sample_rate
@@ -70,7 +70,7 @@ func (ap *AuditoryProc) InitSound() bool {
 }
 
 // InitFromSound loads a sound and sets the AudInputSpec channel vars and sample rate
-func (ais *AudInputSpec) InitFromSound(snd *Sound, nChannels uint32, channel uint32) {
+func (ais *AudInputSpec) InitFromSound(snd *Sound, nChannels int, channel int) {
 	if snd == nil {
 		fmt.Printf("InitFromSound: sound nil")
 		return
@@ -79,9 +79,9 @@ func (ais *AudInputSpec) InitFromSound(snd *Sound, nChannels uint32, channel uin
 	ais.SampleRate = snd.SampleRate()
 	ais.ComputeSamples()
 	if nChannels < 1 {
-		ais.Channels = uint32(snd.Channels())
+		ais.Channels = snd.Channels()
 	} else {
-		ais.Channels = uint32(math32.Min(float32(nChannels), float32(ais.Channels)))
+		ais.Channels = int(math32.Min(float32(nChannels), float32(ais.Channels)))
 	}
 	if ais.Channels > 1 {
 		ais.Channel = channel
@@ -127,20 +127,20 @@ func (ar *AudRenormSpec) Initialize() {
 // has elongated frequency-band specific tuning, not a parallel horizontal tuning -- and has multiple of these
 type AudGaborSpec struct {
 	On              bool    `desc:"use this gabor filtering of the time-frequency space filtered input (time in terms of steps of the DFT transform, and discrete frequency factors based on the FFT window and input sample rate)"`
-	SizeTime        int     `desc:"#CONDSHOW_ON_on #DEF_6;8;12;16;24 size of the filter in the time (horizontal) domain, in terms of steps of the underlying DFT filtering steps"`
-	SizeFreq        int     `desc:"#CONDSHOW_ON_on #DEF_6;8;12;16;24 size of the filter in the frequency domain, in terms of discrete frequency factors based on the FFT window and input sample rate"`
-	SpaceTime       int     `desc:"#CONDSHOW_ON_on spacing in the time (horizontal) domain, in terms of steps"`
-	SpaceFreq       int     `desc:"#CONDSHOW_ON_on spacing in the frequency (vertical) domain"`
+	SizeTime        int    `desc:"#CONDSHOW_ON_on #DEF_6;8;12;16;24 size of the filter in the time (horizontal) domain, in terms of steps of the underlying DFT filtering steps"`
+	SizeFreq        int    `desc:"#CONDSHOW_ON_on #DEF_6;8;12;16;24 size of the filter in the frequency domain, in terms of discrete frequency factors based on the FFT window and input sample rate"`
+	SpaceTime       int    `desc:"#CONDSHOW_ON_on spacing in the time (horizontal) domain, in terms of steps"`
+	SpaceFreq       int    `desc:"#CONDSHOW_ON_on spacing in the frequency (vertical) domain"`
 	WaveLen         float32 `desc:"#CONDSHOW_ON_on #DEF_1.5;2 wavelength of the sine waves in normalized units"`
 	SigmaLen        float32 `desc:"#CONDSHOW_ON_on #DEF_0.6 gaussian sigma for the length dimension (elongated axis perpendicular to the sine waves) -- normalized as a function of filter size in relevant dimension"`
 	SigmaWidth      float32 `desc:"#CONDSHOW_ON_on #DEF_0.3 gaussian sigma for the width dimension (in the direction of the sine waves) -- normalized as a function of filter size in relevant dimension"`
 	SigmaLenHoriz   float32 `desc:"#CONDSHOW_ON_on #DEF_0.3 gaussian sigma for the length of special horizontal narrow-band filters -- normalized as a function of filter size in relevant dimension"`
 	SigmaWidthHoriz float32 `desc:"#CONDSHOW_ON_on #DEF_0.1 gaussian sigma for the horizontal dimension for special horizontal narrow-band filters -- normalized as a function of filter size in relevant dimension"`
 	Gain            float32 `desc:"#CONDSHOW_ON_on #DEF_2 overall gain multiplier applied after gabor filtering -- only relevant if not using renormalization (otherwize it just gets renormed awaY"`
-	NHoriz          int     `desc:"#CONDSHOW_ON_on #DEF_4 number of horizontally-elongated,  pure time-domain, frequency-band specific filters to include, evenly spaced over the available frequency space for this filter set -- in addition to these, there are two diagonals (45, 135) and a vertically-elongated (wide frequency band) filter"`
+	NHoriz          int    `desc:"#CONDSHOW_ON_on #DEF_4 number of horizontally-elongated,  pure time-domain, frequency-band specific filters to include, evenly spaced over the available frequency space for this filter set -- in addition to these, there are two diagonals (45, 135) and a vertically-elongated (wide frequency band) filter"`
 	PhaseOffset     float32 `desc:"#CONDSHOW_ON_on #DEF_0;1.5708 offset for the sine phase -- default is an asymmetric sine wave -- can make it into a symmetric cosine gabor by using PI/2 = 1.5708"`
 	CircleEdge      bool    `desc:"#CONDSHOW_ON_on #DEF_true cut off the filter (to zero) outside a circle of diameter filter_size -- makes the filter more radially symmetric"`
-	NFilters        int     `desc:"#CONDSHOW_ON_on #READ_ONLY #SHOW total number of filters = 3 + n_horiz"`
+	NFilters        int    `desc:"#CONDSHOW_ON_on #READ_ONLY #SHOW total number of filters = 3 + n_horiz"`
 }
 
 func (ag *AudGaborSpec) Initialize() {
@@ -167,9 +167,9 @@ func (ag *AudGaborSpec) RenderFilters(filters *etensor.Float32) {
 // MelFBankSpec contains mel frequency feature bank sampling parameters
 type MelFBankSpec struct {
 	On       bool    `desc:"perform mel-frequency filtering of the fft input"`
+	NFilters int  `desc:"#DEF_32;26 #CONDSHOW_ON_on number of Mel frequency filters to compute"`
 	LoHz     float32 `desc:"#DEF_120;300 #CONDSHOW_ON_on low frequency end of mel frequency spectrum"`
 	HiHz     float32 `desc:"#DEF_10000;8000 #CONDSHOW_ON_on high frequency end of mel frequency spectrum -- must be <= sample_rate / 2 (i.e., less than the Nyquist frequencY"`
-	NFilters uint32  `desc:"#DEF_32;26 #CONDSHOW_ON_on number of Mel frequency filters to compute"`
 	LogOff   float32 `desc:"#CONDSHOW_ON_on #DEF_0 on add this amount when taking the log of the Mel filter sums to produce the filter-bank output -- e.g., 1.0 makes everything positive -- affects the relative contrast of the outputs"`
 	LogMin   float32 `desc:"#CONDSHOW_ON_on #DEF_-10 minimum value a log can produce -- puts a lower limit on log output"`
 	LoMel    float32 `desc:"#READ_ONLY #SHOW #CONDSHOW_ON_on low end of mel scale in mel units"`
@@ -187,7 +187,7 @@ func MelToFreq(mel float32) float32 {
 }
 
 // FreqToBin converts frequency into FFT bin number, using parameters of number of FFT bins and sample rate
-func FreqToBin(freq, nFft, sampleRate float32) int {
+func FreqToBin(freq, nFft, sampleRate float32) int{
 	return int(math32.Floor(((nFft + 1) * freq) / sampleRate))
 }
 
@@ -205,7 +205,7 @@ func (mfb *MelFBankSpec) Initialize() {
 // MelCepstrumSpec holds the mel frequency sampling parameters
 type MelCepstrumSpec struct {
 	On     bool `desc:"perform cepstrum discrete cosine transform (dct) of the mel-frequency filter bank features"`
-	NCoeff int  `desc:"#CONDSHOW_ON_on #DEF_13 number of mfcc coefficients to output -- typically 1/2 of the number of filterbank features"`
+	NCoeff int `desc:"#CONDSHOW_ON_on #DEF_13 number of mfcc coefficients to output -- typically 1/2 of the number of filterbank features"`
 }
 
 func (mc *MelCepstrumSpec) Initialize() {
@@ -234,15 +234,15 @@ type AuditoryProc struct {
 	Mfcc        MelCepstrumSpec `desc:"#CONDSHOW_ON_mel_fbank.on specifications of the mel cepstrum discrete cosine transform of the mel fbank filter features"`
 
 	// Filters
-	DftSize        uint32 `desc:"#READ_ONLY #NO_SAVE full size of fft output -- should be input.win_samples"`
-	DftUse         uint32 `desc:"#READ_ONLY #NO_SAVE number of dft outputs to actually use -- should be dft_size / 2 + 1"`
-	MelNFiltersEff uint32 `desc:"#READ_ONLY #NO_SAVE effective number of mel filters: mel.n_filters + 2"`
+	DftSize        int `desc:"#READ_ONLY #NO_SAVE full size of fft output -- should be input.win_samples"`
+	DftUse         int `desc:"#READ_ONLY #NO_SAVE number of dft outputs to actually use -- should be dft_size / 2 + 1"`
+	MelNFiltersEff int `desc:"#READ_ONLY #NO_SAVE effective number of mel filters: mel.n_filters + 2"`
 
 	MelPtsMel        etensor.Float32 `desc:"#READ_ONLY #NO_SAVE [mel_n_filters_eff] scale points in mel units (mels)"`
 	MelPtsHz         etensor.Float32 `desc:"#READ_ONLY #NO_SAVE [mel_n_filters_eff] mel scale points in hz units"`
-	MelPtsBin        etensor.Float32 `desc:"#READ_ONLY #NO_SAVE [mel_n_filters_eff] mel scale points in fft bins"`
-	MelFilterMaxBins uint32          `desc:"#READ_ONLY #NO_SAVE maximum number of bins for mel filter -- number of bins in highest filter"`
+	MelPtsBin        etensor.Int32  `desc:"#READ_ONLY #NO_SAVE [mel_n_filters_eff] mel scale points in fft bins"`
 	MelFilters       etensor.Float32 `desc:"#READ_ONLY #NO_SAVE [mel_filt_max_bins][mel.n_filters] the actual filters for actual number of mel filters"`
+	MelFilterMaxBins int          `desc:"#READ_ONLY #NO_SAVE maximum number of bins for mel filter -- number of bins in highest filter"`
 
 	Gabor1Filters etensor.Float32 `desc:"#READ_ONLY #NO_SAVE full gabor filters"`
 	Gabor2Filters etensor.Float32 `desc:"#READ_ONLY #NO_SAVE full gabor filters"`
@@ -250,9 +250,9 @@ type AuditoryProc struct {
 
 	// Outputs
 	FirstStep     bool        `desc:"#READ_ONLY #NO_SAVE #SHOW is this the first step of processing -- turns of prv smoothing of dft power"`
-	InputPos      uint32      `desc:"#READ_ONLY #NO_SAVE #SHOW current position in the sound_full input -- in terms of sample number"`
-	TrialStartPos uint32      `desc:"#READ_ONLY #NO_SAVE #SHOW starting position of the current trial -- in terms of sample number"`
-	TrialEndPos   uint32      `desc:"#READ_ONLY #NO_SAVE #SHOW ending position of the current trial -- in terms of sample number"`
+	InputPos      int      `desc:"#READ_ONLY #NO_SAVE #SHOW current position in the sound_full input -- in terms of sample number"`
+	TrialStartPos int      `desc:"#READ_ONLY #NO_SAVE #SHOW starting position of the current trial -- in terms of sample number"`
+	TrialEndPos   int      `desc:"#READ_ONLY #NO_SAVE #SHOW ending position of the current trial -- in terms of sample number"`
 	Gabor1Shape   image.Point `desc:"#CONDSHOW_ON_gabor1.on #READ_ONLY #SHOW overall geometry of gabor1 output (group-level geometry -- feature / unit level geometry is n_features, 2)"`
 	Gabor2Shape   image.Point `desc:"#CONDSHOW_ON_gabor2.on #READ_ONLY #SHOW overall geometry of gabor2 output (group-level geometry -- feature / unit level geometry is n_features, 2)"`
 	Gabor3Shape   image.Point `desc:"#CONDSHOW_ON_gabor3.on #READ_ONLY #SHOW overall geometry of gabor3 output (group-level geometry -- feature / unit level geometry is n_features, 2)"`
@@ -299,13 +299,13 @@ func (ap *AuditoryProc) InitFilters() bool {
 // InitFiltersMel
 func (ap *AuditoryProc) InitFiltersMel() bool {
 	ap.MelNFiltersEff = ap.MelFBank.NFilters + 2
-	ap.MelPtsMel.SetShape([]int{1, int(ap.MelNFiltersEff)}, nil, nil)
-	ap.MelPtsHz.SetShape([]int{1, int(ap.MelNFiltersEff)}, nil, nil)
-	ap.MelPtsBin.SetShape([]int{1, int(ap.MelNFiltersEff)}, nil, nil)
+	ap.MelPtsMel.SetShape([]int{1, ap.MelNFiltersEff}, nil, nil)
+	ap.MelPtsHz.SetShape([]int{1, ap.MelNFiltersEff}, nil, nil)
+	ap.MelPtsBin.SetShape([]int{1, ap.MelNFiltersEff}, nil, nil)
 
 	melIncr := (ap.MelFBank.HiMel - ap.MelFBank.LoMel) / float32(ap.MelFBank.NFilters+1)
 
-	for idx := 0; idx < int(ap.MelNFiltersEff); idx++ {
+	for idx := 0; idx < ap.MelNFiltersEff; idx++ {
 		ml := ap.MelFBank.LoMel + float32(idx)*melIncr
 		hz := MelToFreq(ml)
 		bin := FreqToBin(hz, float32(ap.DftUse), float32(ap.Input.SampleRate))
@@ -314,13 +314,13 @@ func (ap *AuditoryProc) InitFiltersMel() bool {
 		ap.MelPtsBin.SetFloat1D(idx, float64(bin))
 	}
 
-	ap.MelFilterMaxBins = uint32(ap.MelPtsBin.FloatVal1D(int(ap.MelNFiltersEff)-1)-ap.MelPtsBin.FloatVal1D(int(ap.MelNFiltersEff)-3)) + 1
-	ap.MelFilters.SetShape([]int{int(ap.MelFilterMaxBins), int(ap.MelFBank.NFilters)}, nil, nil)
+	ap.MelFilterMaxBins = ap.MelPtsBin.FloatVal1D(ap.MelNFiltersEff - 1, ap.MelPtsBin.FloatVal1D(ap.MelNFiltersEff)-3)) + 1
+	ap.MelFilters.SetShape([]int{ap.MelFilterMaxBins, ap.MelFBank.NFilters)}, nil, nil)
 
-	for f := 0; f < int(ap.MelFBank.NFilters); f++ {
-		mnbin := int(ap.MelPtsBin.Value1D(f))
-		pkbin := int(ap.MelPtsBin.Value1D(f + 1))
-		mxbin := int(ap.MelPtsBin.Value1D(f + 2))
+	for f := 0; f < ap.MelFBank.NFilters; f++ {
+		mnbin := ap.MelPtsBin.Value1D(f)
+		pkbin := ap.MelPtsBin.Value1D(f + 1)
+		mxbin := ap.MelPtsBin.Value1D(f + 2)
 		pkmin := pkbin - mnbin
 		pkmax := mxbin - pkbin
 
@@ -341,7 +341,7 @@ func (ap *AuditoryProc) InitFiltersMel() bool {
 // InitOutMatrix
 func (ap *AuditoryProc) InitOutMatrix() bool {
 	ap.WindowIn.SetShape64([]int64{int64(ap.Input.WinSamples)}, nil, nil)
-	ap.DftOut.SetShape64([]int64{2, int64(ap.DftSize)}, nil, nil)
+	ap.DftOut.SetShape([]int{2, ap.DftSize}, nil, nil)
 	ap.DftPowerOut.SetShape64([]int64{int64(ap.DftUse)}, nil, nil)
 	ap.DftPowerTrialOut.SetShape64([]int64{int64(ap.DftUse), int64(ap.Input.TotalSteps), int64(ap.Input.Channels)}, nil, nil)
 
@@ -410,12 +410,12 @@ func (ap *AuditoryProc) StartNewSound() bool {
 	ap.FirstStep = true
 	ap.InputPos = 0
 	ap.TrialStartPos = 0
-	ap.TrialEndPos = uint32(ap.TrialStartPos) + ap.Input.TrialSamples
+	ap.TrialEndPos = int(ap.TrialStartPos) + ap.Input.TrialSamples
 	return true
 }
 
 func (ap *AuditoryProc) NeedsInit() bool {
-	if uint32(ap.DftSize) != ap.Input.WinSamples || ap.MelNFiltersEff != ap.MelFBank.NFilters+2 {
+	if int(ap.DftSize) != ap.Input.WinSamples || ap.MelNFiltersEff != ap.MelFBank.NFilters+2 {
 		return true
 	}
 	return false
@@ -455,8 +455,8 @@ func (ap *AuditoryProc) InitDataTableChan(ch int) bool {
 }
 
 // InputStepsLeft returns the number of steps left to process in the current input sound
-func (ap *AuditoryProc) InputStepsLeft() uint32 {
-	samplesLeft := uint32(ap.SoundFull.NumDims()) - ap.InputPos
+func (ap *AuditoryProc) InputStepsLeft() int {
+	samplesLeft := int(ap.SoundFull.NumDims()) - ap.InputPos
 	//samplesLeft = ap.SoundFull.Frames() - ap.InputPos
 	return samplesLeft / ap.Input.StepSamples
 }
@@ -479,7 +479,7 @@ func (ap *AuditoryProc) ProcessTrial() bool {
 		ap.TrialStartPos = ap.InputPos
 		ap.TrialEndPos = ap.TrialStartPos + ap.Input.TrialSamples + 2*border*ap.Input.StepSamples
 
-		for ch := 0; ch < int(ap.Input.Channels); ch++ {
+		for ch := int(0); ch < ap.Input.Channels; ch++ {
 			ap.InputPos = startPos // always start at same place per channel
 			for s := 0; s < int(ap.Input.TotalSteps); s++ {
 				ap.ProcessStep(ch, s)
@@ -496,7 +496,7 @@ func (ap *AuditoryProc) ProcessTrial() bool {
 			ap.InputPos = startPos // always start at same place per channel
 			ap.WrapBorder(ch)
 			for s := border; s < ap.Input.TotalSteps; s++ {
-				ap.ProcessStep(uint32(ch), s)
+				ap.ProcessStep(ch, s)
 			}
 			ap.FilterTrial(ch)
 			ap.OutputToTable(ch)
@@ -506,13 +506,13 @@ func (ap *AuditoryProc) ProcessTrial() bool {
 }
 
 // SoundToWindow gets sound from sound_full at given position and channel, into window_in -- pads with zeros for any amount not available in the sound_full input
-func (ap *AuditoryProc) SoundToWindow(inPos uint32, ch uint32) bool {
+func (ap *AuditoryProc) SoundToWindow(inPos int, ch int) bool {
 	samplesAvail := ap.SoundFull.Frames() - inPos
 	samplesCopy := math32.Min(samplesAvail, float32(ap.Input.WinSamples))
 
 
 	if samplesCopy > 0 {
-		sz := samplesCopy * sizeof(Float)
+		sz := samplesCopy * unsafe.Sizeof(Float)
 		if ap.SoundFull.NumDims() == 1 {
 			memcpy(ap.WindowIn.el, ap.SoundFull.el+inPos, sz)
 		} else {
@@ -580,7 +580,7 @@ func (ap *AuditoryProc) CopyStepFromStep(toStep, fmStep, ch int) bool {
 }
 
 // ProcessStep process a step worth of sound input from current input_pos, and increment input_pos by input.step_samples
-func (ap *AuditoryProc) ProcessStep(ch uint32, step uint32) bool {
+func (ap *AuditoryProc) ProcessStep(ch int, step int) bool {
 	ap.SoundToWindow(ap.InputPos, ch)
 	ap.FilterWindow(int(ch), int(step))
 	ap.InputPos = ap.InputPos + ap.Input.StepSamples
@@ -685,15 +685,15 @@ func (ap *AuditoryProc) CepstrumDctMel(ch, step int) {
 // GaborFilter process filters that operate over an entire trial at a time
 func (ap *AuditoryProc) GaborFilter(ch int, spec *AudGaborSpec, filters *etensor.Float32, outRaw *etensor.Float32, out *etensor.Float32) {
 	tHalfSz := spec.SizeTime / 2
-	tOff := tHalfSz - int(ap.Input.BorderSteps)
+	tOff := tHalfSz - ap.Input.BorderSteps
 	tMin := tOff
 	if tMin < 0 {
 		tMin = 0
 	}
-	tMax := int(ap.Input.TrialSteps) - tMin
+	tMax := ap.Input.TrialSteps - tMin
 
-	fMin := 0
-	fMax := int(ap.MelFBank.NFilters) - spec.SizeFreq
+	fMin := int(0)
+	fMax := ap.MelFBank.NFilters - spec.SizeFreq
 
 	tIdx := 0
 	for s := tMin; s < tMax; s, tIdx = spec.SpaceTime, tIdx+1 {
@@ -710,10 +710,10 @@ func (ap *AuditoryProc) GaborFilter(ch int, spec *AudGaborSpec, filters *etensor
 				break
 			}
 			nf := spec.NFilters
-			for fi := 0; fi < nf; fi++ {
+			for fi := int(0); fi < nf; fi++ {
 				fSum := float32(0.0)
-				for ff := 0; ff < spec.SizeFreq; ff++ {
-					for ft := 0; ft < spec.SizeTime; ft++ {
+				for ff := int(0); ff < spec.SizeFreq; ff++ {
+					for ft := int(0); ft < spec.SizeTime; ft++ {
 						fVal := filters.Value([]int{ft, ff, fi})
 						iVal := ap.MelFBankTrialOut.Value([]int{flt + ff, inSt + ft, ch})
 						fSum += fVal * iVal
@@ -732,20 +732,20 @@ func (ap *AuditoryProc) GaborFilter(ch int, spec *AudGaborSpec, filters *etensor
 		}
 	}
 
-	rawFrm :=
-		float_MatrixPtr
-	raw_frm;
-	raw_frm = (float_Matrix *)
-	out_raw.GetFrameSlice(chan);
-	float_MatrixPtr
-	out_frm;
-	out_frm = (float_Matrix *)
-	out.GetFrameSlice(chan);
-	if (gabor_kwta.On()) {
-		gabor_kwta.Compute_Inhib(*raw_frm, *out_frm, gabor_gci);
-	} else {
-		memcpy(out_frm- > el, raw_frm- > el, raw_frm- > size*sizeof(float));
-	}
+	//rawFrm :=
+	//	float_MatrixPtr
+	//raw_frm;
+	//raw_frm = (float_Matrix *)
+	//out_raw.GetFrameSlice(chan);
+	//float_MatrixPtr
+	//out_frm;
+	//out_frm = (float_Matrix *)
+	//out.GetFrameSlice(chan);
+	//if (gabor_kwta.On()) {
+	//	gabor_kwta.Compute_Inhib(*raw_frm, *out_frm, gabor_gci);
+	//} else {
+	//	memcpy(out_frm- > el, raw_frm- > el, raw_frm- > size*sizeof(float));
+	//}
 
 }
 
@@ -1012,7 +1012,7 @@ func (ap *AuditoryProc) MelOutputToTable(dt *dtable.Table, ch int, fmtOnly bool)
 		if fmtOnly == false {
 			dout := col.CloneTensor()
 			for s := 0; s < int(ap.Input.TotalSteps); s++ {
-				for i := 0; i < ap.Mfcc.NCoeff; i {
+				for i := 0; i < ap.Mfcc.NCoeff; i++ {
 					val := ap.MfccDctTrialOut.FloatVal([]int{i, s, ch})
 					dout.SetFloat([]int{s, i}, val)
 				}
