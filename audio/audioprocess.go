@@ -11,8 +11,8 @@ import (
 	"unsafe"
 
 	"github.com/chewxy/math32"
-	"github.com/emer/dtable/dtable"
-	"github.com/emer/dtable/etensor"
+	"github.com/emer/etable/etable"
+	"github.com/emer/etable/etensor"
 )
 
 // AudInputSpec defines the sound input parameters for auditory processing
@@ -223,7 +223,7 @@ type AuditoryProc struct {
 	//	SaveMode      save_mode;      // how to add new data to the data table
 	//	V1KwtaSpec    gabor_kwta;     // #CONDSHOW_ON_gabor1.on k-winner-take-all inhibitory dynamics for the time-gabor output
 
-	Data        *dtable.Table   `desc:"data table for saving filter results for viewing and applying to networks etc"`
+	Data        *etable.Table   `desc:"data table for saving filter results for viewing and applying to networks etc"`
 	Input       AudInputSpec    `desc:"specifications of the raw auditory input"`
 	Dft         AudDftSpec      `desc:"specifications for how to compute the discrete fourier transform (DFT, using FFT)"`
 	MelFBank    MelFBankSpec    `desc:"specifications of the mel feature bank frequency sampling of the DFT (FFT) of the input sound"`
@@ -257,26 +257,27 @@ type AuditoryProc struct {
 	Gabor2Shape   image.Point `desc:"#CONDSHOW_ON_gabor2.on #READ_ONLY #SHOW overall geometry of gabor2 output (group-level geometry -- feature / unit level geometry is n_features, 2)"`
 	Gabor3Shape   image.Point `desc:"#CONDSHOW_ON_gabor3.on #READ_ONLY #SHOW overall geometry of gabor3 output (group-level geometry -- feature / unit level geometry is n_features, 2)"`
 
-	SoundFull etensor.Float32 `desc:"#READ_ONLY #NO_SAVE the full sound input obtained from the sound input"`
-	WindowIn  etensor.Float32 `desc:"#READ_ONLY #NO_SAVE [input.win_samples] the raw sound input, one channel at a time"`
+	SoundFull           etensor.Float32   `desc:"#READ_ONLY #NO_SAVE the full sound input obtained from the sound input"`
+	WindowIn            etensor.Float32   `desc:"#READ_ONLY #NO_SAVE [input.win_samples] the raw sound input, one channel at a time"`
+	DftOut              etensor.Complex64 `desc:"#READ_ONLY #NO_SAVE [2, dft_size] discrete fourier transform (fft) output complex representation"`
+	DftPowerOut         etensor.Float32   `desc:"#READ_ONLY #NO_SAVE [dft_use] power of the dft, up to the nyquist limit frequency (1/2 input.win_samples)"`
+	DftLogPowerOut      etensor.Float32   `desc:"#READ_ONLY #NO_SAVE [dft_use] log power of the dft, up to the nyquist limit frequency (1/2 input.win_samples)"`
+	DftPowerTrialOut    etensor.Float32   `desc:"#READ_ONLY #NO_SAVE [dft_use][input.total_steps][input.channels] full trial's worth of power of the dft, up to the nyquist limit frequency (1/2 input.win_samples)"`
+	DftLogPowerTrialOut etensor.Float32   `desc:"#READ_ONLY #NO_SAVE [dft_use][input.total_steps][input.channels] full trial's worth of log power of the dft, up to the nyquist limit frequency (1/2 input.win_samples)"`
 
-	DftOut etensor.ComplexFloat32 `desc:"#READ_ONLY #NO_SAVE [2, dft_size] discrete fourier transform (fft) output complex representation"`
+	MelFBankOut      etensor.Float32 `desc:"#READ_ONLY #NO_SAVE [mel.n_filters] mel scale transformation of dft_power, using triangular filters, resulting in the mel filterbank output -- the natural log of this is typically applied"`
+	MelFBankTrialOut etensor.Float32 `desc:"#READ_ONLY #NO_SAVE [mel.n_filters][input.total_steps][input.channels] full trial's worth of mel feature-bank output -- only if using gabors"`
 
-	DftPowerOut         etensor.Float32 `desc:"#READ_ONLY #NO_SAVE [dft_use] power of the dft, up to the nyquist limit frequency (1/2 input.win_samples)"`
-	DftLogPowerOut      etensor.Float32 `desc:"#READ_ONLY #NO_SAVE [dft_use] log power of the dft, up to the nyquist limit frequency (1/2 input.win_samples)"`
-	DftPowerTrialOut    etensor.Float32 `desc:"#READ_ONLY #NO_SAVE [dft_use][input.total_steps][input.channels] full trial's worth of power of the dft, up to the nyquist limit frequency (1/2 input.win_samples)"`
-	DftLogPowerTrialOut etensor.Float32 `desc:"#READ_ONLY #NO_SAVE [dft_use][input.total_steps][input.channels] full trial's worth of log power of the dft, up to the nyquist limit frequency (1/2 input.win_samples)"`
-	MelFBankOut         etensor.Float32 `desc:"#READ_ONLY #NO_SAVE [mel.n_filters] mel scale transformation of dft_power, using triangular filters, resulting in the mel filterbank output -- the natural log of this is typically applied"`
-	MelFBankTrialOut    etensor.Float32 `desc:"#READ_ONLY #NO_SAVE [mel.n_filters][input.total_steps][input.channels] full trial's worth of mel feature-bank output -- only if using gabors"`
-	GaborGci            etensor.Float32 `desc:"#READ_ONLY #NO_SAVE inhibitory conductances, for computing kwta"`
-	Gabor1TrialRaw      etensor.Float32 `desc:"#READ_ONLY #NO_SAVE [gabor.n_filters*2][mel.n_filters][input.trial_steps][input.channels] raw output of gabor1 -- full trial's worth of gabor steps"`
-	Gabor1TrialOut      etensor.Float32 `desc:"#READ_ONLY #NO_SAVE [gabor.n_filters*2][mel.n_filters][input.trial_steps][input.channels] post-kwta output of full trial's worth of gabor steps"`
-	Gabor2TrialRaw      etensor.Float32 `desc:"#READ_ONLY #NO_SAVE [gabor.n_filters*2][mel.n_filters][input.trial_steps][input.channels] raw output of gabor1 -- full trial's worth of gabor steps"`
-	Gabor2TrialOut      etensor.Float32 `desc:"#READ_ONLY #NO_SAVE [gabor.n_filters*2][mel.n_filters][input.trial_steps][input.channels] post-kwta output of full trial's worth of gabor steps"`
-	Gabor3TrialRaw      etensor.Float32 `desc:"#READ_ONLY #NO_SAVE [gabor.n_filters*2][mel.n_filters][input.trial_steps][input.channels] raw output of gabor1 -- full trial's worth of gabor steps"`
-	Gabor3TrialOut      etensor.Float32 `desc:"#READ_ONLY #NO_SAVE [gabor.n_filters*2][mel.n_filters][input.trial_steps][input.channels] post-kwta output of full trial's worth of gabor steps"`
-	MfccDctOut          etensor.Float32 `desc:"#READ_ONLY #NO_SAVE discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
-	MfccDctTrialOut     etensor.Float32 `desc:"#READ_ONLY #NO_SAVE full trial's worth of discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
+	GaborGci       etensor.Float32 `desc:"#READ_ONLY #NO_SAVE inhibitory conductances, for computing kwta"`
+	Gabor1TrialRaw etensor.Float32 `desc:"#READ_ONLY #NO_SAVE [gabor.n_filters*2][mel.n_filters][input.trial_steps][input.channels] raw output of gabor1 -- full trial's worth of gabor steps"`
+	Gabor1TrialOut etensor.Float32 `desc:"#READ_ONLY #NO_SAVE [gabor.n_filters*2][mel.n_filters][input.trial_steps][input.channels] post-kwta output of full trial's worth of gabor steps"`
+	Gabor2TrialRaw etensor.Float32 `desc:"#READ_ONLY #NO_SAVE [gabor.n_filters*2][mel.n_filters][input.trial_steps][input.channels] raw output of gabor1 -- full trial's worth of gabor steps"`
+	Gabor2TrialOut etensor.Float32 `desc:"#READ_ONLY #NO_SAVE [gabor.n_filters*2][mel.n_filters][input.trial_steps][input.channels] post-kwta output of full trial's worth of gabor steps"`
+	Gabor3TrialRaw etensor.Float32 `desc:"#READ_ONLY #NO_SAVE [gabor.n_filters*2][mel.n_filters][input.trial_steps][input.channels] raw output of gabor1 -- full trial's worth of gabor steps"`
+	Gabor3TrialOut etensor.Float32 `desc:"#READ_ONLY #NO_SAVE [gabor.n_filters*2][mel.n_filters][input.trial_steps][input.channels] post-kwta output of full trial's worth of gabor steps"`
+
+	MfccDctOut      etensor.Float32 `desc:"#READ_ONLY #NO_SAVE discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
+	MfccDctTrialOut etensor.Float32 `desc:"#READ_ONLY #NO_SAVE full trial's worth of discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
 }
 
 // InitFilters
@@ -426,7 +427,7 @@ func (ap *AuditoryProc) Init() bool {
 	//ap.UpdateConfig()
 	ap.InitFilters()
 	ap.InitOutMatrix()
-	ap.Data = &dtable.Table{}
+	ap.Data = &etable.Table{}
 	ap.InitDataTable()
 	ap.InitSound()
 	return true
@@ -726,29 +727,31 @@ func (ap *AuditoryProc) GaborFilter(ch int, spec *AudGaborSpec, filters *etensor
 				pos := fSum >= 0.0
 				act := spec.Gain * math32.Abs(fSum)
 				if pos {
-					outRaw.SetFloat([]int{fi, 0, fIdx, tIdx, ch}, float64(act))
-					outRaw.SetFloat([]int{fi, 1, fIdx, tIdx, ch}, 0)
+					outRaw.SetFloat([]int{ch, fi, 0, fIdx, tIdx}, float64(act))
+					outRaw.SetFloat([]int{ch, fi, 1, fIdx, tIdx}, 0)
 				} else {
-					outRaw.SetFloat([]int{fi, 0, fIdx, tIdx, ch}, 0)
-					outRaw.SetFloat([]int{fi, 1, fIdx, tIdx, ch}, float64(act))
+					outRaw.SetFloat([]int{ch, fi, 0, fIdx, tIdx}, 0)
+					outRaw.SetFloat([]int{ch, fi, 1, fIdx, tIdx}, float64(act))
 				}
 			}
 		}
 	}
-	//float_MatrixPtr raw_frm;
-	//raw_frm = (float_Matrix*)out_raw.GetFrameSlice(chan);
-	//float_MatrixPtr out_frm;
-	//out_frm = (float_Matrix*)out.GetFrameSlice(chan);
+	rawFrame, err := outRaw.SubSlice(outRaw.NumDims()-1, []int{ch})
+	if err != nil {
+		fmt.Printf("GaborFilter: SubSlice error: %v", err)
+	}
 
-	rawFrame := outRaw.GetFrameSlice(ch)
-	outFrame := out.GetFrameSlice(ch)
+	outFrame, err := out.SubSlice(outRaw.NumDims()-1, []int{ch})
+	if err != nil {
+		fmt.Printf("GaborFilter: SubSlice error: %v", err)
+	}
 
 	// V1KwtaSpec not yet implemented
 	//if (gabor_kwta.On()) {
 	//	gabor_kwta.Compute_Inhib(*raw_frm, *out_frm, gabor_gci);
 	//} else {
 	//	memcpy(out_frm->el, raw_frm->el, raw_frm->size * sizeof(float));
-	copy(out_frm, raw_frm)
+	copy(outFrame.Values, rawFrame.Values)
 	//}
 
 }
@@ -778,7 +781,7 @@ func (ap *AuditoryProc) OutputToTable(ch int) bool {
 }
 
 // MelOutputToTable mel filter bank to output table
-func (ap *AuditoryProc) MelOutputToTable(dt *dtable.Table, ch int, fmtOnly bool) bool { // ch is channel
+func (ap *AuditoryProc) MelOutputToTable(dt *etable.Table, ch int, fmtOnly bool) bool { // ch is channel
 	//var idx int
 	var colSfx string
 
