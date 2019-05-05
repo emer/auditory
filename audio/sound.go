@@ -103,7 +103,7 @@ func (snd *Sound) SampleType() SoundSampleType {
 // can optionally select a specific channel (formats sound_data as a single-dimensional matrix of frames size),
 // and -1 gets all available channels (formats sound_data as two-dimensional matrix with inner dimension as
 // channels and outer dimension frames
-func (snd *Sound) SoundToMatrix(soundData *etensor.Float32, channel uint32) bool {
+func (snd *Sound) SoundToMatrix(soundData *etensor.Float32, channel int) bool {
 
 	buf, err := snd.Decoder.FullPCMBuffer()
 	if err != nil {
@@ -142,7 +142,7 @@ func (snd *Sound) SoundToMatrix(soundData *etensor.Float32, channel uint32) bool
 		} else {
 			idx := 0
 			for i := 0; i < nFrames; i++ {
-				soundData.SetFloat([]int{i}, float64(buf.Data[uint32(idx)+channel]))
+				soundData.SetFloat([]int{i}, float64(buf.Data[idx+channel]))
 				idx += int(nChannels)
 			}
 		}

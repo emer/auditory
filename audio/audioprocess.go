@@ -65,7 +65,7 @@ func SamplesToMSec(samples int, rate int) float32 {
 // InitSound
 func (ap *AuditoryProc) InitSound() bool {
 	ap.InputPos = 0
-	ap.SoundFull.Reset()
+	//ap.SoundFull = nil
 	return true
 }
 
@@ -76,10 +76,10 @@ func (ais *AudInputSpec) InitFromSound(snd *Sound, nChannels int, channel int) {
 		return
 	}
 
-	ais.SampleRate = snd.SampleRate()
+	ais.SampleRate = int(snd.SampleRate())
 	ais.ComputeSamples()
 	if nChannels < 1 {
-		ais.Channels = snd.Channels()
+		ais.Channels = int(snd.Channels())
 	} else {
 		ais.Channels = int(math32.Min(float32(nChannels), float32(ais.Channels)))
 	}
@@ -598,25 +598,25 @@ func (ap *AuditoryProc) DftInput(ch int, step int) {
 // PowerOfDft
 func (ap *AuditoryProc) PowerOfDft(ch, step int) {
 	// Mag() is absolute value   SqMag is square of it - r*r + i*i
-	for i := 0; i < int(ap.DftUse); i++ {
-		r := ap.DftOut.FastEl_Flat(2 * i)
-		j := ap.DftOut.FastEl_Flat(2*i + 1)
-		powr := r*r + j*j
+	for k := 0; k < int(ap.DftUse); k++ {
+		rl := ap.DftOut.FloatVal([]int{2, k})
+		im := ap.DftOut.FloatValImag([]int{2, k})
+		powr := float64(rl*rl + im*im) // why is complex converted to float here
 		if ap.FirstStep == false {
-			powr = ap.Dft.PreviousSmooth*ap.DftPowerOut.FastEl_Flat(i) + ap.Dft.CurrentSmooth*powr
+			powr = float64(ap.Dft.PreviousSmooth)*ap.DftPowerOut.FloatVal1D(k) + float64(ap.Dft.CurrentSmooth)*powr
 		}
-		ap.DftPowerOut.FastEl_Flat(i) = powr
-		ap.DftPowerTrialOut.SetFloat([]int{i, step, ch}, powr)
+		ap.DftPowerOut.SetFloat1D(k, powr)
+		ap.DftPowerTrialOut.SetFloat([]int{k, step, ch}, powr)
+		var logp float64
 		if ap.Dft.LogPow {
-			powr += ap.Dft.LogOff
-			var logp float32
+			powr += float64(ap.Dft.LogOff)
 			if powr == 0 {
-				logp = ap.Dft.LogMin
+				logp = float64(ap.Dft.LogMin)
 			} else {
-				logp = math32.Log(powr)
+				logp = math.Log(powr)
 			}
-			ap.DftPowerOut.FastEl_Flat(i) = logp
-			ap.DftPowerTrialOut.SetFloat([]int{i, step, ch}, logp)
+			ap.DftPowerOut.SetFloat1D(k, float64(logp))
+			ap.DftPowerTrialOut.SetFloat([]int{k, step, ch}, logp)
 		}
 	}
 }
@@ -628,14 +628,14 @@ func (ap *AuditoryProc) MelFilterDft(ch, step int) {
 		minBin := ap.MelPtsBin.Value1D(flt)
 		maxBin := ap.MelPtsBin.Value1D(flt + 2)
 
-		sum := 0
+		sum := float32(0)
 		fi := 0
 		for bin := minBin; bin < maxBin; bin, fi = bin+1, fi+1 {
 			fVal := ap.MelFilters.Value([]int{fi, mi})
-			pVal := ap.DftPowerOut.FastEl_Flat(bin)
-			sum += fVal * pVal
+			pVal := ap.DftPowerOut.FloatVal1D(int(bin))
+			sum += fVal * float32(pVal)
 		}
-		sum += int(ap.MelFBank.LogOff)
+		sum += ap.MelFBank.LogOff
 		var val float32
 		if sum == 0 {
 			val = ap.MelFBank.LogMin
@@ -736,12 +736,12 @@ func (ap *AuditoryProc) GaborFilter(ch int, spec *AudGaborSpec, filters *etensor
 			}
 		}
 	}
-	rawFrame, err := outRaw.SubSlice(outRaw.NumDims()-1, []int{ch})
+	rawFrame, err := outRaw.SubSpace(outRaw.NumDims()-1, []int{ch})
 	if err != nil {
 		fmt.Printf("GaborFilter: SubSlice error: %v", err)
 	}
 
-	outFrame, err := out.SubSlice(outRaw.NumDims()-1, []int{ch})
+	outFrame, err := out.SubSpace(outRaw.NumDims()-1, []int{ch})
 	if err != nil {
 		fmt.Printf("GaborFilter: SubSlice error: %v", err)
 	}
