@@ -268,13 +268,13 @@ type AuditoryProc struct {
 	MelFBankOut      etensor.Float32 `desc:"#READ_ONLY #NO_SAVE [mel.n_filters] mel scale transformation of dft_power, using triangular filters, resulting in the mel filterbank output -- the natural log of this is typically applied"`
 	MelFBankTrialOut etensor.Float32 `desc:"#READ_ONLY #NO_SAVE [mel.n_filters][input.total_steps][input.channels] full trial's worth of mel feature-bank output -- only if using gabors"`
 
-	GaborGci       etensor.Float32 `desc:"#READ_ONLY #NO_SAVE inhibitory conductances, for computing kwta"`
-	Gabor1TrialRaw etensor.Float32 `desc:"#READ_ONLY #NO_SAVE [gabor.n_filters*2][mel.n_filters][input.trial_steps][input.channels] raw output of gabor1 -- full trial's worth of gabor steps"`
-	Gabor1TrialOut etensor.Float32 `desc:"#READ_ONLY #NO_SAVE [gabor.n_filters*2][mel.n_filters][input.trial_steps][input.channels] post-kwta output of full trial's worth of gabor steps"`
-	Gabor2TrialRaw etensor.Float32 `desc:"#READ_ONLY #NO_SAVE [gabor.n_filters*2][mel.n_filters][input.trial_steps][input.channels] raw output of gabor1 -- full trial's worth of gabor steps"`
-	Gabor2TrialOut etensor.Float32 `desc:"#READ_ONLY #NO_SAVE [gabor.n_filters*2][mel.n_filters][input.trial_steps][input.channels] post-kwta output of full trial's worth of gabor steps"`
-	Gabor3TrialRaw etensor.Float32 `desc:"#READ_ONLY #NO_SAVE [gabor.n_filters*2][mel.n_filters][input.trial_steps][input.channels] raw output of gabor1 -- full trial's worth of gabor steps"`
-	Gabor3TrialOut etensor.Float32 `desc:"#READ_ONLY #NO_SAVE [gabor.n_filters*2][mel.n_filters][input.trial_steps][input.channels] post-kwta output of full trial's worth of gabor steps"`
+	GaborGci  etensor.Float32 `desc:"#READ_ONLY #NO_SAVE inhibitory conductances, for computing kwta"`
+	Gabor1Raw etensor.Float32 `desc:"#READ_ONLY #NO_SAVE [gabor.n_filters*2][mel.n_filters][input.trial_steps][input.channels] raw output of gabor1 -- full trial's worth of gabor steps"`
+	Gabor1Out etensor.Float32 `desc:"#READ_ONLY #NO_SAVE [gabor.n_filters*2][mel.n_filters][input.trial_steps][input.channels] post-kwta output of full trial's worth of gabor steps"`
+	Gabor2Raw etensor.Float32 `desc:"#READ_ONLY #NO_SAVE [gabor.n_filters*2][mel.n_filters][input.trial_steps][input.channels] raw output of gabor1 -- full trial's worth of gabor steps"`
+	Gabor2Out etensor.Float32 `desc:"#READ_ONLY #NO_SAVE [gabor.n_filters*2][mel.n_filters][input.trial_steps][input.channels] post-kwta output of full trial's worth of gabor steps"`
+	Gabor3Raw etensor.Float32 `desc:"#READ_ONLY #NO_SAVE [gabor.n_filters*2][mel.n_filters][input.trial_steps][input.channels] raw output of gabor1 -- full trial's worth of gabor steps"`
+	Gabor3Out etensor.Float32 `desc:"#READ_ONLY #NO_SAVE [gabor.n_filters*2][mel.n_filters][input.trial_steps][input.channels] post-kwta output of full trial's worth of gabor steps"`
 
 	MfccDctOut      etensor.Float32 `desc:"#READ_ONLY #NO_SAVE discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
 	MfccDctTrialOut etensor.Float32 `desc:"#READ_ONLY #NO_SAVE full trial's worth of discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
@@ -344,33 +344,33 @@ func (ap *AuditoryProc) InitOutMatrix() bool {
 	ap.WindowIn.SetShape64([]int64{int64(ap.Input.WinSamples)}, nil, nil)
 	ap.DftOut.SetShape([]int{2, ap.DftSize}, nil, nil)
 	ap.DftPowerOut.SetShape64([]int64{int64(ap.DftUse)}, nil, nil)
-	ap.DftPowerTrialOut.SetShape64([]int64{int64(ap.DftUse), int64(ap.Input.TotalSteps), int64(ap.Input.Channels)}, nil, nil)
+	ap.DftPowerOut.SetShape64([]int64{int64(ap.DftUse), int64(ap.Input.TotalSteps), int64(ap.Input.Channels)}, nil, nil)
 
 	if ap.Dft.LogPow {
 		ap.DftLogPowerOut.SetShape64([]int64{int64(ap.DftUse)}, nil, nil)
-		ap.DftLogPowerTrialOut.SetShape64([]int64{int64(ap.DftUse), int64(ap.Input.TotalSteps), int64(ap.Input.Channels)}, nil, nil)
+		ap.DftLogPowerOut.SetShape64([]int64{int64(ap.DftUse), int64(ap.Input.TotalSteps), int64(ap.Input.Channels)}, nil, nil)
 	}
 
 	if ap.MelFBank.On {
 		ap.MelFBankOut.SetShape64([]int64{int64(ap.MelFBank.NFilters)}, nil, nil)
-		ap.MelFBankTrialOut.SetShape64([]int64{int64(ap.MelFBank.NFilters), int64(ap.Input.TotalSteps), int64(ap.Input.Channels)}, nil, nil)
+		ap.MelFBankOut.SetShape64([]int64{int64(ap.MelFBank.NFilters), int64(ap.Input.TotalSteps), int64(ap.Input.Channels)}, nil, nil)
 
 		if ap.MelFBank.On {
 			if ap.Gabor1.On {
-				ap.Gabor1TrialRaw.SetShape64([]int64{int64(ap.Gabor1.NFilters), 2, int64(ap.Gabor1Shape.Y), int64(ap.Gabor1Shape.X), int64(ap.Input.Channels)}, nil, nil)
-				ap.Gabor1TrialOut.SetShape64([]int64{int64(ap.Gabor1.NFilters), 2, int64(ap.Gabor1Shape.Y), int64(ap.Gabor1Shape.X), int64(ap.Input.Channels)}, nil, nil)
+				ap.Gabor1Raw.SetShape64([]int64{int64(ap.Gabor1.NFilters), 2, int64(ap.Gabor1Shape.Y), int64(ap.Gabor1Shape.X), int64(ap.Input.Channels)}, nil, nil)
+				ap.Gabor1Out.SetShape64([]int64{int64(ap.Gabor1.NFilters), 2, int64(ap.Gabor1Shape.Y), int64(ap.Gabor1Shape.X), int64(ap.Input.Channels)}, nil, nil)
 			}
 			if ap.Gabor2.On {
-				ap.Gabor2TrialRaw.SetShape64([]int64{int64(ap.Gabor2.NFilters), 2, int64(ap.Gabor2Shape.Y), int64(ap.Gabor2Shape.X), int64(ap.Input.Channels)}, nil, nil)
-				ap.Gabor2TrialOut.SetShape64([]int64{int64(ap.Gabor2.NFilters), 2, int64(ap.Gabor2Shape.Y), int64(ap.Gabor2Shape.X), int64(ap.Input.Channels)}, nil, nil)
+				ap.Gabor2Raw.SetShape64([]int64{int64(ap.Gabor2.NFilters), 2, int64(ap.Gabor2Shape.Y), int64(ap.Gabor2Shape.X), int64(ap.Input.Channels)}, nil, nil)
+				ap.Gabor2Out.SetShape64([]int64{int64(ap.Gabor2.NFilters), 2, int64(ap.Gabor2Shape.Y), int64(ap.Gabor2Shape.X), int64(ap.Input.Channels)}, nil, nil)
 			}
 			if ap.Gabor3.On {
-				ap.Gabor3TrialRaw.SetShape64([]int64{int64(ap.Gabor3.NFilters), 2, int64(ap.Gabor3Shape.Y), int64(ap.Gabor3Shape.X), int64(ap.Input.Channels)}, nil, nil)
-				ap.Gabor3TrialOut.SetShape64([]int64{int64(ap.Gabor3.NFilters), 2, int64(ap.Gabor3Shape.Y), int64(ap.Gabor3Shape.X), int64(ap.Input.Channels)}, nil, nil)
+				ap.Gabor3Raw.SetShape64([]int64{int64(ap.Gabor3.NFilters), 2, int64(ap.Gabor3Shape.Y), int64(ap.Gabor3Shape.X), int64(ap.Input.Channels)}, nil, nil)
+				ap.Gabor3Out.SetShape64([]int64{int64(ap.Gabor3.NFilters), 2, int64(ap.Gabor3Shape.Y), int64(ap.Gabor3Shape.X), int64(ap.Input.Channels)}, nil, nil)
 			}
 			if ap.Mfcc.On {
 				ap.MfccDctOut.SetShape64([]int64{int64(ap.MelFBank.NFilters)}, nil, nil)
-				ap.MfccDctTrialOut.SetShape64([]int64{int64(ap.MelFBank.NFilters), int64(ap.Input.TotalSteps), int64(ap.Input.Channels)}, nil, nil)
+				ap.MfccDctOut.SetShape64([]int64{int64(ap.MelFBank.NFilters), int64(ap.Input.TotalSteps), int64(ap.Input.Channels)}, nil, nil)
 			}
 		}
 	}
@@ -425,6 +425,8 @@ func (ap *AuditoryProc) NeedsInit() bool {
 
 func (ap *AuditoryProc) Init() bool {
 	//ap.UpdateConfig()
+	ap.MelFBank.Initialize()
+
 	ap.InitFilters()
 	ap.InitOutMatrix()
 	ap.Data = &etable.Table{}
@@ -559,22 +561,22 @@ func (ap *AuditoryProc) StepForward(ch int) bool {
 // CopyStepFromStep
 func (ap *AuditoryProc) CopyStepFromStep(toStep, fmStep, ch int) bool {
 	for i := 0; i < int(ap.DftUse); i++ {
-		val := ap.DftPowerTrialOut.Value([]int{i, fmStep, ch})
-		ap.DftPowerTrialOut.Set([]int{i, toStep, ch}, val)
+		val := ap.DftPowerOut.Value([]int{i, fmStep, ch})
+		ap.DftPowerOut.Set([]int{i, toStep, ch}, val)
 		if ap.Dft.LogPow {
-			val := ap.DftLogPowerTrialOut.Value([]int{i, fmStep, ch})
-			ap.DftLogPowerTrialOut.Set([]int{i, toStep, ch}, val)
+			val := ap.DftLogPowerOut.Value([]int{i, fmStep, ch})
+			ap.DftLogPowerOut.Set([]int{i, toStep, ch}, val)
 		}
 	}
 	if ap.MelFBank.On {
 		for i := 0; i < int(ap.MelFBank.NFilters); i++ {
-			val := ap.MelFBankTrialOut.Value([]int{i, fmStep, ch})
-			ap.MelFBankTrialOut.Set([]int{i, toStep, ch}, val)
+			val := ap.MelFBankOut.Value([]int{i, fmStep, ch})
+			ap.MelFBankOut.Set([]int{i, toStep, ch}, val)
 		}
 		if ap.Mfcc.On {
 			for i := 0; i < int(ap.MelFBank.NFilters); i++ {
-				val := ap.MfccDctTrialOut.Value([]int{i, fmStep, ch})
-				ap.MfccDctTrialOut.Set([]int{i, toStep, ch}, val)
+				val := ap.MfccDctOut.Value([]int{i, fmStep, ch})
+				ap.MfccDctOut.Set([]int{i, toStep, ch}, val)
 			}
 		}
 	}
@@ -606,7 +608,7 @@ func (ap *AuditoryProc) PowerOfDft(ch, step int) {
 			powr = float64(ap.Dft.PreviousSmooth)*ap.DftPowerOut.FloatVal1D(k) + float64(ap.Dft.CurrentSmooth)*powr
 		}
 		ap.DftPowerOut.SetFloat1D(k, powr)
-		ap.DftPowerTrialOut.SetFloat([]int{k, step, ch}, powr)
+		ap.DftPowerOut.SetFloat([]int{k, step, ch}, powr)
 		var logp float64
 		if ap.Dft.LogPow {
 			powr += float64(ap.Dft.LogOff)
@@ -616,7 +618,7 @@ func (ap *AuditoryProc) PowerOfDft(ch, step int) {
 				logp = math.Log(powr)
 			}
 			ap.DftPowerOut.SetFloat1D(k, float64(logp))
-			ap.DftPowerTrialOut.SetFloat([]int{k, step, ch}, logp)
+			ap.DftPowerOut.SetFloat([]int{k, step, ch}, logp)
 		}
 	}
 }
@@ -659,15 +661,15 @@ func (ap *AuditoryProc) MelFilterDft(ch, step int) {
 func (ap *AuditoryProc) FilterTrial(ch int) bool {
 	if ap.Gabor1.On {
 		ap.GaborFilter(ch, &ap.Gabor1, &ap.Gabor1Filters,
-			&ap.Gabor1TrialRaw, &ap.Gabor1TrialOut)
+			&ap.Gabor1Raw, &ap.Gabor1Out)
 	}
 	if ap.Gabor2.On {
 		ap.GaborFilter(ch, &ap.Gabor2, &ap.Gabor2Filters,
-			&ap.Gabor2TrialRaw, &ap.Gabor2TrialOut)
+			&ap.Gabor2Raw, &ap.Gabor2Out)
 	}
 	if ap.Gabor3.On {
 		ap.GaborFilter(ch, &ap.Gabor3, &ap.Gabor3Filters,
-			&ap.Gabor3TrialRaw, &ap.Gabor3TrialOut)
+			&ap.Gabor3Raw, &ap.Gabor3Out)
 	}
 	return true
 }
@@ -720,7 +722,7 @@ func (ap *AuditoryProc) GaborFilter(ch int, spec *AudGaborSpec, filters *etensor
 				for ff := int(0); ff < spec.SizeFreq; ff++ {
 					for ft := int(0); ft < spec.SizeTime; ft++ {
 						fVal := filters.Value([]int{ft, ff, fi})
-						iVal := ap.MelFBankTrialOut.Value([]int{flt + ff, inSt + ft, ch})
+						iVal := ap.MelFBankOut.Value([]int{flt + ff, inSt + ft, ch})
 						fSum += fVal * iVal
 					}
 				}
@@ -784,6 +786,7 @@ func (ap *AuditoryProc) OutputToTable(ch int) bool {
 func (ap *AuditoryProc) MelOutputToTable(dt *etable.Table, ch int, fmtOnly bool) bool { // ch is channel
 	//var idx int
 	var colSfx string
+	rows := 1
 
 	if ap.Input.Channels > 1 {
 		colSfx = "_ch" + strconv.Itoa(ch)
@@ -793,7 +796,7 @@ func (ap *AuditoryProc) MelOutputToTable(dt *etable.Table, ch int, fmtOnly bool)
 	cn := "AudProc" + "_dft_pow" + colSfx // column name
 	col := dt.ColByName(cn)
 	if col == nil {
-		err = dt.AddCol(etensor.NewFloat32([]int{int(ap.Input.TotalSteps), int(ap.DftUse)}, nil, nil), cn)
+		err = dt.AddCol(etensor.NewFloat32([]int{rows, int(ap.Input.TotalSteps), int(ap.DftUse)}, nil, nil), cn)
 		if err != nil {
 			fmt.Printf("MelOutputToTable: column not found or failed to be created")
 			return false
@@ -806,10 +809,10 @@ func (ap *AuditoryProc) MelOutputToTable(dt *etable.Table, ch int, fmtOnly bool)
 		for s := 0; s < int(ap.Input.TotalSteps); s++ {
 			for i := 0; i < int(ap.DftUse); i++ {
 				if ap.Dft.LogPow {
-					val := ap.DftLogPowerTrialOut.FloatVal([]int{i, s, ch})
+					val := ap.DftLogPowerOut.FloatVal([]int{i, s, ch})
 					dout.SetFloat([]int{s, i}, val)
 				} else {
-					val := ap.DftPowerTrialOut.FloatVal([]int{i, s, ch})
+					val := ap.DftPowerOut.FloatVal([]int{i, s, ch})
 					dout.SetFloat([]int{s, i}, val)
 				}
 			}
@@ -820,7 +823,7 @@ func (ap *AuditoryProc) MelOutputToTable(dt *etable.Table, ch int, fmtOnly bool)
 		cn := "AudProc" + "_mel_fbank" + colSfx // column name
 		col := dt.ColByName(cn)
 		if col == nil {
-			err = dt.AddCol(etensor.NewFloat32([]int{int(ap.Input.TotalSteps), int(ap.MelFBank.NFilters)}, nil, nil), cn)
+			err = dt.AddCol(etensor.NewFloat32([]int{rows, int(ap.Input.TotalSteps), int(ap.MelFBank.NFilters)}, nil, nil), cn)
 			if err != nil {
 				fmt.Printf("MelOutputToTable: column not found or failed to be created")
 				return false
@@ -831,7 +834,7 @@ func (ap *AuditoryProc) MelOutputToTable(dt *etable.Table, ch int, fmtOnly bool)
 			dout := col.CloneTensor()
 			for s := 0; s < int(ap.Input.TotalSteps); s++ {
 				for i := 0; i < int(ap.MelFBank.NFilters); i++ {
-					val := ap.MelFBankTrialOut.FloatVal([]int{i, s, ch})
+					val := ap.MelFBankOut.FloatVal([]int{i, s, ch})
 					dout.SetFloat([]int{s, i}, val)
 				}
 			}
@@ -842,7 +845,7 @@ func (ap *AuditoryProc) MelOutputToTable(dt *etable.Table, ch int, fmtOnly bool)
 		cn := "AudProc" + "_mel_gabor1_raw" + colSfx // column name
 		col := dt.ColByName(cn)
 		if col == nil {
-			err = dt.AddCol(etensor.NewFloat32([]int{ap.Gabor1.NFilters, 2, ap.Gabor1Shape.X, ap.Gabor1Shape.Y}, nil, nil), cn)
+			err = dt.AddCol(etensor.NewFloat32([]int{rows, ap.Gabor1.NFilters, 2, ap.Gabor1Shape.X, ap.Gabor1Shape.Y}, nil, nil), cn)
 			if err != nil {
 				fmt.Printf("MelOutputToTable: column not found or failed to be created")
 				return false
@@ -855,9 +858,9 @@ func (ap *AuditoryProc) MelOutputToTable(dt *etable.Table, ch int, fmtOnly bool)
 			for s := 0; s < ap.Gabor1Shape.X; s++ {
 				for i := 0; i < ap.Gabor1Shape.Y; i++ {
 					for ti := 0; ti < nf; ti++ {
-						val0 := ap.Gabor1TrialRaw.FloatVal([]int{ti, 0, i, s, ch})
+						val0 := ap.Gabor1Raw.FloatVal([]int{ti, 0, i, s, ch})
 						dout.SetFloat([]int{ti, 0, s, i}, val0)
-						val1 := ap.Gabor1TrialRaw.FloatVal([]int{ti, 1, i, s, ch})
+						val1 := ap.Gabor1Raw.FloatVal([]int{ti, 1, i, s, ch})
 						dout.SetFloat([]int{ti, 1, s, i}, val1)
 					}
 				}
@@ -867,7 +870,7 @@ func (ap *AuditoryProc) MelOutputToTable(dt *etable.Table, ch int, fmtOnly bool)
 		cn = "AudProc" + "_mel_gabor1" + colSfx // column name
 		col = dt.ColByName(cn)
 		if col == nil {
-			err = dt.AddCol(etensor.NewFloat32([]int{ap.Gabor1.NFilters, 2, ap.Gabor1Shape.X, ap.Gabor1Shape.Y}, nil, nil), cn)
+			err = dt.AddCol(etensor.NewFloat32([]int{rows, ap.Gabor1.NFilters, 2, ap.Gabor1Shape.X, ap.Gabor1Shape.Y}, nil, nil), cn)
 			if err != nil {
 				fmt.Printf("MelOutputToTable: column not found or failed to be created")
 				return false
@@ -880,9 +883,9 @@ func (ap *AuditoryProc) MelOutputToTable(dt *etable.Table, ch int, fmtOnly bool)
 			for s := 0; s < ap.Gabor1Shape.X; s++ {
 				for i := 0; i < ap.Gabor1Shape.Y; i++ {
 					for ti := 0; ti < nf; ti++ {
-						val0 := ap.Gabor1TrialOut.FloatVal([]int{ti, 0, i, s, ch})
+						val0 := ap.Gabor1Out.FloatVal([]int{ti, 0, i, s, ch})
 						dout.SetFloat([]int{ti, 0, s, i}, val0)
-						val1 := ap.Gabor1TrialOut.FloatVal([]int{ti, 1, i, s, ch})
+						val1 := ap.Gabor1Out.FloatVal([]int{ti, 1, i, s, ch})
 						dout.SetFloat([]int{ti, 1, s, i}, val1)
 					}
 				}
@@ -894,7 +897,7 @@ func (ap *AuditoryProc) MelOutputToTable(dt *etable.Table, ch int, fmtOnly bool)
 		cn := "AudProc" + "_mel_gabor2_raw" + colSfx // column name
 		col := dt.ColByName(cn)
 		if col == nil {
-			err = dt.AddCol(etensor.NewFloat32([]int{ap.Gabor2.NFilters, 2, ap.Gabor2Shape.X, ap.Gabor2Shape.Y}, nil, nil), cn)
+			err = dt.AddCol(etensor.NewFloat32([]int{rows, ap.Gabor2.NFilters, 2, ap.Gabor2Shape.X, ap.Gabor2Shape.Y}, nil, nil), cn)
 			if err != nil {
 				fmt.Printf("MelOutputToTable: column not found or failed to be created")
 				return false
@@ -907,9 +910,9 @@ func (ap *AuditoryProc) MelOutputToTable(dt *etable.Table, ch int, fmtOnly bool)
 			for s := 0; s < ap.Gabor2Shape.X; s++ {
 				for i := 0; i < ap.Gabor2Shape.Y; i++ {
 					for ti := 0; ti < nf; ti++ {
-						val0 := ap.Gabor2TrialRaw.FloatVal([]int{ti, 0, i, s, ch})
+						val0 := ap.Gabor2Raw.FloatVal([]int{ti, 0, i, s, ch})
 						dout.SetFloat([]int{ti, 0, s, i}, val0)
-						val1 := ap.Gabor2TrialRaw.FloatVal([]int{ti, 1, i, s, ch})
+						val1 := ap.Gabor2Raw.FloatVal([]int{ti, 1, i, s, ch})
 						dout.SetFloat([]int{ti, 1, s, i}, val1)
 					}
 				}
@@ -919,7 +922,7 @@ func (ap *AuditoryProc) MelOutputToTable(dt *etable.Table, ch int, fmtOnly bool)
 		cn = "AudProc" + "_mel_gabor2" + colSfx // column name
 		col = dt.ColByName(cn)
 		if col == nil {
-			err = dt.AddCol(etensor.NewFloat32([]int{ap.Gabor2.NFilters, 2, ap.Gabor2Shape.X, ap.Gabor2Shape.Y}, nil, nil), cn)
+			err = dt.AddCol(etensor.NewFloat32([]int{rows, ap.Gabor2.NFilters, 2, ap.Gabor2Shape.X, ap.Gabor2Shape.Y}, nil, nil), cn)
 			if err != nil {
 				fmt.Printf("MelOutputToTable: column not found or failed to be created")
 				return false
@@ -932,9 +935,9 @@ func (ap *AuditoryProc) MelOutputToTable(dt *etable.Table, ch int, fmtOnly bool)
 			for s := 0; s < ap.Gabor2Shape.X; s++ {
 				for i := 0; i < ap.Gabor2Shape.Y; i++ {
 					for ti := 0; ti < nf; ti++ {
-						val0 := ap.Gabor2TrialOut.FloatVal([]int{ti, 0, i, s, ch})
+						val0 := ap.Gabor2Out.FloatVal([]int{ti, 0, i, s, ch})
 						dout.SetFloat([]int{ti, 0, s, i}, val0)
-						val1 := ap.Gabor2TrialOut.FloatVal([]int{ti, 1, i, s, ch})
+						val1 := ap.Gabor2Out.FloatVal([]int{ti, 1, i, s, ch})
 						dout.SetFloat([]int{ti, 1, s, i}, val1)
 					}
 				}
@@ -946,7 +949,7 @@ func (ap *AuditoryProc) MelOutputToTable(dt *etable.Table, ch int, fmtOnly bool)
 		cn := "AudProc" + "_mel_gabor3_raw" + colSfx // column name
 		col := dt.ColByName(cn)
 		if col == nil {
-			err = dt.AddCol(etensor.NewFloat32([]int{ap.Gabor3.NFilters, 2, ap.Gabor3Shape.X, ap.Gabor3Shape.Y}, nil, nil), cn)
+			err = dt.AddCol(etensor.NewFloat32([]int{rows, ap.Gabor3.NFilters, 2, ap.Gabor3Shape.X, ap.Gabor3Shape.Y}, nil, nil), cn)
 			if err != nil {
 				fmt.Printf("MelOutputToTable: column not found or failed to be created")
 				return false
@@ -959,9 +962,9 @@ func (ap *AuditoryProc) MelOutputToTable(dt *etable.Table, ch int, fmtOnly bool)
 			for s := 0; s < ap.Gabor3Shape.X; s++ {
 				for i := 0; i < ap.Gabor3Shape.Y; i++ {
 					for ti := 0; ti < nf; ti++ {
-						val0 := ap.Gabor3TrialRaw.FloatVal([]int{ti, 0, i, s, ch})
+						val0 := ap.Gabor3Raw.FloatVal([]int{ti, 0, i, s, ch})
 						dout.SetFloat([]int{ti, 0, s, i}, val0)
-						val1 := ap.Gabor3TrialRaw.FloatVal([]int{ti, 1, i, s, ch})
+						val1 := ap.Gabor3Raw.FloatVal([]int{ti, 1, i, s, ch})
 						dout.SetFloat([]int{ti, 1, s, i}, val1)
 					}
 				}
@@ -971,7 +974,7 @@ func (ap *AuditoryProc) MelOutputToTable(dt *etable.Table, ch int, fmtOnly bool)
 		cn = "AudProc" + "_mel_gabor3" + colSfx // column name
 		col = dt.ColByName(cn)
 		if col == nil {
-			err = dt.AddCol(etensor.NewFloat32([]int{ap.Gabor3.NFilters, 2, ap.Gabor3Shape.X, ap.Gabor3Shape.Y}, nil, nil), cn)
+			err = dt.AddCol(etensor.NewFloat32([]int{rows, ap.Gabor3.NFilters, 2, ap.Gabor3Shape.X, ap.Gabor3Shape.Y}, nil, nil), cn)
 			if err != nil {
 				fmt.Printf("MelOutputToTable: column not found or failed to be created")
 				return false
@@ -984,9 +987,9 @@ func (ap *AuditoryProc) MelOutputToTable(dt *etable.Table, ch int, fmtOnly bool)
 			for s := 0; s < ap.Gabor3Shape.X; s++ {
 				for i := 0; i < ap.Gabor3Shape.Y; i++ {
 					for ti := 0; ti < nf; ti++ {
-						val0 := ap.Gabor3TrialOut.FloatVal([]int{ti, 0, i, s, ch})
+						val0 := ap.Gabor3Out.FloatVal([]int{ti, 0, i, s, ch})
 						dout.SetFloat([]int{ti, 0, s, i}, val0)
-						val1 := ap.Gabor3TrialOut.FloatVal([]int{ti, 1, i, s, ch})
+						val1 := ap.Gabor3Out.FloatVal([]int{ti, 1, i, s, ch})
 						dout.SetFloat([]int{ti, 1, s, i}, val1)
 					}
 				}
@@ -998,7 +1001,7 @@ func (ap *AuditoryProc) MelOutputToTable(dt *etable.Table, ch int, fmtOnly bool)
 		cn = "AudProc" + "_mel_mfcc" + colSfx // column name
 		col = dt.ColByName(cn)
 		if col == nil {
-			err = dt.AddCol(etensor.NewFloat32([]int{int(ap.Input.TotalSteps), ap.Mfcc.NCoeff}, nil, nil), cn)
+			err = dt.AddCol(etensor.NewFloat32([]int{rows, int(ap.Input.TotalSteps), ap.Mfcc.NCoeff}, nil, nil), cn)
 			if err != nil {
 				fmt.Printf("MelOutputToTable: column not found or failed to be created")
 				return false
@@ -1009,7 +1012,7 @@ func (ap *AuditoryProc) MelOutputToTable(dt *etable.Table, ch int, fmtOnly bool)
 			dout := col.CloneTensor()
 			for s := 0; s < int(ap.Input.TotalSteps); s++ {
 				for i := 0; i < ap.Mfcc.NCoeff; i++ {
-					val := ap.MfccDctTrialOut.FloatVal([]int{i, s, ch})
+					val := ap.MfccDctOut.FloatVal([]int{i, s, ch})
 					dout.SetFloat([]int{s, i}, val)
 				}
 			}
