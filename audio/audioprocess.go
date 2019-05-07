@@ -36,7 +36,7 @@ func (ais *AudInputSpec) Initialize() {
 	ais.WinMsec = 25.0
 	ais.StepMsec = 5.0
 	ais.TrialMsec = 100.0
-	ais.BorderSteps = 12
+	ais.BorderSteps = 0
 	ais.SampleRate = 16000
 	ais.Channels = 1
 	ais.Channel = 0
@@ -425,7 +425,14 @@ func (ap *AuditoryProc) NeedsInit() bool {
 
 func (ap *AuditoryProc) Init() bool {
 	//ap.UpdateConfig()
+	ap.Input.Initialize()
+	ap.Dft.Initialize()
 	ap.MelFBank.Initialize()
+	ap.FBankRenorm.Initialize()
+	ap.Gabor1.Initialize()
+	ap.Gabor2.Initialize()
+	ap.Gabor3.Initialize()
+	ap.Mfcc.Initialize()
 
 	ap.InitFilters()
 	ap.InitOutMatrix()
@@ -459,7 +466,7 @@ func (ap *AuditoryProc) InitDataTableChan(ch int) bool {
 
 // InputStepsLeft returns the number of steps left to process in the current input sound
 func (ap *AuditoryProc) InputStepsLeft() int {
-	samplesLeft := int(ap.SoundFull.NumDims()) - ap.InputPos
+	samplesLeft := len(ap.SoundFull.Values) - ap.InputPos
 	//samplesLeft = ap.SoundFull.Frames() - ap.InputPos
 	return samplesLeft / ap.Input.StepSamples
 }
@@ -510,7 +517,7 @@ func (ap *AuditoryProc) ProcessTrial() bool {
 
 // SoundToWindow gets sound from sound_full at given position and channel, into window_in -- pads with zeros for any amount not available in the sound_full input
 func (ap *AuditoryProc) SoundToWindow(inPos int, ch int) bool {
-	samplesAvail := ap.SoundFull.NumDims() - inPos
+	samplesAvail := len(ap.SoundFull.Values) - inPos
 	samplesCopy := int(math32.Min(float32(samplesAvail), float32(ap.Input.WinSamples)))
 
 	if samplesCopy > 0 {
