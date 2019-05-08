@@ -149,6 +149,8 @@ func (ag *AudGaborSpec) Initialize() {
 	ag.NHoriz = 4
 	ag.SizeTime = 6.0
 	ag.SizeFreq = 6.0
+	ag.SpaceTime = 2.0
+	ag.SpaceFreq = 2.0
 	ag.WaveLen = 1.5
 	ag.SigmaLen = 0.6
 	ag.SigmaWidth = 0.3
@@ -423,8 +425,19 @@ func (ap *AuditoryProc) NeedsInit() bool {
 
 }
 
+// UpdateConfig
+func (ap *AuditoryProc) UpdateConfig() {
+	ap.Gabor1Shape.X = ((ap.Input.TrialSteps - 1) / ap.Gabor1.SpaceTime) + 1
+	ap.Gabor1Shape.Y = ((ap.MelFBank.NFilters - ap.Gabor1.SizeFreq - 1) / ap.Gabor1.SpaceFreq) + 1
+
+	ap.Gabor2Shape.X = ((ap.Input.TrialSteps - 1) / ap.Gabor2.SpaceTime) + 1
+	ap.Gabor2Shape.Y = ((ap.MelFBank.NFilters - ap.Gabor2.SizeFreq - 1) / ap.Gabor2.SpaceFreq) + 1
+
+	ap.Gabor3Shape.X = ((ap.Input.TrialSteps - 1) / ap.Gabor3.SpaceTime) + 1
+	ap.Gabor3Shape.Y = ((ap.MelFBank.NFilters - ap.Gabor3.SizeFreq - 1) / ap.Gabor3.SpaceFreq) + 1
+}
+
 func (ap *AuditoryProc) Init() bool {
-	//ap.UpdateConfig()
 	ap.Input.Initialize()
 	ap.Dft.Initialize()
 	ap.MelFBank.Initialize()
@@ -432,6 +445,7 @@ func (ap *AuditoryProc) Init() bool {
 	ap.Gabor1.Initialize()
 	ap.Gabor2.Initialize()
 	ap.Gabor3.Initialize()
+	ap.UpdateConfig()
 	ap.Mfcc.Initialize()
 
 	ap.InitFilters()
