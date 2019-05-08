@@ -286,12 +286,15 @@ func (ap *AuditoryProc) InitFilters() bool {
 	ap.DftUse = ap.DftSize/2 + 1
 	ap.InitFiltersMel()
 	if ap.Gabor1.On {
+		ap.Gabor1Filters.SetShape([]int{ap.Gabor1.SizeTime, ap.Gabor1.SizeFreq, ap.Gabor1.NFilters}, nil, nil)
 		ap.Gabor1.RenderFilters(&ap.Gabor1Filters)
 	}
 	if ap.Gabor2.On {
+		ap.Gabor1Filters.SetShape([]int{ap.Gabor2.SizeTime, ap.Gabor2.SizeFreq, ap.Gabor2.NFilters}, nil, nil)
 		ap.Gabor2.RenderFilters(&ap.Gabor2Filters)
 	}
 	if ap.Gabor3.On {
+		ap.Gabor1Filters.SetShape([]int{ap.Gabor3.SizeTime, ap.Gabor3.SizeFreq, ap.Gabor3.NFilters}, nil, nil)
 		ap.Gabor3.RenderFilters(&ap.Gabor3Filters)
 	}
 	return true
@@ -353,25 +356,22 @@ func (ap *AuditoryProc) InitOutMatrix() bool {
 
 	if ap.MelFBank.On {
 		ap.MelFBankOut.SetShape([]int{ap.MelFBank.NFilters}, nil, nil)
-		ap.MelFBankOut.SetShape([]int{ap.MelFBank.NFilters, ap.Input.TotalSteps, ap.Input.Channels}, nil, nil)
-
-		if ap.MelFBank.On {
-			if ap.Gabor1.On {
-				ap.Gabor1Raw.SetShape([]int{ap.Gabor1.NFilters, 2, ap.Gabor1Shape.Y, ap.Gabor1Shape.X, ap.Input.Channels}, nil, nil)
-				ap.Gabor1Out.SetShape([]int{ap.Gabor1.NFilters, 2, ap.Gabor1Shape.Y, ap.Gabor1Shape.X, ap.Input.Channels}, nil, nil)
-			}
-			if ap.Gabor2.On {
-				ap.Gabor2Raw.SetShape([]int{ap.Gabor2.NFilters, 2, ap.Gabor2Shape.Y, ap.Gabor2Shape.X, ap.Input.Channels}, nil, nil)
-				ap.Gabor2Out.SetShape([]int{ap.Gabor2.NFilters, 2, ap.Gabor2Shape.Y, ap.Gabor2Shape.X, ap.Input.Channels}, nil, nil)
-			}
-			if ap.Gabor3.On {
-				ap.Gabor3Raw.SetShape([]int{ap.Gabor3.NFilters, 2, ap.Gabor3Shape.Y, ap.Gabor3Shape.X, ap.Input.Channels}, nil, nil)
-				ap.Gabor3Out.SetShape([]int{ap.Gabor3.NFilters, 2, ap.Gabor3Shape.Y, ap.Gabor3Shape.X, ap.Input.Channels}, nil, nil)
-			}
-			if ap.Mfcc.On {
-				ap.MfccDctOut.SetShape([]int{ap.MelFBank.NFilters}, nil, nil)
-				ap.MfccDctOut.SetShape([]int{ap.MelFBank.NFilters, ap.Input.TotalSteps, ap.Input.Channels}, nil, nil)
-			}
+		ap.MelFBankTrialOut.SetShape([]int{ap.MelFBank.NFilters, ap.Input.TotalSteps, ap.Input.Channels}, nil, nil)
+		if ap.Gabor1.On {
+			ap.Gabor1Raw.SetShape([]int{ap.Gabor1.NFilters, 2, ap.Gabor1Shape.Y, ap.Gabor1Shape.X, ap.Input.Channels}, nil, nil)
+			ap.Gabor1Out.SetShape([]int{ap.Gabor1.NFilters, 2, ap.Gabor1Shape.Y, ap.Gabor1Shape.X, ap.Input.Channels}, nil, nil)
+		}
+		if ap.Gabor2.On {
+			ap.Gabor2Raw.SetShape([]int{ap.Gabor2.NFilters, 2, ap.Gabor2Shape.Y, ap.Gabor2Shape.X, ap.Input.Channels}, nil, nil)
+			ap.Gabor2Out.SetShape([]int{ap.Gabor2.NFilters, 2, ap.Gabor2Shape.Y, ap.Gabor2Shape.X, ap.Input.Channels}, nil, nil)
+		}
+		if ap.Gabor3.On {
+			ap.Gabor3Raw.SetShape([]int{ap.Gabor3.NFilters, 2, ap.Gabor3Shape.Y, ap.Gabor3Shape.X, ap.Input.Channels}, nil, nil)
+			ap.Gabor3Out.SetShape([]int{ap.Gabor3.NFilters, 2, ap.Gabor3Shape.Y, ap.Gabor3Shape.X, ap.Input.Channels}, nil, nil)
+		}
+		if ap.Mfcc.On {
+			ap.MfccDctOut.SetShape([]int{ap.MelFBank.NFilters}, nil, nil)
+			ap.MfccDctOut.SetShape([]int{ap.MelFBank.NFilters, ap.Input.TotalSteps, ap.Input.Channels}, nil, nil)
 		}
 	}
 	return true
@@ -667,16 +667,13 @@ func (ap *AuditoryProc) MelFilterDft(ch, step int) {
 // FilterTrial process filters that operate over an entire trial at a time
 func (ap *AuditoryProc) FilterTrial(ch int) bool {
 	if ap.Gabor1.On {
-		ap.GaborFilter(ch, &ap.Gabor1, &ap.Gabor1Filters,
-			&ap.Gabor1Raw, &ap.Gabor1Out)
+		ap.GaborFilter(ch, &ap.Gabor1, &ap.Gabor1Filters, &ap.Gabor1Raw, &ap.Gabor1Out)
 	}
 	if ap.Gabor2.On {
-		ap.GaborFilter(ch, &ap.Gabor2, &ap.Gabor2Filters,
-			&ap.Gabor2Raw, &ap.Gabor2Out)
+		ap.GaborFilter(ch, &ap.Gabor2, &ap.Gabor2Filters, &ap.Gabor2Raw, &ap.Gabor2Out)
 	}
 	if ap.Gabor3.On {
-		ap.GaborFilter(ch, &ap.Gabor3, &ap.Gabor3Filters,
-			&ap.Gabor3Raw, &ap.Gabor3Out)
+		ap.GaborFilter(ch, &ap.Gabor3, &ap.Gabor3Filters, &ap.Gabor3Raw, &ap.Gabor3Out)
 	}
 	return true
 }
@@ -729,7 +726,7 @@ func (ap *AuditoryProc) GaborFilter(ch int, spec *AudGaborSpec, filters *etensor
 				for ff := int(0); ff < spec.SizeFreq; ff++ {
 					for ft := int(0); ft < spec.SizeTime; ft++ {
 						fVal := filters.Value([]int{ft, ff, fi})
-						iVal := ap.MelFBankOut.Value([]int{flt + ff, inSt + ft, ch})
+						iVal := ap.MelFBankTrialOut.Value([]int{flt + ff, inSt + ft, ch})
 						fSum += fVal * iVal
 					}
 				}
@@ -755,7 +752,7 @@ func (ap *AuditoryProc) GaborFilter(ch int, spec *AudGaborSpec, filters *etensor
 		fmt.Printf("GaborFilter: SubSlice error: %v", err)
 	}
 
-	// V1KwtaSpec not yet implemented
+	// todo: V1KwtaSpec not yet implemented
 	//if (gabor_kwta.On()) {
 	//	gabor_kwta.Compute_Inhib(*raw_frm, *out_frm, gabor_gci);
 	//} else {
