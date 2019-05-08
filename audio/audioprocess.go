@@ -259,7 +259,7 @@ type AuditoryProc struct {
 
 	SoundFull           etensor.Float32   `desc:"#READ_ONLY #NO_SAVE the full sound input obtained from the sound input"`
 	WindowIn            etensor.Float32   `desc:"#READ_ONLY #NO_SAVE [input.win_samples] the raw sound input, one channel at a time"`
-	DftOut              etensor.Complex64 `desc:"#READ_ONLY #NO_SAVE [2, dft_size] discrete fourier transform (fft) output complex representation"`
+	DftOut              etensor.Complex64 `desc:"#READ_ONLY #NO_SAVE [dft_size] discrete fourier transform (fft) output complex representation"`
 	DftPowerOut         etensor.Float32   `desc:"#READ_ONLY #NO_SAVE [dft_use] power of the dft, up to the nyquist limit frequency (1/2 input.win_samples)"`
 	DftLogPowerOut      etensor.Float32   `desc:"#READ_ONLY #NO_SAVE [dft_use] log power of the dft, up to the nyquist limit frequency (1/2 input.win_samples)"`
 	DftPowerTrialOut    etensor.Float32   `desc:"#READ_ONLY #NO_SAVE [dft_use][input.total_steps][input.channels] full trial's worth of power of the dft, up to the nyquist limit frequency (1/2 input.win_samples)"`
@@ -341,36 +341,36 @@ func (ap *AuditoryProc) InitFiltersMel() bool {
 
 // InitOutMatrix
 func (ap *AuditoryProc) InitOutMatrix() bool {
-	ap.WindowIn.SetShape64([]int64{int64(ap.Input.WinSamples)}, nil, nil)
-	ap.DftOut.SetShape([]int{2, ap.DftSize}, nil, nil)
-	ap.DftPowerOut.SetShape64([]int64{int64(ap.DftUse)}, nil, nil)
-	ap.DftPowerOut.SetShape64([]int64{int64(ap.DftUse), int64(ap.Input.TotalSteps), int64(ap.Input.Channels)}, nil, nil)
+	ap.WindowIn.SetShape([]int{ap.Input.WinSamples}, nil, nil)
+	ap.DftOut.SetShape([]int{ap.DftSize}, nil, nil)
+	ap.DftPowerOut.SetShape([]int{ap.DftUse}, nil, nil)
+	ap.DftPowerTrialOut.SetShape([]int{ap.DftUse, ap.Input.TotalSteps, ap.Input.Channels}, nil, nil)
 
 	if ap.Dft.LogPow {
-		ap.DftLogPowerOut.SetShape64([]int64{int64(ap.DftUse)}, nil, nil)
-		ap.DftLogPowerOut.SetShape64([]int64{int64(ap.DftUse), int64(ap.Input.TotalSteps), int64(ap.Input.Channels)}, nil, nil)
+		ap.DftLogPowerOut.SetShape([]int{ap.DftUse}, nil, nil)
+		ap.DftLogPowerTrialOut.SetShape([]int{ap.DftUse, ap.Input.TotalSteps, ap.Input.Channels}, nil, nil)
 	}
 
 	if ap.MelFBank.On {
-		ap.MelFBankOut.SetShape64([]int64{int64(ap.MelFBank.NFilters)}, nil, nil)
-		ap.MelFBankOut.SetShape64([]int64{int64(ap.MelFBank.NFilters), int64(ap.Input.TotalSteps), int64(ap.Input.Channels)}, nil, nil)
+		ap.MelFBankOut.SetShape([]int{ap.MelFBank.NFilters}, nil, nil)
+		ap.MelFBankOut.SetShape([]int{ap.MelFBank.NFilters, ap.Input.TotalSteps, ap.Input.Channels}, nil, nil)
 
 		if ap.MelFBank.On {
 			if ap.Gabor1.On {
-				ap.Gabor1Raw.SetShape64([]int64{int64(ap.Gabor1.NFilters), 2, int64(ap.Gabor1Shape.Y), int64(ap.Gabor1Shape.X), int64(ap.Input.Channels)}, nil, nil)
-				ap.Gabor1Out.SetShape64([]int64{int64(ap.Gabor1.NFilters), 2, int64(ap.Gabor1Shape.Y), int64(ap.Gabor1Shape.X), int64(ap.Input.Channels)}, nil, nil)
+				ap.Gabor1Raw.SetShape([]int{ap.Gabor1.NFilters, 2, ap.Gabor1Shape.Y, ap.Gabor1Shape.X, ap.Input.Channels}, nil, nil)
+				ap.Gabor1Out.SetShape([]int{ap.Gabor1.NFilters, 2, ap.Gabor1Shape.Y, ap.Gabor1Shape.X, ap.Input.Channels}, nil, nil)
 			}
 			if ap.Gabor2.On {
-				ap.Gabor2Raw.SetShape64([]int64{int64(ap.Gabor2.NFilters), 2, int64(ap.Gabor2Shape.Y), int64(ap.Gabor2Shape.X), int64(ap.Input.Channels)}, nil, nil)
-				ap.Gabor2Out.SetShape64([]int64{int64(ap.Gabor2.NFilters), 2, int64(ap.Gabor2Shape.Y), int64(ap.Gabor2Shape.X), int64(ap.Input.Channels)}, nil, nil)
+				ap.Gabor2Raw.SetShape([]int{ap.Gabor2.NFilters, 2, ap.Gabor2Shape.Y, ap.Gabor2Shape.X, ap.Input.Channels}, nil, nil)
+				ap.Gabor2Out.SetShape([]int{ap.Gabor2.NFilters, 2, ap.Gabor2Shape.Y, ap.Gabor2Shape.X, ap.Input.Channels}, nil, nil)
 			}
 			if ap.Gabor3.On {
-				ap.Gabor3Raw.SetShape64([]int64{int64(ap.Gabor3.NFilters), 2, int64(ap.Gabor3Shape.Y), int64(ap.Gabor3Shape.X), int64(ap.Input.Channels)}, nil, nil)
-				ap.Gabor3Out.SetShape64([]int64{int64(ap.Gabor3.NFilters), 2, int64(ap.Gabor3Shape.Y), int64(ap.Gabor3Shape.X), int64(ap.Input.Channels)}, nil, nil)
+				ap.Gabor3Raw.SetShape([]int{ap.Gabor3.NFilters, 2, ap.Gabor3Shape.Y, ap.Gabor3Shape.X, ap.Input.Channels}, nil, nil)
+				ap.Gabor3Out.SetShape([]int{ap.Gabor3.NFilters, 2, ap.Gabor3Shape.Y, ap.Gabor3Shape.X, ap.Input.Channels}, nil, nil)
 			}
 			if ap.Mfcc.On {
-				ap.MfccDctOut.SetShape64([]int64{int64(ap.MelFBank.NFilters)}, nil, nil)
-				ap.MfccDctOut.SetShape64([]int64{int64(ap.MelFBank.NFilters), int64(ap.Input.TotalSteps), int64(ap.Input.Channels)}, nil, nil)
+				ap.MfccDctOut.SetShape([]int{ap.MelFBank.NFilters}, nil, nil)
+				ap.MfccDctOut.SetShape([]int{ap.MelFBank.NFilters, ap.Input.TotalSteps, ap.Input.Channels}, nil, nil)
 			}
 		}
 	}
@@ -608,14 +608,14 @@ func (ap *AuditoryProc) DftInput(ch int, step int) {
 func (ap *AuditoryProc) PowerOfDft(ch, step int) {
 	// Mag() is absolute value   SqMag is square of it - r*r + i*i
 	for k := 0; k < int(ap.DftUse); k++ {
-		rl := ap.DftOut.FloatVal([]int{2, k})
-		im := ap.DftOut.FloatValImag([]int{2, k})
+		rl := ap.DftOut.FloatVal1D(k)
+		im := ap.DftOut.FloatVal1DImag(k)
 		powr := float64(rl*rl + im*im) // why is complex converted to float here
 		if ap.FirstStep == false {
 			powr = float64(ap.Dft.PreviousSmooth)*ap.DftPowerOut.FloatVal1D(k) + float64(ap.Dft.CurrentSmooth)*powr
 		}
 		ap.DftPowerOut.SetFloat1D(k, powr)
-		ap.DftPowerOut.SetFloat([]int{k, step, ch}, powr)
+		ap.DftPowerTrialOut.SetFloat([]int{k, step, ch}, powr)
 		var logp float64
 		if ap.Dft.LogPow {
 			powr += float64(ap.Dft.LogOff)
@@ -624,8 +624,8 @@ func (ap *AuditoryProc) PowerOfDft(ch, step int) {
 			} else {
 				logp = math.Log(powr)
 			}
-			ap.DftPowerOut.SetFloat1D(k, float64(logp))
-			ap.DftPowerOut.SetFloat([]int{k, step, ch}, logp)
+			ap.DftLogPowerOut.SetFloat1D(k, logp)
+			ap.DftLogPowerTrialOut.SetFloat([]int{k, step, ch}, logp)
 		}
 	}
 }
