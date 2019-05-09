@@ -292,11 +292,11 @@ func (ap *AuditoryProc) InitFilters() bool {
 		ap.Gabor1.RenderFilters(&ap.Gabor1Filters)
 	}
 	if ap.Gabor2.On {
-		ap.Gabor1Filters.SetShape([]int{ap.Gabor2.SizeTime, ap.Gabor2.SizeFreq, ap.Gabor2.NFilters}, nil, nil)
+		ap.Gabor2Filters.SetShape([]int{ap.Gabor2.SizeTime, ap.Gabor2.SizeFreq, ap.Gabor2.NFilters}, nil, nil)
 		ap.Gabor2.RenderFilters(&ap.Gabor2Filters)
 	}
 	if ap.Gabor3.On {
-		ap.Gabor1Filters.SetShape([]int{ap.Gabor3.SizeTime, ap.Gabor3.SizeFreq, ap.Gabor3.NFilters}, nil, nil)
+		ap.Gabor3Filters.SetShape([]int{ap.Gabor3.SizeTime, ap.Gabor3.SizeFreq, ap.Gabor3.NFilters}, nil, nil)
 		ap.Gabor3.RenderFilters(&ap.Gabor3Filters)
 	}
 	return true
@@ -721,7 +721,7 @@ func (ap *AuditoryProc) GaborFilter(ch int, spec *AudGaborSpec, filters *etensor
 	fMax := ap.MelFBank.NFilters - spec.SizeFreq
 
 	tIdx := 0
-	for s := tMin; s < tMax; s, tIdx = spec.SpaceTime, tIdx+1 {
+	for s := tMin; s < tMax; s, tIdx = s+spec.SpaceTime, tIdx+1 {
 		inSt := s - tOff
 		if tIdx > outRaw.Dim(3) {
 			fmt.Printf("GaborFilter: time index %v out of range: %v", tIdx, outRaw.Dim(3))
@@ -758,12 +758,12 @@ func (ap *AuditoryProc) GaborFilter(ch int, spec *AudGaborSpec, filters *etensor
 	}
 	rawFrame, err := outRaw.SubSpace(outRaw.NumDims()-1, []int{ch})
 	if err != nil {
-		fmt.Printf("GaborFilter: SubSlice error: %v", err)
+		fmt.Printf("GaborFilter: SubSpace error: %v", err)
 	}
 
 	outFrame, err := out.SubSpace(outRaw.NumDims()-1, []int{ch})
 	if err != nil {
-		fmt.Printf("GaborFilter: SubSlice error: %v", err)
+		fmt.Printf("GaborFilter: SubSpace error: %v", err)
 	}
 
 	// todo: V1KwtaSpec not yet implemented
@@ -802,7 +802,6 @@ func (ap *AuditoryProc) OutputToTable(ch int) bool {
 
 // MelOutputToTable mel filter bank to output table
 func (ap *AuditoryProc) MelOutputToTable(dt *etable.Table, ch int, fmtOnly bool) bool { // ch is channel
-	//var idx int
 	var colSfx string
 	rows := 1
 
@@ -821,16 +820,20 @@ func (ap *AuditoryProc) MelOutputToTable(dt *etable.Table, ch int, fmtOnly bool)
 		}
 	}
 
-	col = dt.ColByName(cn)
 	if fmtOnly == false {
-		dout := col.CloneTensor()
+		colAsF32 := dt.ColByName(cn).(*etensor.Float32)
+		dout, err := colAsF32.SubSpace(2, []int{dt.Rows - 1})
+		if err != nil {
+			fmt.Printf("MelOutputToTable: subspacing error")
+			return false
+		}
 		for s := 0; s < int(ap.Input.TotalSteps); s++ {
 			for i := 0; i < int(ap.DftUse); i++ {
 				if ap.Dft.LogPow {
-					val := ap.DftLogPowerOut.FloatVal([]int{i, s, ch})
+					val := ap.DftLogPowerTrialOut.FloatVal([]int{i, s, ch})
 					dout.SetFloat([]int{s, i}, val)
 				} else {
-					val := ap.DftPowerOut.FloatVal([]int{i, s, ch})
+					val := ap.DftPowerTrialOut.FloatVal([]int{i, s, ch})
 					dout.SetFloat([]int{s, i}, val)
 				}
 			}
@@ -847,12 +850,16 @@ func (ap *AuditoryProc) MelOutputToTable(dt *etable.Table, ch int, fmtOnly bool)
 				return false
 			}
 		}
-		col = dt.ColByName(cn)
 		if fmtOnly == false {
-			dout := col.CloneTensor()
+			colAsF32 := dt.ColByName(cn).(*etensor.Float32)
+			dout, err := colAsF32.SubSpace(2, []int{dt.Rows - 1})
+			if err != nil {
+				fmt.Printf("MelOutputToTable: subspacing error")
+				return false
+			}
 			for s := 0; s < int(ap.Input.TotalSteps); s++ {
 				for i := 0; i < int(ap.MelFBank.NFilters); i++ {
-					val := ap.MelFBankOut.FloatVal([]int{i, s, ch})
+					val := ap.MelFBankTrialOut.FloatVal([]int{i, s, ch})
 					dout.SetFloat([]int{s, i}, val)
 				}
 			}
@@ -869,9 +876,14 @@ func (ap *AuditoryProc) MelOutputToTable(dt *etable.Table, ch int, fmtOnly bool)
 				return false
 			}
 		}
-		col = dt.ColByName(cn)
+
 		if fmtOnly == false {
-			dout := col.CloneTensor()
+			colAsF32 := dt.ColByName(cn).(*etensor.Float32)
+			dout, err := colAsF32.SubSpace(4, []int{dt.Rows - 1})
+			if err != nil {
+				fmt.Printf("MelOutputToTable: subspacing error")
+				return false
+			}
 			nf := ap.Gabor1.NFilters
 			for s := 0; s < ap.Gabor1Shape.X; s++ {
 				for i := 0; i < ap.Gabor1Shape.Y; i++ {
@@ -894,9 +906,13 @@ func (ap *AuditoryProc) MelOutputToTable(dt *etable.Table, ch int, fmtOnly bool)
 				return false
 			}
 		}
-		col = dt.ColByName(cn)
 		if fmtOnly == false {
-			dout := col.CloneTensor()
+			colAsF32 := dt.ColByName(cn).(*etensor.Float32)
+			dout, err := colAsF32.SubSpace(4, []int{dt.Rows - 1})
+			if err != nil {
+				fmt.Printf("MelOutputToTable: subspacing error")
+				return false
+			}
 			nf := ap.Gabor1.NFilters
 			for s := 0; s < ap.Gabor1Shape.X; s++ {
 				for i := 0; i < ap.Gabor1Shape.Y; i++ {
@@ -921,9 +937,13 @@ func (ap *AuditoryProc) MelOutputToTable(dt *etable.Table, ch int, fmtOnly bool)
 				return false
 			}
 		}
-		col = dt.ColByName(cn)
 		if fmtOnly == false {
-			dout := col.CloneTensor()
+			colAsF32 := dt.ColByName(cn).(*etensor.Float32)
+			dout, err := colAsF32.SubSpace(4, []int{dt.Rows - 1})
+			if err != nil {
+				fmt.Printf("MelOutputToTable: subspacing error")
+				return false
+			}
 			nf := ap.Gabor2.NFilters
 			for s := 0; s < ap.Gabor2Shape.X; s++ {
 				for i := 0; i < ap.Gabor2Shape.Y; i++ {
@@ -946,9 +966,13 @@ func (ap *AuditoryProc) MelOutputToTable(dt *etable.Table, ch int, fmtOnly bool)
 				return false
 			}
 		}
-		col = dt.ColByName(cn)
 		if fmtOnly == false {
-			dout := col.CloneTensor()
+			colAsF32 := dt.ColByName(cn).(*etensor.Float32)
+			dout, err := colAsF32.SubSpace(4, []int{dt.Rows - 1})
+			if err != nil {
+				fmt.Printf("MelOutputToTable: subspacing error")
+				return false
+			}
 			nf := ap.Gabor2.NFilters
 			for s := 0; s < ap.Gabor2Shape.X; s++ {
 				for i := 0; i < ap.Gabor2Shape.Y; i++ {
@@ -973,9 +997,13 @@ func (ap *AuditoryProc) MelOutputToTable(dt *etable.Table, ch int, fmtOnly bool)
 				return false
 			}
 		}
-		col = dt.ColByName(cn)
 		if fmtOnly == false {
-			dout := col.CloneTensor()
+			colAsF32 := dt.ColByName(cn).(*etensor.Float32)
+			dout, err := colAsF32.SubSpace(4, []int{dt.Rows - 1})
+			if err != nil {
+				fmt.Printf("MelOutputToTable: subspacing error")
+				return false
+			}
 			nf := ap.Gabor3.NFilters
 			for s := 0; s < ap.Gabor3Shape.X; s++ {
 				for i := 0; i < ap.Gabor3Shape.Y; i++ {
@@ -998,9 +1026,13 @@ func (ap *AuditoryProc) MelOutputToTable(dt *etable.Table, ch int, fmtOnly bool)
 				return false
 			}
 		}
-		col = dt.ColByName(cn)
 		if fmtOnly == false {
-			dout := col.CloneTensor()
+			colAsF32 := dt.ColByName(cn).(*etensor.Float32)
+			dout, err := colAsF32.SubSpace(4, []int{dt.Rows - 1})
+			if err != nil {
+				fmt.Printf("MelOutputToTable: subspacing error")
+				return false
+			}
 			nf := ap.Gabor3.NFilters
 			for s := 0; s < ap.Gabor3Shape.X; s++ {
 				for i := 0; i < ap.Gabor3Shape.Y; i++ {
@@ -1025,9 +1057,13 @@ func (ap *AuditoryProc) MelOutputToTable(dt *etable.Table, ch int, fmtOnly bool)
 				return false
 			}
 		}
-		col = dt.ColByName(cn)
 		if fmtOnly == false {
-			dout := col.CloneTensor()
+			colAsF32 := dt.ColByName(cn).(*etensor.Float32)
+			dout, err := colAsF32.SubSpace(4, []int{dt.Rows - 1})
+			if err != nil {
+				fmt.Printf("MelOutputToTable: subspacing error")
+				return false
+			}
 			for s := 0; s < int(ap.Input.TotalSteps); s++ {
 				for i := 0; i < ap.Mfcc.NCoeff; i++ {
 					val := ap.MfccDctOut.FloatVal([]int{i, s, ch})
