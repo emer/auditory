@@ -6,10 +6,12 @@ package audio
 import (
 	"errors"
 	"fmt"
-	"github.com/emer/etable/etensor"
-	"github.com/go-audio/wav"
 	"os"
 	"time"
+
+	"github.com/emer/etable/etensor"
+	"github.com/go-audio/audio"
+	"github.com/go-audio/wav"
 )
 
 type Endian int32
@@ -104,7 +106,6 @@ func (snd *Sound) SampleType() SoundSampleType {
 // and -1 gets all available channels (formats sound_data as two-dimensional matrix with inner dimension as
 // channels and outer dimension frames
 func (snd *Sound) SoundToMatrix(soundData *etensor.Float32, channel int) bool {
-
 	buf, err := snd.Decoder.FullPCMBuffer()
 	if err != nil {
 		fmt.Printf("SoundToMatrix error: %v", err)
@@ -113,10 +114,7 @@ func (snd *Sound) SoundToMatrix(soundData *etensor.Float32, channel int) bool {
 	//fmt.Printf("frames: %v\n", strconv.Itoa(int(buf.NumFrames())))
 
 	nChannels := snd.Channels()
-	// todo: come back to the sample type as this is needed to know how to access the data correctly
-	// todo: look at old code GetFloatAtIdx()
 	//st := snd.SampleType()
-	//size := snd.Decoder.SampleBitDepth()
 	if channel < 0 && nChannels > 1 {
 		shape := make([]int, 2)
 		shape[0] = int(nChannels)
@@ -125,8 +123,7 @@ func (snd *Sound) SoundToMatrix(soundData *etensor.Float32, channel int) bool {
 		idx := 0
 		for i := 0; i < nFrames; i++ {
 			for c := 0; c < int(nChannels); c, idx = c+1, idx+1 {
-				soundData.SetFloat([]int{c, i}, float64(buf.Data[idx]))
-				fmt.Printf("%v", buf.Data[idx])
+				soundData.SetFloat([]int{c, i}, float64(snd.GetFloatAtIdx(buf, idx)))
 			}
 		}
 	} else {
@@ -136,16 +133,29 @@ func (snd *Sound) SoundToMatrix(soundData *etensor.Float32, channel int) bool {
 
 		if nChannels == 1 {
 			for i := 0; i < nFrames; i++ {
-				soundData.SetFloat([]int{i}, float64(buf.Data[i]))
-				fmt.Printf("%v\n", buf.Data[i])
+				soundData.SetFloat1D(i, float64(snd.GetFloatAtIdx(buf, i)))
 			}
 		} else {
 			idx := 0
 			for i := 0; i < nFrames; i++ {
-				soundData.SetFloat([]int{i}, float64(buf.Data[idx+channel]))
+				soundData.SetFloat1D(i, float64(snd.GetFloatAtIdx(buf, idx+channel)))
 				idx += int(nChannels)
 			}
 		}
 	}
 	return true
+}
+
+// ConvertWavBufData
+func (snd *Sound) GetFloatAtIdx(buf *audio.IntBuffer, idx int) float32 {
+	if buf.SourceBitDepth == 32 {
+		return float32(buf.Data[idx]) / float32(0x7FFFFFFF)
+	} else if buf.SourceBitDepth == 24 {
+		return float32(buf.Data[idx]) / float32(0x7FFFFF)
+	} else if buf.SourceBitDepth == 16 {
+		return float32(buf.Data[idx]) / float32(0x7FFF)
+	} else if buf.SourceBitDepth == 8 {
+		return float32(buf.Data[idx]) / float32(0x7F)
+	}
+	return 0
 }

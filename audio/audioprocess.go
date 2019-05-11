@@ -8,7 +8,6 @@ import (
 	"image"
 	"math"
 	"strconv"
-	"unsafe"
 
 	"github.com/chewxy/math32"
 	"github.com/emer/etable/etable"
@@ -37,8 +36,8 @@ func (ais *AudInputSpec) Initialize() {
 	ais.WinMsec = 25.0
 	ais.StepMsec = 5.0
 	ais.TrialMsec = 100.0
-	ais.BorderSteps = 0
-	ais.SampleRate = 16000
+	ais.BorderSteps = 2
+	ais.SampleRate = 44100
 	ais.Channels = 1
 	ais.Channel = 0
 	ais.ComputeSamples()
@@ -137,8 +136,8 @@ type AudGaborSpec struct {
 	WaveLen         float32 `desc:"#CONDSHOW_ON_on #DEF_1.5;2 wavelength of the sine waves in normalized units"`
 	SigmaLen        float32 `desc:"#CONDSHOW_ON_on #DEF_0.6 gaussian sigma for the length dimension (elongated axis perpendicular to the sine waves) -- normalized as a function of filter size in relevant dimension"`
 	SigmaWidth      float32 `desc:"#CONDSHOW_ON_on #DEF_0.3 gaussian sigma for the width dimension (in the direction of the sine waves) -- normalized as a function of filter size in relevant dimension"`
-	SigmaLenHoriz   float32 `desc:"#CONDSHOW_ON_on #DEF_0.3 gaussian sigma for the length of special horizontal narrow-band filters -- normalized as a function of filter size in relevant dimension"`
-	SigmaWidthHoriz float32 `desc:"#CONDSHOW_ON_on #DEF_0.1 gaussian sigma for the horizontal dimension for special horizontal narrow-band filters -- normalized as a function of filter size in relevant dimension"`
+	HorizSigmaLen   float32 `desc:"#CONDSHOW_ON_on #DEF_0.3 gaussian sigma for the length of special horizontal narrow-band filters -- normalized as a function of filter size in relevant dimension"`
+	HorizSigmaWidth float32 `desc:"#CONDSHOW_ON_on #DEF_0.1 gaussian sigma for the horizontal dimension for special horizontal narrow-band filters -- normalized as a function of filter size in relevant dimension"`
 	Gain            float32 `desc:"#CONDSHOW_ON_on #DEF_2 overall gain multiplier applied after gabor filtering -- only relevant if not using renormalization (otherwize it just gets renormed awaY"`
 	NHoriz          int     `desc:"#CONDSHOW_ON_on #DEF_4 number of horizontally-elongated,  pure time-domain, frequency-band specific filters to include, evenly spaced over the available frequency space for this filter set -- in addition to these, there are two diagonals (45, 135) and a vertically-elongated (wide frequency band) filter"`
 	PhaseOffset     float32 `desc:"#CONDSHOW_ON_on #DEF_0;1.5708 offset for the sine phase -- default is an asymmetric sine wave -- can make it into a symmetric cosine gabor by using PI/2 = 1.5708"`
@@ -158,101 +157,107 @@ func (ag *AudGaborSpec) Initialize() {
 	ag.WaveLen = 1.5
 	ag.SigmaLen = 0.6
 	ag.SigmaWidth = 0.3
-	ag.SigmaLenHoriz = 0.3
-	ag.SigmaWidthHoriz = 0.1
+	ag.HorizSigmaLen = 0.3
+	ag.HorizSigmaWidth = 0.1
 	ag.PhaseOffset = 0.0
 	ag.CircleEdge = true
 	ag.NFilters = 3 + ag.NHoriz
 }
 
-// RenderFilters generates filters into the given matrix, which is formatted as: [sz_time_steps][sz_freq][n_filters]
+// RenderFilters generates filters into the given matrix, which is formatted as: [ag.SizeTime_steps][ag.SizeFreq][n_filters]
 func (ag *AudGaborSpec) RenderFilters(filters *etensor.Float32) {
-	fltrs.SetGeom(3, sz_time, sz_freq, n_filters);
+	filters.SetShape([]int{ag.SizeTime, ag.SizeFreq, ag.NFilters}, nil, nil)
 
-	float ctr_t = (float)(sz_time-1) / 2.0f;
-	float ctr_f = (float)(sz_freq-1) / 2.0f;
-	float ang_inc = taMath_float::pi / (float)4.0f;
+	ctrTime := (ag.SizeTime - 1) / 2.0
+	ctrFreq := (ag.SizeFreq - 1) / 2.0
+	angInc := math32.Pi / 4.0
 
-	float radius_t = (float)(sz_time) / 2.0f;
-	float radius_f = (float)(sz_freq) / 2.0f;
+	radiusTime := ag.SizeTime / 2.0
+	radiusFreq := ag.SizeFreq / 2.0
 
-	float len_norm = 1.0f / (2.0f * sig_len * sig_len);
-	float wd_norm = 1.0f / (2.0f * sig_wd * sig_wd);
-	float hor_len_norm = 1.0f / (2.0f * sig_hor_len * sig_hor_len);
-	float hor_wd_norm = 1.0f / (2.0f * sig_hor_wd * sig_hor_wd);
+	lenNorm := 1.0 / (2.0 * ag.SigmaLen * ag.SigmaLen)
+	widthNorm := 1.0 / (2.0 * ag.SigmaWidth * ag.SigmaWidth)
+	lenHorizNorm := 1.0 / (2.0 * ag.HorizSigmaLen * ag.HorizSigmaLen)
+	widthHorizNorm := 1.0 / (2.0 * ag.HorizSigmaWidth * ag.HorizSigmaWidth)
 
-	float twopinorm = (2.0f * taMath_float::pi) / wvlen;
+	twoPiNorm := (2.0 * math32.Pi) / ag.WaveLen
+	hCtrInc := (ag.SizeFreq - 1) / (ag.NHoriz + 1)
 
-	float hctr_inc = (float)(sz_freq-1) / (float)(n_horiz+1);
+	fli := 0
+	for hi := 0; hi < ag.NHoriz; hi, fli = hi+1, fli+1 {
+		hCtrFreq := hCtrInc * (hi + 1)
+		angF := -2.0 * angInc
+		for y := 0; y < ag.SizeFreq; y++ {
+			for x := 0; x < ag.SizeTime; x++ {
+				xf := x - ctrTime
+				yf := y - hCtrFreq
+				xfn := float32(xf / radiusTime)
+				yfn := float32(yf / radiusFreq)
 
-	int fli = 0;
-	for(int hi = 0; hi < n_horiz; hi++, fli++) {
-
-		float hctr_f = hctr_inc * (float)(hi + 1);
-
-		float angf = -2.0f * ang_inc;
-		for(int y = 0; y < sz_freq; y++) {
-			for(int x = 0; x < sz_time; x++) {
-				float xf = (float)x - ctr_t;
-				float yf = (float)y - hctr_f;
-				float xfn = xf / radius_t;
-				float yfn = yf / radius_f;
-
-				float dist = taMath_float::hypot(xfn, yfn);
-				float val = 0.0f;
-				if(!(circle_edge && (dist > 1.0f))) {
-				float nx = xfn * cosf(angf) - yfn * sinf(angf);
-				float ny = yfn * cosf(angf) + xfn * sinf(angf);
-				float gauss = expf(-(hor_wd_norm * (nx * nx) + hor_len_norm * (ny * ny)));
-				float sin_val = sinf(twopinorm * ny + phase_off);
-				val = gauss * sin_val;
+				dist := math32.Hypot(xfn, yfn)
+				val := float32(0)
+				if !(ag.CircleEdge && dist > 1.0) {
+					nx := xfn*math32.Cos(angF) - yfn*math32.Sin(angF)
+					ny := yfn*math32.Cos(angF) + xfn*math32.Sin(angF)
+					gauss := math32.Exp(-(widthHorizNorm*(nx*nx) + lenHorizNorm*(ny*ny)))
+					sinVal := math32.Sin(twoPiNorm*ny + ag.PhaseOffset)
+					val = gauss * sinVal
 				}
-				fltrs.FastEl3d(x, y, fli) = val;
+				filters.Set([]int{x, y, fli}, val)
 			}
 		}
 	}
-	for(int ang = 1; ang < 4; ang++, fli++) {
-		float angf = -(float)ang * ang_inc;
 
-		for(int y = 0; y < sz_freq; y++) {
-			for(int x = 0; x < sz_time; x++) {
-				float xf = (float)x - ctr_t;
-				float yf = (float)y - ctr_f;
-				float xfn = xf / radius_t;
-				float yfn = yf / radius_f;
+	for ang := 1; ang < 4; ang, fli = ang+1, fli+1 {
+		angF := float32(-ang) * angInc
 
-				float dist = taMath_float::hypot(xfn, yfn);
-				float val = 0.0f;
-				if(!(circle_edge && (dist > 1.0f))) {
-				float nx = xfn * cosf(angf) - yfn * sinf(angf);
-				float ny = yfn * cosf(angf) + xfn * sinf(angf);
-				float gauss = expf(-(len_norm * (nx * nx) + wd_norm * (ny * ny)));
-				float sin_val = sinf(twopinorm * ny + phase_off);
-				val = gauss * sin_val;
+		for y := 0; y < ag.SizeFreq; y++ {
+			for x := 0; x < ag.SizeTime; x++ {
+				xf := x - ctrTime
+				yf := y - ctrFreq
+				xfn := float32(xf / radiusTime)
+				yfn := float32(yf / radiusFreq)
+
+				dist := math32.Hypot(xfn, yfn)
+				val := float32(0)
+				if !(ag.CircleEdge && dist > 1.0) {
+					nx := xfn*math32.Cos(angF) - yfn*math32.Sin(angF)
+					ny := yfn*math32.Cos(angF) + xfn*math32.Sin(angF)
+					gauss := math32.Exp(-(lenNorm*(nx*nx) + widthNorm*(ny*ny)))
+					sinVal := math32.Sin(twoPiNorm*ny + ag.PhaseOffset)
+					val = gauss * sinVal
 				}
-				fltrs.FastEl3d(x, y, fli) = val;
+				filters.Set([]int{x, y, fli}, val)
 			}
 		}
 	}
 
 	// renorm each half
-	for(fli = 0; fli < n_filters; fli++) {
-		float pos_sum = 0.0f;
-		float neg_sum = 0.0f;
-		for(int y = 0; y < sz_freq; y++) {
-			for(int x = 0; x < sz_time; x++) {
-				float& val = fltrs.FastEl3d(x, y, fli);
-				if(val > 0.0f)          { pos_sum += val; }
-				else if(val < 0.0f)     { neg_sum += val; }
+	for fli := 0; fli < ag.NFilters; fli++ {
+		posSum := float32(0)
+		negSum := float32(0)
+		for y := 0; y < ag.SizeFreq; y++ {
+			for x := 0; x < ag.SizeTime; x++ {
+				val := float32(filters.Value([]int{x, y, fli}))
+				if val > 0 {
+					posSum += val
+				} else if val < 0 {
+					negSum += val
+				}
 			}
 		}
-		float pos_norm = 1.0f / pos_sum;
-		float neg_norm = -1.0f / neg_sum;
-		for(int y = 0; y < sz_freq; y++) {
-			for(int x = 0; x < sz_time; x++) {
-				float& val = fltrs.FastEl3d(x, y, fli);
-				if(val > 0.0f)          { val *= pos_norm; }
-				else if(val < 0.0f)     { val *= neg_norm; }
+		posNorm := 1.0 / posSum
+		negNorm := -1.0 / negSum
+		for y := 0; y < ag.SizeFreq; y++ {
+			for x := 0; x < ag.SizeTime; x++ {
+				val := filters.Value([]int{x, y, fli})
+				if val > 0.0 {
+					val *= posNorm
+					filters.Set([]int{x, y, fli}, val)
+				} else if val < 0.0 {
+					val *= negNorm
+					filters.Set([]int{x, y, fli}, val)
+				}
 			}
 		}
 	}
@@ -353,13 +358,13 @@ type AuditoryProc struct {
 	Gabor2Shape   image.Point `desc:"#CONDSHOW_ON_gabor2.on #READ_ONLY #SHOW overall geometry of gabor2 output (group-level geometry -- feature / unit level geometry is n_features, 2)"`
 	Gabor3Shape   image.Point `desc:"#CONDSHOW_ON_gabor3.on #READ_ONLY #SHOW overall geometry of gabor3 output (group-level geometry -- feature / unit level geometry is n_features, 2)"`
 
-	SoundFull           etensor.Float32   `desc:"#READ_ONLY #NO_SAVE the full sound input obtained from the sound input"`
-	WindowIn            etensor.Float32   `desc:"#READ_ONLY #NO_SAVE [input.win_samples] the raw sound input, one channel at a time"`
+	SoundFull           etensor.Float32    `desc:"#READ_ONLY #NO_SAVE the full sound input obtained from the sound input"`
+	WindowIn            etensor.Float32    `desc:"#READ_ONLY #NO_SAVE [input.win_samples] the raw sound input, one channel at a time"`
 	DftOut              etensor.Complex128 `desc:"#READ_ONLY #NO_SAVE [dft_size] discrete fourier transform (fft) output complex representation"`
-	DftPowerOut         etensor.Float32   `desc:"#READ_ONLY #NO_SAVE [dft_use] power of the dft, up to the nyquist limit frequency (1/2 input.win_samples)"`
-	DftLogPowerOut      etensor.Float32   `desc:"#READ_ONLY #NO_SAVE [dft_use] log power of the dft, up to the nyquist limit frequency (1/2 input.win_samples)"`
-	DftPowerTrialOut    etensor.Float32   `desc:"#READ_ONLY #NO_SAVE [dft_use][input.total_steps][input.channels] full trial's worth of power of the dft, up to the nyquist limit frequency (1/2 input.win_samples)"`
-	DftLogPowerTrialOut etensor.Float32   `desc:"#READ_ONLY #NO_SAVE [dft_use][input.total_steps][input.channels] full trial's worth of log power of the dft, up to the nyquist limit frequency (1/2 input.win_samples)"`
+	DftPowerOut         etensor.Float32    `desc:"#READ_ONLY #NO_SAVE [dft_use] power of the dft, up to the nyquist limit frequency (1/2 input.win_samples)"`
+	DftLogPowerOut      etensor.Float32    `desc:"#READ_ONLY #NO_SAVE [dft_use] log power of the dft, up to the nyquist limit frequency (1/2 input.win_samples)"`
+	DftPowerTrialOut    etensor.Float32    `desc:"#READ_ONLY #NO_SAVE [dft_use][input.total_steps][input.channels] full trial's worth of power of the dft, up to the nyquist limit frequency (1/2 input.win_samples)"`
+	DftLogPowerTrialOut etensor.Float32    `desc:"#READ_ONLY #NO_SAVE [dft_use][input.total_steps][input.channels] full trial's worth of log power of the dft, up to the nyquist limit frequency (1/2 input.win_samples)"`
 
 	MelFBankOut      etensor.Float32 `desc:"#READ_ONLY #NO_SAVE [mel.n_filters] mel scale transformation of dft_power, using triangular filters, resulting in the mel filterbank output -- the natural log of this is typically applied"`
 	MelFBankTrialOut etensor.Float32 `desc:"#READ_ONLY #NO_SAVE [mel.n_filters][input.total_steps][input.channels] full trial's worth of mel feature-bank output -- only if using gabors"`
@@ -627,23 +632,21 @@ func (ap *AuditoryProc) ProcessTrial() bool {
 func (ap *AuditoryProc) SoundToWindow(inPos int, ch int) bool {
 	samplesAvail := len(ap.SoundFull.Values) - inPos
 	samplesCopy := int(math32.Min(float32(samplesAvail), float32(ap.Input.WinSamples)))
-
 	if samplesCopy > 0 {
-		sz := int(samplesCopy * int(unsafe.Sizeof(Float)))
 		if ap.SoundFull.NumDims() == 1 {
-			copy(ap.WindowIn.Values, ap.SoundFull.Values[inPos:sz+inPos])
+			copy(ap.WindowIn.Values, ap.SoundFull.Values[inPos:samplesCopy+inPos])
 		} else {
-			// todo: this is not right: comment from c++ version
+			// todo: comment from c++ version - this is not right
 			//memcpy(window_in.el, (void*)&(sound_full.FastEl2d(chan, in_pos)), sz);
 			fmt.Printf("SoundToWindow: else case not implemented - please report this issue")
 		}
 	}
-
 	samplesCopy = int(math32.Max(float32(samplesCopy), 0)) // prevent negatives here -- otherwise overflows
 	// pad remainder with zero
 	zeroN := int(ap.Input.WinSamples) - int(samplesCopy)
 	if zeroN > 0 {
-		sz := zeroN * int(unsafe.Sizeof(Float))
+		//sz := zeroN * int(unsafe.Sizeof(Float))
+		sz := zeroN * 4
 		copy(ap.WindowIn.Values[samplesCopy:], make([]float32, sz))
 	}
 	return true
@@ -803,7 +806,7 @@ func (ap *AuditoryProc) CepstrumDctMel(ch, step int) {
 	var mfccDctOut []float64
 	mfccDctOut = dct.Transform(mfccDctOut, ap.MfccDctOut.Floats1D())
 	el0 := mfccDctOut[0]
-	mfccDctOut[0] = math.Log(1.0 + el0 * el0)              // replace with log energy instead..
+	mfccDctOut[0] = math.Log(1.0 + el0*el0) // replace with log energy instead..
 	for i := 0; i < ap.MelFBank.NFilters; i++ {
 		ap.MfccDctTrialOut.SetFloat([]int{i, step, ch}, mfccDctOut[i])
 	}
@@ -824,14 +827,14 @@ func (ap *AuditoryProc) GaborFilter(ch int, spec *AudGaborSpec, filters *etensor
 
 	tIdx := 0
 	for s := tMin; s < tMax; s, tIdx = s+spec.SpaceTime, tIdx+1 {
-		inSt := s - tOff
+		//inSt := s - tOff
 		if tIdx > outRaw.Dim(3) {
 			fmt.Printf("GaborFilter: time index %v out of range: %v", tIdx, outRaw.Dim(3))
 			break
 		}
 
 		fIdx := 0
-		for flt := fMin; flt < fMax; flt, fIdx = flt + spec.SpaceFreq, fIdx+1 {
+		for flt := fMin; flt < fMax; flt, fIdx = flt+spec.SpaceFreq, fIdx+1 {
 			if fIdx > outRaw.Dim(2) {
 				fmt.Printf("GaborFilter: freq index %v out of range: %v", tIdx, outRaw.Dim(2))
 				break
@@ -842,8 +845,9 @@ func (ap *AuditoryProc) GaborFilter(ch int, spec *AudGaborSpec, filters *etensor
 				for ff := int(0); ff < spec.SizeFreq; ff++ {
 					for ft := int(0); ft < spec.SizeTime; ft++ {
 						fVal := filters.Value([]int{ft, ff, fi})
-						iVal := ap.MelFBankTrialOut.Value([]int{flt + ff, inSt + ft, ch})
-						fSum += fVal * iVal
+						//iVal := ap.MelFBankTrialOut.Value([]int{flt + ff, inSt + ft, ch})
+						//fSum += fVal * iVal
+						fSum += fVal
 					}
 				}
 				pos := fSum >= 0.0
@@ -939,6 +943,9 @@ func (ap *AuditoryProc) MelOutputToTable(dt *etable.Table, ch int, fmtOnly bool)
 					val := ap.DftPowerTrialOut.FloatVal([]int{i, s, ch})
 					dout.SetFloat([]int{s, i}, val)
 				}
+				//for _, v := range  colAsF32.Values {
+				//	fmt.Printf("%v, ", v)
+				//}
 			}
 		}
 	}
