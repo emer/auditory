@@ -161,15 +161,15 @@ func (ag *AudGaborSpec) Initialize() {
 	ag.HorizSigmaWidth = 0.1
 	ag.PhaseOffset = 0.0
 	ag.CircleEdge = true
-	ag.NFilters = 3 + ag.NHoriz
+	ag.NFilters = 3 + ag.NHoriz // 3 is number of angle filters
 }
 
 // RenderFilters generates filters into the given matrix, which is formatted as: [ag.SizeTime_steps][ag.SizeFreq][n_filters]
 func (ag *AudGaborSpec) RenderFilters(filters *etensor.Float32) {
-	filters.SetShape([]int{ag.SizeTime, ag.SizeFreq, ag.NFilters}, nil, nil)
+	filters.SetShape([]int{ag.NFilters, ag.SizeTime, ag.SizeFreq}, nil, nil)
 
-	ctrTime := (ag.SizeTime - 1) / 2
-	ctrFreq := (ag.SizeFreq - 1) / 2
+	ctrTime := (float32(ag.SizeTime) - 1) / 2.0
+	ctrFreq := (float32(ag.SizeFreq) - 1) / 2.0
 	angInc := math32.Pi / 4.0
 	radiusTime := float32(ag.SizeTime / 2.0)
 	radiusFreq := float32(ag.SizeFreq / 2.0)
@@ -189,8 +189,8 @@ func (ag *AudGaborSpec) RenderFilters(filters *etensor.Float32) {
 		for y := 0; y < ag.SizeFreq; y++ {
 			var xf, yf, xfn, yfn float32
 			for x := 0; x < ag.SizeTime; x++ {
-				xf = float32(x - ctrTime)
-				yf = float32(y - hCtrFreq)
+				xf = float32(x) - ctrTime
+				yf = float32(y) - float32(hCtrFreq)
 				xfn = xf / radiusTime
 				yfn = yf / radiusFreq
 
@@ -203,7 +203,7 @@ func (ag *AudGaborSpec) RenderFilters(filters *etensor.Float32) {
 					sinVal := math32.Sin(twoPiNorm*ny + ag.PhaseOffset)
 					val = gauss * sinVal
 				}
-				filters.Set([]int{x, y, fli}, val)
+				filters.Set([]int{fli, y, x}, val)
 			}
 		}
 	}
@@ -213,8 +213,8 @@ func (ag *AudGaborSpec) RenderFilters(filters *etensor.Float32) {
 		var xf, yf, xfn, yfn float32
 		for y := 0; y < ag.SizeFreq; y++ {
 			for x := 0; x < ag.SizeTime; x++ {
-				xf = float32(x - ctrTime)
-				yf = float32(y - ctrFreq)
+				xf = float32(x) - ctrTime
+				yf = float32(y) - ctrFreq
 				xfn = xf / radiusTime
 				yfn = yf / radiusFreq
 
@@ -227,7 +227,7 @@ func (ag *AudGaborSpec) RenderFilters(filters *etensor.Float32) {
 					sinVal := math32.Sin(twoPiNorm*ny + ag.PhaseOffset)
 					val = gauss * sinVal
 				}
-				filters.Set([]int{x, y, fli}, val)
+				filters.Set([]int{fli, y, x}, val)
 			}
 		}
 	}
@@ -238,7 +238,7 @@ func (ag *AudGaborSpec) RenderFilters(filters *etensor.Float32) {
 		negSum := float32(0)
 		for y := 0; y < ag.SizeFreq; y++ {
 			for x := 0; x < ag.SizeTime; x++ {
-				val := float32(filters.Value([]int{x, y, fli}))
+				val := float32(filters.Value([]int{fli, y, x}))
 				if val > 0 {
 					posSum += val
 				} else if val < 0 {
@@ -250,7 +250,7 @@ func (ag *AudGaborSpec) RenderFilters(filters *etensor.Float32) {
 		negNorm := -1.0 / negSum
 		for y := 0; y < ag.SizeFreq; y++ {
 			for x := 0; x < ag.SizeTime; x++ {
-				val := filters.Value([]int{x, y, fli})
+				val := filters.Value([]int{fli, y, x})
 				if val > 0.0 {
 					val *= posNorm
 				} else if val < 0.0 {
