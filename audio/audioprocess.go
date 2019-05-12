@@ -119,8 +119,8 @@ type AudRenormSpec struct {
 //Initialize initializes the AudRenormSpec
 func (ar *AudRenormSpec) Initialize() {
 	ar.On = true
-	ar.RenormMin = -10.0
-	ar.RenormMax = 7.0
+	ar.RenormMin = -5.0
+	ar.RenormMax = 9.0
 	ar.RenormScale = 1.0 / (ar.RenormMax - ar.RenormMin)
 }
 
@@ -154,7 +154,7 @@ func (ag *AudGaborSpec) Initialize() {
 	ag.SizeFreq = 6.0
 	ag.SpaceTime = 2.0
 	ag.SpaceFreq = 2.0
-	ag.WaveLen = 1.5
+	ag.WaveLen = 2.0
 	ag.SigmaLen = 0.6
 	ag.SigmaWidth = 0.3
 	ag.HorizSigmaLen = 0.3
@@ -168,12 +168,11 @@ func (ag *AudGaborSpec) Initialize() {
 func (ag *AudGaborSpec) RenderFilters(filters *etensor.Float32) {
 	filters.SetShape([]int{ag.SizeTime, ag.SizeFreq, ag.NFilters}, nil, nil)
 
-	ctrTime := (ag.SizeTime - 1) / 2.0
-	ctrFreq := (ag.SizeFreq - 1) / 2.0
+	ctrTime := (ag.SizeTime - 1) / 2
+	ctrFreq := (ag.SizeFreq - 1) / 2
 	angInc := math32.Pi / 4.0
-
-	radiusTime := ag.SizeTime / 2.0
-	radiusFreq := ag.SizeFreq / 2.0
+	radiusTime := float32(ag.SizeTime / 2.0)
+	radiusFreq := float32(ag.SizeFreq / 2.0)
 
 	lenNorm := 1.0 / (2.0 * ag.SigmaLen * ag.SigmaLen)
 	widthNorm := 1.0 / (2.0 * ag.SigmaWidth * ag.SigmaWidth)
@@ -188,11 +187,12 @@ func (ag *AudGaborSpec) RenderFilters(filters *etensor.Float32) {
 		hCtrFreq := hCtrInc * (hi + 1)
 		angF := -2.0 * angInc
 		for y := 0; y < ag.SizeFreq; y++ {
+			var xf, yf, xfn, yfn float32
 			for x := 0; x < ag.SizeTime; x++ {
-				xf := x - ctrTime
-				yf := y - hCtrFreq
-				xfn := float32(xf / radiusTime)
-				yfn := float32(yf / radiusFreq)
+				xf = float32(x - ctrTime)
+				yf = float32(y - hCtrFreq)
+				xfn = xf / radiusTime
+				yfn = yf / radiusFreq
 
 				dist := math32.Hypot(xfn, yfn)
 				val := float32(0)
@@ -210,13 +210,13 @@ func (ag *AudGaborSpec) RenderFilters(filters *etensor.Float32) {
 
 	for ang := 1; ang < 4; ang, fli = ang+1, fli+1 {
 		angF := float32(-ang) * angInc
-
+		var xf, yf, xfn, yfn float32
 		for y := 0; y < ag.SizeFreq; y++ {
 			for x := 0; x < ag.SizeTime; x++ {
-				xf := x - ctrTime
-				yf := y - ctrFreq
-				xfn := float32(xf / radiusTime)
-				yfn := float32(yf / radiusFreq)
+				xf = float32(x - ctrTime)
+				yf = float32(y - ctrFreq)
+				xfn = xf / radiusTime
+				yfn = yf / radiusFreq
 
 				dist := math32.Hypot(xfn, yfn)
 				val := float32(0)
@@ -253,10 +253,8 @@ func (ag *AudGaborSpec) RenderFilters(filters *etensor.Float32) {
 				val := filters.Value([]int{x, y, fli})
 				if val > 0.0 {
 					val *= posNorm
-					filters.Set([]int{x, y, fli}, val)
 				} else if val < 0.0 {
 					val *= negNorm
-					filters.Set([]int{x, y, fli}, val)
 				}
 			}
 		}
@@ -310,18 +308,12 @@ type MelCepstrumSpec struct {
 
 //Initialize initializes the MelCepstrumSpec
 func (mc *MelCepstrumSpec) Initialize() {
-	mc.On = true
+	mc.On = false
 	mc.NCoeff = 13
 }
 
 type AuditoryProc struct {
-	// From C++ version not ported
-	//	enum SaveMode {               // how to add new data to the data table
-	//	NONE_SAVE,                  // don't save anything at all -- overrides any more specific save guys and prevents any addition or modification to the data table
-	//	FIRST_ROW,                  // always overwrite the first row -- does EnforceRows(1) if rows = 0
-	//	ADD_ROW,                    // always add a new row and write to that, preserving a history of inputs over time -- should be reset at some interval!
-	//};
-	//	SaveMode      save_mode;      // how to add new data to the data table
+	// todo:
 	//	V1KwtaSpec    gabor_kwta;     // #CONDSHOW_ON_gabor1.on k-winner-take-all inhibitory dynamics for the time-gabor output
 
 	Data        *etable.Table   `desc:"data table for saving filter results for viewing and applying to networks etc"`
@@ -612,7 +604,7 @@ func (ap *AuditoryProc) ProcessTrial() bool {
 		}
 	} else {
 		border := 2 * ap.Input.BorderSteps // full amount to wrap
-		ap.TrialStartPos = ap.InputPos - ap.Input.TrialSamples*ap.Input.BorderSteps
+		ap.TrialStartPos = ap.InputPos - ap.Input.StepSamples*ap.Input.BorderSteps
 		ap.TrialEndPos = ap.TrialStartPos + ap.Input.TrialSamples
 
 		for ch := 0; ch < int(ap.Input.Channels); ch++ {
@@ -709,16 +701,26 @@ func (ap *AuditoryProc) ProcessStep(ch int, step int) bool {
 	return true
 }
 
+// FftReal
+func (ap *AuditoryProc) FftReal(out etensor.Complex128, in etensor.Float32) bool {
+	if !out.IsEqual(&in.Shape) {
+		fmt.Printf("FftReal: out shape different from in shape - modifying out to match")
+		out.CopyShape(&in.Shape)
+	}
+	if out.NumDims() == 1 {
+		for i := 0; i < out.Len(); i++ {
+			out.SetFloat1D(i, in.FloatVal1D(i))
+			out.SetFloat1DImag(i, 0)
+		}
+	}
+	return true
+}
+
 // DftInput applies dft (fft) to input
 func (ap *AuditoryProc) DftInput(windowInVals []float64) {
-	//taMath_float::fft_real(&dft_out, &window_in); // old emergent
-	fft := fourier.NewFFT(len(windowInVals))
-	fftOut := fft.Coefficients(nil, windowInVals)
-	var i int
-	var v complex128
-	for i, v = range fftOut {
-		ap.DftOut.Set([]int{i}, v)
-	}
+	ap.FftReal(ap.DftOut, ap.WindowIn)
+	fft := fourier.NewCmplxFFT(ap.DftOut.Len())
+	ap.DftOut.Values = fft.Coefficients(nil, ap.DftOut.Values)
 }
 
 // PowerOfDft
@@ -750,9 +752,9 @@ func (ap *AuditoryProc) PowerOfDft(ch, step int) {
 // MelFilterDft
 func (ap *AuditoryProc) MelFilterDft(ch, step int) {
 	mi := 0
-	for flt := 0; flt < int(ap.MelFBank.NFilters); flt, mi = flt+1, mi+1 {
-		minBin := ap.MelPtsBin.Value1D(flt)
-		maxBin := ap.MelPtsBin.Value1D(flt + 2)
+	for f := 0; f < int(ap.MelFBank.NFilters); f, mi = f+1, mi+1 { // f is filter
+		minBin := ap.MelPtsBin.Value1D(f)
+		maxBin := ap.MelPtsBin.Value1D(f + 2)
 
 		sum := float32(0)
 		fi := 0
@@ -778,6 +780,8 @@ func (ap *AuditoryProc) MelFilterDft(ch, step int) {
 		if val > 1.0 {
 			val = 1.0
 		}
+		ap.MelFBankOut.SetFloat1D(mi, float64(val))
+		ap.MelFBankTrialOut.Set([]int{mi, step, ch}, val)
 	}
 }
 
@@ -884,7 +888,7 @@ func (ap *AuditoryProc) GaborFilter(ch int, spec *AudGaborSpec, filters *etensor
 
 // FilterWindow filters the current window_in input data according to current settings -- called by ProcessStep, but can be called separately
 func (ap *AuditoryProc) FilterWindow(ch int, step int) bool {
-	//ap.DftInput(ch, step)
+	ap.FftReal(ap.DftOut, ap.WindowIn)
 	ap.DftInput(ap.WindowIn.Floats1D())
 	if ap.MelFBank.On {
 		ap.PowerOfDft(ch, step)
@@ -943,9 +947,6 @@ func (ap *AuditoryProc) MelOutputToTable(dt *etable.Table, ch int, fmtOnly bool)
 					val := ap.DftPowerTrialOut.FloatVal([]int{i, s, ch})
 					dout.SetFloat([]int{s, i}, val)
 				}
-				//for _, v := range  colAsF32.Values {
-				//	fmt.Printf("%v, ", v)
-				//}
 			}
 		}
 	}
