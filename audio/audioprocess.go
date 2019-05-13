@@ -166,8 +166,6 @@ func (ag *AudGaborSpec) Initialize() {
 
 // RenderFilters generates filters into the given matrix, which is formatted as: [ag.SizeTime_steps][ag.SizeFreq][n_filters]
 func (ag *AudGaborSpec) RenderFilters(filters *etensor.Float32) {
-	filters.SetShape([]int{ag.NFilters, ag.SizeTime, ag.SizeFreq}, nil, nil)
-
 	ctrTime := (float32(ag.SizeTime) - 1) / 2.0
 	ctrFreq := (float32(ag.SizeFreq) - 1) / 2.0
 	angInc := math32.Pi / 4.0
@@ -208,6 +206,7 @@ func (ag *AudGaborSpec) RenderFilters(filters *etensor.Float32) {
 		}
 	}
 
+	// fli should be ag.Horiz - 1 at this point
 	for ang := 1; ang < 4; ang, fli = ang+1, fli+1 {
 		angF := float32(-ang) * angInc
 		var xf, yf, xfn, yfn float32
@@ -379,15 +378,15 @@ func (ap *AuditoryProc) InitFilters() bool {
 	ap.DftUse = ap.DftSize/2 + 1
 	ap.InitFiltersMel()
 	if ap.Gabor1.On {
-		ap.Gabor1Filters.SetShape([]int{ap.Gabor1.SizeTime, ap.Gabor1.SizeFreq, ap.Gabor1.NFilters}, nil, nil)
+		ap.Gabor1Filters.SetShape([]int{ap.Gabor1.NFilters, ap.Gabor1.SizeFreq, ap.Gabor1.SizeTime}, nil, nil)
 		ap.Gabor1.RenderFilters(&ap.Gabor1Filters)
 	}
 	if ap.Gabor2.On {
-		ap.Gabor2Filters.SetShape([]int{ap.Gabor2.SizeTime, ap.Gabor2.SizeFreq, ap.Gabor2.NFilters}, nil, nil)
+		ap.Gabor2Filters.SetShape([]int{ap.Gabor2.NFilters, ap.Gabor2.SizeFreq, ap.Gabor2.SizeTime}, nil, nil)
 		ap.Gabor2.RenderFilters(&ap.Gabor2Filters)
 	}
 	if ap.Gabor3.On {
-		ap.Gabor3Filters.SetShape([]int{ap.Gabor3.SizeTime, ap.Gabor3.SizeFreq, ap.Gabor3.NFilters}, nil, nil)
+		ap.Gabor3Filters.SetShape([]int{ap.Gabor3.NFilters, ap.Gabor3.SizeFreq, ap.Gabor3.SizeTime}, nil, nil)
 		ap.Gabor3.RenderFilters(&ap.Gabor3Filters)
 	}
 	return true
@@ -396,9 +395,9 @@ func (ap *AuditoryProc) InitFilters() bool {
 // InitFiltersMel
 func (ap *AuditoryProc) InitFiltersMel() bool {
 	ap.MelNFiltersEff = ap.MelFBank.NFilters + 2
-	ap.MelPtsMel.SetShape([]int{1, ap.MelNFiltersEff}, nil, nil)
-	ap.MelPtsHz.SetShape([]int{1, ap.MelNFiltersEff}, nil, nil)
-	ap.MelPtsBin.SetShape([]int{1, ap.MelNFiltersEff}, nil, nil)
+	ap.MelPtsMel.SetShape([]int{ap.MelNFiltersEff}, nil, nil)
+	ap.MelPtsHz.SetShape([]int{ap.MelNFiltersEff}, nil, nil)
+	ap.MelPtsBin.SetShape([]int{ap.MelNFiltersEff}, nil, nil)
 
 	melIncr := (ap.MelFBank.HiMel - ap.MelFBank.LoMel) / float32(ap.MelFBank.NFilters+1)
 
@@ -412,7 +411,7 @@ func (ap *AuditoryProc) InitFiltersMel() bool {
 	}
 
 	ap.MelFilterMaxBins = int(ap.MelPtsBin.Value1D(ap.MelNFiltersEff-1)) - int(ap.MelPtsBin.Value1D(ap.MelNFiltersEff-3)) + 1
-	ap.MelFilters.SetShape([]int{ap.MelFilterMaxBins, ap.MelFBank.NFilters}, nil, nil)
+	ap.MelFilters.SetShape([]int{ap.MelFBank.NFilters, ap.MelFilterMaxBins}, nil, nil)
 
 	for f := 0; f < ap.MelFBank.NFilters; f++ {
 		mnbin := int(ap.MelPtsBin.Value1D(f))
@@ -423,13 +422,13 @@ func (ap *AuditoryProc) InitFiltersMel() bool {
 
 		fi := 0
 		bin := 0
-		for bin = mnbin; bin < pkbin; bin, fi = bin+1, fi+1 {
+		for bin = mnbin; bin <= pkbin; bin, fi = bin+1, fi+1 {
 			fval := float32((bin - mnbin) / pkmin)
-			ap.MelFilters.SetFloat([]int{fi, f}, float64(fval))
+			ap.MelFilters.SetFloat([]int{f, fi}, float64(fval))
 		}
-		for ; bin < mxbin; bin, fi = bin+1, fi+1 {
+		for ; bin <= mxbin; bin, fi = bin+1, fi+1 {
 			fval := float32((mxbin - bin) / pkmax)
-			ap.MelFilters.SetFloat([]int{fi, f}, float64(fval))
+			ap.MelFilters.SetFloat([]int{f, fi}, float64(fval))
 		}
 	}
 	return true
@@ -572,7 +571,6 @@ func (ap *AuditoryProc) InitDataTableChan(ch int) bool {
 // InputStepsLeft returns the number of steps left to process in the current input sound
 func (ap *AuditoryProc) InputStepsLeft() int {
 	samplesLeft := len(ap.SoundFull.Values) - ap.InputPos
-	//samplesLeft = ap.SoundFull.Frames() - ap.InputPos
 	return samplesLeft / ap.Input.StepSamples
 }
 
@@ -735,6 +733,7 @@ func (ap *AuditoryProc) PowerOfDft(ch, step int) {
 		}
 		ap.DftPowerOut.SetFloat1D(k, powr)
 		ap.DftPowerTrialOut.SetFloat([]int{k, step, ch}, powr)
+
 		var logp float64
 		if ap.Dft.LogPow {
 			powr += float64(ap.Dft.LogOff)
@@ -759,7 +758,7 @@ func (ap *AuditoryProc) MelFilterDft(ch, step int) {
 		sum := float32(0)
 		fi := 0
 		for bin := minBin; bin < maxBin; bin, fi = bin+1, fi+1 {
-			fVal := ap.MelFilters.Value([]int{fi, mi})
+			fVal := ap.MelFilters.Value([]int{mi, fi})
 			pVal := ap.DftPowerOut.FloatVal1D(int(bin))
 			sum += fVal * float32(pVal)
 		}
@@ -818,6 +817,12 @@ func (ap *AuditoryProc) CepstrumDctMel(ch, step int) {
 
 // GaborFilter process filters that operate over an entire trial at a time
 func (ap *AuditoryProc) GaborFilter(ch int, spec *AudGaborSpec, filters *etensor.Float32, outRaw *etensor.Float32, out *etensor.Float32) {
+
+	//vals := filters.Floats1D()
+	//for i := 0; i < len(vals); i++ {
+	//	fmt.Printf("%v\n", filters.Value1D(i))
+	//}
+
 	tHalfSz := spec.SizeTime / 2
 	tOff := tHalfSz - ap.Input.BorderSteps
 	tMin := tOff
@@ -831,7 +836,7 @@ func (ap *AuditoryProc) GaborFilter(ch int, spec *AudGaborSpec, filters *etensor
 
 	tIdx := 0
 	for s := tMin; s < tMax; s, tIdx = s+spec.SpaceTime, tIdx+1 {
-		//inSt := s - tOff
+		inSt := s - tOff
 		if tIdx > outRaw.Dim(3) {
 			fmt.Printf("GaborFilter: time index %v out of range: %v", tIdx, outRaw.Dim(3))
 			break
@@ -849,19 +854,20 @@ func (ap *AuditoryProc) GaborFilter(ch int, spec *AudGaborSpec, filters *etensor
 				for ff := int(0); ff < spec.SizeFreq; ff++ {
 					for ft := int(0); ft < spec.SizeTime; ft++ {
 						fVal := filters.Value([]int{ft, ff, fi})
-						//iVal := ap.MelFBankTrialOut.Value([]int{flt + ff, inSt + ft, ch})
-						//fSum += fVal * iVal
-						fSum += fVal
+						iVal := ap.MelFBankTrialOut.Value([]int{flt + ff, inSt + ft, ch})
+						fSum += fVal * iVal
+						//fSum += fVal
 					}
 				}
 				pos := fSum >= 0.0
 				act := spec.Gain * math32.Abs(fSum)
+				//fmt.Printf("%v\n", act)
 				if pos {
-					outRaw.SetFloat([]int{ch, fi, 0, fIdx, tIdx}, float64(act))
-					outRaw.SetFloat([]int{ch, fi, 1, fIdx, tIdx}, 0)
+					outRaw.SetFloat([]int{fi, 0, fIdx, tIdx, ch}, float64(act))
+					outRaw.SetFloat([]int{fi, 1, fIdx, tIdx, ch}, 0)
 				} else {
-					outRaw.SetFloat([]int{ch, fi, 0, fIdx, tIdx}, 0)
-					outRaw.SetFloat([]int{ch, fi, 1, fIdx, tIdx}, float64(act))
+					outRaw.SetFloat([]int{fi, 0, fIdx, tIdx, ch}, 0)
+					outRaw.SetFloat([]int{fi, 1, fIdx, tIdx, ch}, float64(act))
 				}
 			}
 		}
@@ -1000,6 +1006,7 @@ func (ap *AuditoryProc) MelOutputToTable(dt *etable.Table, ch int, fmtOnly bool)
 				for i := 0; i < ap.Gabor1Shape.Y; i++ {
 					for ti := 0; ti < nf; ti++ {
 						val0 := ap.Gabor1Raw.FloatVal([]int{ti, 0, i, s, ch})
+						//fmt.Printf("%v\n", val0)
 						dout.SetFloat([]int{ti, 0, s, i}, val0)
 						val1 := ap.Gabor1Raw.FloatVal([]int{ti, 1, i, s, ch})
 						dout.SetFloat([]int{ti, 1, s, i}, val1)
