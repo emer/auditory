@@ -165,7 +165,7 @@ func (ag *AudGaborSpec) Initialize() {
 }
 
 // RenderFilters generates filters into the given matrix, which is formatted as: [ag.SizeTime_steps][ag.SizeFreq][n_filters]
-func (ag *AudGaborSpec) RenderFilters(filters *etensor.Float32) {
+func (ag *AudGaborSpec) RenderFilters(filters etensor.Float32) {
 	ctrTime := (float32(ag.SizeTime) - 1) / 2.0
 	ctrFreq := (float32(ag.SizeFreq) - 1) / 2.0
 	angInc := math32.Pi / 4.0
@@ -201,7 +201,7 @@ func (ag *AudGaborSpec) RenderFilters(filters *etensor.Float32) {
 					sinVal := math32.Sin(twoPiNorm*ny + ag.PhaseOffset)
 					val = gauss * sinVal
 				}
-				filters.Set([]int{fli, y, x}, val)
+				filters.Set([]int{x, y, fli}, val)
 			}
 		}
 	}
@@ -226,7 +226,7 @@ func (ag *AudGaborSpec) RenderFilters(filters *etensor.Float32) {
 					sinVal := math32.Sin(twoPiNorm*ny + ag.PhaseOffset)
 					val = gauss * sinVal
 				}
-				filters.Set([]int{fli, y, x}, val)
+				filters.Set([]int{x, y, fli}, val)
 			}
 		}
 	}
@@ -237,7 +237,7 @@ func (ag *AudGaborSpec) RenderFilters(filters *etensor.Float32) {
 		negSum := float32(0)
 		for y := 0; y < ag.SizeFreq; y++ {
 			for x := 0; x < ag.SizeTime; x++ {
-				val := float32(filters.Value([]int{fli, y, x}))
+				val := float32(filters.Value([]int{x, y, fli}))
 				if val > 0 {
 					posSum += val
 				} else if val < 0 {
@@ -249,12 +249,13 @@ func (ag *AudGaborSpec) RenderFilters(filters *etensor.Float32) {
 		negNorm := -1.0 / negSum
 		for y := 0; y < ag.SizeFreq; y++ {
 			for x := 0; x < ag.SizeTime; x++ {
-				val := filters.Value([]int{fli, y, x})
+				val := filters.Value([]int{x, y, fli})
 				if val > 0.0 {
 					val *= posNorm
 				} else if val < 0.0 {
 					val *= negNorm
 				}
+				filters.Set([]int{x, y, fli}, val)
 			}
 		}
 	}
@@ -378,16 +379,16 @@ func (ap *AuditoryProc) InitFilters() bool {
 	ap.DftUse = ap.DftSize/2 + 1
 	ap.InitFiltersMel()
 	if ap.Gabor1.On {
-		ap.Gabor1Filters.SetShape([]int{ap.Gabor1.NFilters, ap.Gabor1.SizeFreq, ap.Gabor1.SizeTime}, nil, nil)
-		ap.Gabor1.RenderFilters(&ap.Gabor1Filters)
+		ap.Gabor1Filters.SetShape([]int{ap.Gabor1.SizeTime, ap.Gabor1.SizeFreq, ap.Gabor1.NFilters}, nil, nil)
+		ap.Gabor1.RenderFilters(ap.Gabor1Filters)
 	}
 	if ap.Gabor2.On {
-		ap.Gabor2Filters.SetShape([]int{ap.Gabor2.NFilters, ap.Gabor2.SizeFreq, ap.Gabor2.SizeTime}, nil, nil)
-		ap.Gabor2.RenderFilters(&ap.Gabor2Filters)
+		ap.Gabor2Filters.SetShape([]int{ap.Gabor2.SizeTime, ap.Gabor2.SizeFreq, ap.Gabor2.NFilters}, nil, nil)
+		ap.Gabor2.RenderFilters(ap.Gabor2Filters)
 	}
 	if ap.Gabor3.On {
-		ap.Gabor3Filters.SetShape([]int{ap.Gabor3.NFilters, ap.Gabor3.SizeFreq, ap.Gabor3.SizeTime}, nil, nil)
-		ap.Gabor3.RenderFilters(&ap.Gabor3Filters)
+		ap.Gabor3Filters.SetShape([]int{ap.Gabor3.SizeTime, ap.Gabor3.SizeFreq, ap.Gabor3.NFilters}, nil, nil)
+		ap.Gabor3.RenderFilters(ap.Gabor3Filters)
 	}
 	return true
 }
@@ -787,13 +788,13 @@ func (ap *AuditoryProc) MelFilterDft(ch, step int) {
 // FilterTrial process filters that operate over an entire trial at a time
 func (ap *AuditoryProc) FilterTrial(ch int) bool {
 	if ap.Gabor1.On {
-		ap.GaborFilter(ch, &ap.Gabor1, &ap.Gabor1Filters, &ap.Gabor1Raw, &ap.Gabor1Out)
+		ap.GaborFilter(ch, ap.Gabor1, ap.Gabor1Filters, ap.Gabor1Raw, ap.Gabor1Out)
 	}
 	if ap.Gabor2.On {
-		ap.GaborFilter(ch, &ap.Gabor2, &ap.Gabor2Filters, &ap.Gabor2Raw, &ap.Gabor2Out)
+		ap.GaborFilter(ch, ap.Gabor2, ap.Gabor2Filters, ap.Gabor2Raw, ap.Gabor2Out)
 	}
 	if ap.Gabor3.On {
-		ap.GaborFilter(ch, &ap.Gabor3, &ap.Gabor3Filters, &ap.Gabor3Raw, &ap.Gabor3Out)
+		ap.GaborFilter(ch, ap.Gabor3, ap.Gabor3Filters, ap.Gabor3Raw, ap.Gabor3Out)
 	}
 	return true
 }
@@ -816,7 +817,7 @@ func (ap *AuditoryProc) CepstrumDctMel(ch, step int) {
 }
 
 // GaborFilter process filters that operate over an entire trial at a time
-func (ap *AuditoryProc) GaborFilter(ch int, spec *AudGaborSpec, filters *etensor.Float32, outRaw *etensor.Float32, out *etensor.Float32) {
+func (ap *AuditoryProc) GaborFilter(ch int, spec AudGaborSpec, filters etensor.Float32, outRaw etensor.Float32, out etensor.Float32) {
 
 	//vals := filters.Floats1D()
 	//for i := 0; i < len(vals); i++ {
@@ -856,7 +857,6 @@ func (ap *AuditoryProc) GaborFilter(ch int, spec *AudGaborSpec, filters *etensor
 						fVal := filters.Value([]int{ft, ff, fi})
 						iVal := ap.MelFBankTrialOut.Value([]int{flt + ff, inSt + ft, ch})
 						fSum += fVal * iVal
-						//fSum += fVal
 					}
 				}
 				pos := fSum >= 0.0
@@ -872,6 +872,13 @@ func (ap *AuditoryProc) GaborFilter(ch int, spec *AudGaborSpec, filters *etensor
 			}
 		}
 	}
+
+	//rawVals := outRaw.Floats1D()
+	//for i := 0; i < len(rawVals); i++ {
+	//	fmt.Printf("%v\n", rawVals[i])
+	//}
+	//
+
 	rawFrame, err := outRaw.SubSpace(outRaw.NumDims()-1, []int{ch})
 	if err != nil {
 		fmt.Printf("GaborFilter: SubSpace error: %v", err)
