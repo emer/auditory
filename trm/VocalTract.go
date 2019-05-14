@@ -43,8 +43,8 @@ package trm
 import (
 	"fmt"
 	"github.com/chewxy/math32"
-	"github.com/emer/emergent/dtable"
-	"github.com/emer/emergent/etensor"
+	"github.com/emer/etable/etable"
+	"github.com/emer/etable/etensor"
 	"github.com/goki/gi/gi"
 	"math"
 	"strings"
@@ -384,7 +384,7 @@ func (vtc *VocalTractCtrl) SetFromParams(vtcOther *VocalTractCtrl) {
 //}
 //
 
-func (vtc *VocalTractCtrl) SetFromDataTable(table dtable.Table, col etensor.Tensor, row int, normalized bool) {
+func (vtc *VocalTractCtrl) SetFromDataTable(table etable.Table, col etensor.Tensor, row int, normalized bool) {
 
 }
 
@@ -534,8 +534,8 @@ type VocalTract struct {
 	PrevControl   VocalTractCtrl
 	DeltaControl  VocalTractCtrl
 	DeltaMax      VocalTractCtrl
-	PhoneTable    dtable.Table
-	DictTable     dtable.Table
+	PhoneTable    etable.Table
+	DictTable     etable.Table
 
 	// derived values
 	ControlRate      float32 // 1.0-1000.0 input tables/second (Hz)
@@ -606,11 +606,11 @@ func (vt *VocalTract) ControlFromMatrix(vals etensor.Tensor, normalized bool) {
 //}
 //
 
-func (vt *VocalTract) ControlFromDataTable(table dtable.Table, col etensor.Tensor, row int, normalized bool) {
+func (vt *VocalTract) ControlFromDataTable(table etable.Table, col etensor.Tensor, row int, normalized bool) {
 	vt.CurControl.SetFromDataTable(table, col, row, normalized)
 }
 
-func (vt *VocalTract) SynthFromDataTable(table dtable.Table, col etensor.Tensor, row int, normalized bool, resetFirst bool) {
+func (vt *VocalTract) SynthFromDataTable(table etable.Table, col etensor.Tensor, row int, normalized bool, resetFirst bool) {
 
 }
 
