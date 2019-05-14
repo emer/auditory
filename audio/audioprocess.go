@@ -819,10 +819,10 @@ func (ap *AuditoryProc) CepstrumDctMel(ch, step int) {
 // GaborFilter process filters that operate over an entire trial at a time
 func (ap *AuditoryProc) GaborFilter(ch int, spec AudGaborSpec, filters etensor.Float32, outRaw etensor.Float32, out etensor.Float32) {
 
-	//vals := filters.Floats1D()
-	//for i := 0; i < len(vals); i++ {
-	//	fmt.Printf("%v\n", filters.Value1D(i))
-	//}
+	vals := filters.Floats1D()
+	for i := 0; i < len(vals); i++ {
+		fmt.Printf("%v\n", filters.Value1D(i))
+	}
 
 	tHalfSz := spec.SizeTime / 2
 	tOff := tHalfSz - ap.Input.BorderSteps
@@ -861,7 +861,7 @@ func (ap *AuditoryProc) GaborFilter(ch int, spec AudGaborSpec, filters etensor.F
 				}
 				pos := fSum >= 0.0
 				act := spec.Gain * math32.Abs(fSum)
-				//fmt.Printf("%v\n", act)
+				fmt.Printf("%v\n", act)
 				if pos {
 					outRaw.SetFloat([]int{fi, 0, fIdx, tIdx, ch}, float64(act))
 					outRaw.SetFloat([]int{fi, 1, fIdx, tIdx, ch}, 0)
@@ -994,7 +994,7 @@ func (ap *AuditoryProc) MelOutputToTable(dt *etable.Table, ch int, fmtOnly bool)
 		cn := "AudProc" + "_mel_gabor1_raw" + colSfx // column name
 		col := dt.ColByName(cn)
 		if col == nil {
-			err = dt.AddCol(etensor.NewFloat32([]int{rows, ap.Gabor1.NFilters, 2, ap.Gabor1Shape.X, ap.Gabor1Shape.Y}, nil, nil), cn)
+			err = dt.AddCol(etensor.NewFloat32([]int{rows, ap.Gabor1Shape.Y, ap.Gabor1Shape.X, 2, ap.Gabor1.NFilters}, nil, nil), cn)
 			if err != nil {
 				fmt.Printf("MelOutputToTable: column not found or failed to be created")
 				return false
@@ -1013,10 +1013,9 @@ func (ap *AuditoryProc) MelOutputToTable(dt *etable.Table, ch int, fmtOnly bool)
 				for i := 0; i < ap.Gabor1Shape.Y; i++ {
 					for ti := 0; ti < nf; ti++ {
 						val0 := ap.Gabor1Raw.FloatVal([]int{ti, 0, i, s, ch})
-						//fmt.Printf("%v\n", val0)
-						dout.SetFloat([]int{ti, 0, s, i}, val0)
+						dout.SetFloat([]int{i, s, 0, ti}, val0)
 						val1 := ap.Gabor1Raw.FloatVal([]int{ti, 1, i, s, ch})
-						dout.SetFloat([]int{ti, 1, s, i}, val1)
+						dout.SetFloat([]int{i, s, 1, ti}, val1)
 					}
 				}
 			}
@@ -1025,7 +1024,7 @@ func (ap *AuditoryProc) MelOutputToTable(dt *etable.Table, ch int, fmtOnly bool)
 		cn = "AudProc" + "_mel_gabor1" + colSfx // column name
 		col = dt.ColByName(cn)
 		if col == nil {
-			err = dt.AddCol(etensor.NewFloat32([]int{rows, ap.Gabor1.NFilters, 2, ap.Gabor1Shape.X, ap.Gabor1Shape.Y}, nil, nil), cn)
+			err = dt.AddCol(etensor.NewFloat32([]int{rows, ap.Gabor1Shape.Y, ap.Gabor1Shape.X, 2, ap.Gabor1.NFilters}, nil, nil), cn)
 			if err != nil {
 				fmt.Printf("MelOutputToTable: column not found or failed to be created")
 				return false
@@ -1043,9 +1042,10 @@ func (ap *AuditoryProc) MelOutputToTable(dt *etable.Table, ch int, fmtOnly bool)
 				for i := 0; i < ap.Gabor1Shape.Y; i++ {
 					for ti := 0; ti < nf; ti++ {
 						val0 := ap.Gabor1Out.FloatVal([]int{ti, 0, i, s, ch})
-						dout.SetFloat([]int{ti, 0, s, i}, val0)
+						fmt.Printf("val:%v, ti:%v, 0, i:%v, s:%v, ch:%v\n", val0, ti, i, s, ch)
+						dout.SetFloat([]int{i, s, 0, ti}, val0)
 						val1 := ap.Gabor1Out.FloatVal([]int{ti, 1, i, s, ch})
-						dout.SetFloat([]int{ti, 1, s, i}, val1)
+						dout.SetFloat([]int{i, s, 1, ti}, val1)
 					}
 				}
 			}
@@ -1056,7 +1056,7 @@ func (ap *AuditoryProc) MelOutputToTable(dt *etable.Table, ch int, fmtOnly bool)
 		cn := "AudProc" + "_mel_gabor2_raw" + colSfx // column name
 		col := dt.ColByName(cn)
 		if col == nil {
-			err = dt.AddCol(etensor.NewFloat32([]int{rows, ap.Gabor2.NFilters, 2, ap.Gabor2Shape.X, ap.Gabor2Shape.Y}, nil, nil), cn)
+			err = dt.AddCol(etensor.NewFloat32([]int{rows, ap.Gabor2Shape.Y, ap.Gabor2Shape.X, 2, ap.Gabor2.NFilters}, nil, nil), cn)
 			if err != nil {
 				fmt.Printf("MelOutputToTable: column not found or failed to be created")
 				return false
@@ -1074,9 +1074,9 @@ func (ap *AuditoryProc) MelOutputToTable(dt *etable.Table, ch int, fmtOnly bool)
 				for i := 0; i < ap.Gabor2Shape.Y; i++ {
 					for ti := 0; ti < nf; ti++ {
 						val0 := ap.Gabor2Raw.FloatVal([]int{ti, 0, i, s, ch})
-						dout.SetFloat([]int{ti, 0, s, i}, val0)
+						dout.SetFloat([]int{i, s, 0, ti}, val0)
 						val1 := ap.Gabor2Raw.FloatVal([]int{ti, 1, i, s, ch})
-						dout.SetFloat([]int{ti, 1, s, i}, val1)
+						dout.SetFloat([]int{i, s, 1, ti}, val1)
 					}
 				}
 			}
@@ -1085,7 +1085,7 @@ func (ap *AuditoryProc) MelOutputToTable(dt *etable.Table, ch int, fmtOnly bool)
 		cn = "AudProc" + "_mel_gabor2" + colSfx // column name
 		col = dt.ColByName(cn)
 		if col == nil {
-			err = dt.AddCol(etensor.NewFloat32([]int{rows, ap.Gabor2.NFilters, 2, ap.Gabor2Shape.X, ap.Gabor2Shape.Y}, nil, nil), cn)
+			err = dt.AddCol(etensor.NewFloat32([]int{rows, ap.Gabor2Shape.Y, ap.Gabor2Shape.X, 2, ap.Gabor2.NFilters}, nil, nil), cn)
 			if err != nil {
 				fmt.Printf("MelOutputToTable: column not found or failed to be created")
 				return false
@@ -1103,9 +1103,9 @@ func (ap *AuditoryProc) MelOutputToTable(dt *etable.Table, ch int, fmtOnly bool)
 				for i := 0; i < ap.Gabor2Shape.Y; i++ {
 					for ti := 0; ti < nf; ti++ {
 						val0 := ap.Gabor2Out.FloatVal([]int{ti, 0, i, s, ch})
-						dout.SetFloat([]int{ti, 0, s, i}, val0)
+						dout.SetFloat([]int{i, s, 0, ti}, val0)
 						val1 := ap.Gabor2Out.FloatVal([]int{ti, 1, i, s, ch})
-						dout.SetFloat([]int{ti, 1, s, i}, val1)
+						dout.SetFloat([]int{i, s, 1, ti}, val1)
 					}
 				}
 			}
@@ -1116,7 +1116,7 @@ func (ap *AuditoryProc) MelOutputToTable(dt *etable.Table, ch int, fmtOnly bool)
 		cn := "AudProc" + "_mel_gabor3_raw" + colSfx // column name
 		col := dt.ColByName(cn)
 		if col == nil {
-			err = dt.AddCol(etensor.NewFloat32([]int{rows, ap.Gabor3.NFilters, 2, ap.Gabor3Shape.X, ap.Gabor3Shape.Y}, nil, nil), cn)
+			err = dt.AddCol(etensor.NewFloat32([]int{rows, ap.Gabor3Shape.Y, ap.Gabor3Shape.X, 2, ap.Gabor3.NFilters}, nil, nil), cn)
 			if err != nil {
 				fmt.Printf("MelOutputToTable: column not found or failed to be created")
 				return false
@@ -1134,9 +1134,9 @@ func (ap *AuditoryProc) MelOutputToTable(dt *etable.Table, ch int, fmtOnly bool)
 				for i := 0; i < ap.Gabor3Shape.Y; i++ {
 					for ti := 0; ti < nf; ti++ {
 						val0 := ap.Gabor3Raw.FloatVal([]int{ti, 0, i, s, ch})
-						dout.SetFloat([]int{ti, 0, s, i}, val0)
+						dout.SetFloat([]int{i, s, 0, ti}, val0)
 						val1 := ap.Gabor3Raw.FloatVal([]int{ti, 1, i, s, ch})
-						dout.SetFloat([]int{ti, 1, s, i}, val1)
+						dout.SetFloat([]int{i, s, 1, ti}, val1)
 					}
 				}
 			}
@@ -1145,7 +1145,7 @@ func (ap *AuditoryProc) MelOutputToTable(dt *etable.Table, ch int, fmtOnly bool)
 		cn = "AudProc" + "_mel_gabor3" + colSfx // column name
 		col = dt.ColByName(cn)
 		if col == nil {
-			err = dt.AddCol(etensor.NewFloat32([]int{rows, ap.Gabor3.NFilters, 2, ap.Gabor3Shape.X, ap.Gabor3Shape.Y}, nil, nil), cn)
+			err = dt.AddCol(etensor.NewFloat32([]int{rows, ap.Gabor3Shape.Y, ap.Gabor3Shape.X, 2, ap.Gabor3.NFilters}, nil, nil), cn)
 			if err != nil {
 				fmt.Printf("MelOutputToTable: column not found or failed to be created")
 				return false
@@ -1163,20 +1163,21 @@ func (ap *AuditoryProc) MelOutputToTable(dt *etable.Table, ch int, fmtOnly bool)
 				for i := 0; i < ap.Gabor3Shape.Y; i++ {
 					for ti := 0; ti < nf; ti++ {
 						val0 := ap.Gabor3Out.FloatVal([]int{ti, 0, i, s, ch})
-						dout.SetFloat([]int{ti, 0, s, i}, val0)
+						dout.SetFloat([]int{i, s, 0, ti}, val0)
 						val1 := ap.Gabor3Out.FloatVal([]int{ti, 1, i, s, ch})
-						dout.SetFloat([]int{ti, 1, s, i}, val1)
+						dout.SetFloat([]int{i, s, 1, ti}, val1)
 					}
 				}
 			}
 		}
 	}
 
+	// todo: this one needs to be checked
 	if ap.Mfcc.On {
 		cn = "AudProc" + "_mel_mfcc" + colSfx // column name
 		col = dt.ColByName(cn)
 		if col == nil {
-			err = dt.AddCol(etensor.NewFloat32([]int{rows, int(ap.Input.TotalSteps), ap.Mfcc.NCoeff}, nil, nil), cn)
+			err = dt.AddCol(etensor.NewFloat32([]int{rows, ap.Gabor3Shape.Y, ap.Gabor3Shape.X, 2, ap.Gabor3.NFilters}, nil, nil), cn)
 			if err != nil {
 				fmt.Printf("MelOutputToTable: column not found or failed to be created")
 				return false
