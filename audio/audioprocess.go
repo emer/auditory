@@ -818,12 +818,6 @@ func (ap *AuditoryProc) CepstrumDctMel(ch, step int) {
 
 // GaborFilter process filters that operate over an entire trial at a time
 func (ap *AuditoryProc) GaborFilter(ch int, spec AudGaborSpec, filters etensor.Float32, outRaw etensor.Float32, out etensor.Float32) {
-
-	vals := filters.Floats1D()
-	for i := 0; i < len(vals); i++ {
-		fmt.Printf("%v\n", filters.Value1D(i))
-	}
-
 	tHalfSz := spec.SizeTime / 2
 	tOff := tHalfSz - ap.Input.BorderSteps
 	tMin := tOff
@@ -861,40 +855,39 @@ func (ap *AuditoryProc) GaborFilter(ch int, spec AudGaborSpec, filters etensor.F
 				}
 				pos := fSum >= 0.0
 				act := spec.Gain * math32.Abs(fSum)
-				fmt.Printf("%v\n", act)
 				if pos {
 					outRaw.SetFloat([]int{fi, 0, fIdx, tIdx, ch}, float64(act))
 					outRaw.SetFloat([]int{fi, 1, fIdx, tIdx, ch}, 0)
+					out.SetFloat([]int{fi, 0, fIdx, tIdx, ch}, float64(act))
+					out.SetFloat([]int{fi, 1, fIdx, tIdx, ch}, 0)
 				} else {
 					outRaw.SetFloat([]int{fi, 0, fIdx, tIdx, ch}, 0)
 					outRaw.SetFloat([]int{fi, 1, fIdx, tIdx, ch}, float64(act))
+					out.SetFloat([]int{fi, 0, fIdx, tIdx, ch}, 0)
+					out.SetFloat([]int{fi, 1, fIdx, tIdx, ch}, float64(act))
 				}
 			}
 		}
 	}
 
-	//rawVals := outRaw.Floats1D()
-	//for i := 0; i < len(rawVals); i++ {
-	//	fmt.Printf("%v\n", rawVals[i])
+	// old emergent did a memcpy - not sure if it is faster in go that the simple loop setting above
+	// if you change to copy() the shape needs to be modified to get a correct subspace - code below is not right!
+	//rawFrame, err := outRaw.SubSpace(outRaw.NumDims()-1, []int{ch})
+	//if err != nil {
+	//	fmt.Printf("GaborFilter: SubSpace error: %v", err)
 	//}
 	//
+	//outFrame, err := out.SubSpace(outRaw.NumDims()-1, []int{ch})
+	//if err != nil {
+	//	fmt.Printf("GaborFilter: SubSpace error: %v", err)
+	//}
 
-	rawFrame, err := outRaw.SubSpace(outRaw.NumDims()-1, []int{ch})
-	if err != nil {
-		fmt.Printf("GaborFilter: SubSpace error: %v", err)
-	}
-
-	outFrame, err := out.SubSpace(outRaw.NumDims()-1, []int{ch})
-	if err != nil {
-		fmt.Printf("GaborFilter: SubSpace error: %v", err)
-	}
-
-	// todo: V1KwtaSpec not yet implemented
+	// todo: ******* V1KwtaSpec not yet implemented *******
 	//if (gabor_kwta.On()) {
 	//	gabor_kwta.Compute_Inhib(*raw_frm, *out_frm, gabor_gci);
 	//} else {
 	//	memcpy(out_frm->el, raw_frm->el, raw_frm->size * sizeof(float));
-	copy(outFrame.Values, rawFrame.Values)
+	//copy(outFrame.Values, rawFrame.Values)
 	//}
 
 }
@@ -1042,7 +1035,6 @@ func (ap *AuditoryProc) MelOutputToTable(dt *etable.Table, ch int, fmtOnly bool)
 				for i := 0; i < ap.Gabor1Shape.Y; i++ {
 					for ti := 0; ti < nf; ti++ {
 						val0 := ap.Gabor1Out.FloatVal([]int{ti, 0, i, s, ch})
-						fmt.Printf("val:%v, ti:%v, 0, i:%v, s:%v, ch:%v\n", val0, ti, i, s, ch)
 						dout.SetFloat([]int{i, s, 0, ti}, val0)
 						val1 := ap.Gabor1Out.FloatVal([]int{ti, 1, i, s, ch})
 						dout.SetFloat([]int{i, s, 1, ti}, val1)
