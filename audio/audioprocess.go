@@ -17,18 +17,18 @@ import (
 
 // AudInputSpec defines the sound input parameters for auditory processing
 type AudInputSpec struct {
-	WinMsec      float32 `desc:"#DEF_25 input window -- number of milliseconds worth of sound to filter at a time"`
-	StepMsec     float32 `desc:"#DEF_5;10;12.5 input step -- number of milliseconds worth of sound that the input is stepped along to obtain the next window sample"`
-	TrialMsec    float32 `desc:"#DEF_100 length of a full trial's worth of input -- total number of milliseconds to accumulate into a complete trial of activations to present to a network -- must be a multiple of step_msec -- input will be trial_msec / step_msec = trial_steps wide in the X axis, and number of filters in the Y axis"`
+	WinMsec      float32 `def:"25" desc:"input window -- number of milliseconds worth of sound to filter at a time"`
+	StepMsec     float32 `def:"5,10,12.5" desc:"input step -- number of milliseconds worth of sound that the input is stepped along to obtain the next window sample"`
+	TrialMsec    float32 `def:"100" desc:"length of a full trial's worth of input -- total number of milliseconds to accumulate into a complete trial of activations to present to a network -- must be a multiple of step_msec -- input will be trial_msec / step_msec = trial_steps wide in the X axis, and number of filters in the Y axis"`
 	SampleRate   int     `desc:"rate of sampling in our sound input (e.g., 16000 = 16Khz) -- can initialize this from a taSound object using InitFromSound method"`
 	BorderSteps  int     `desc:"number of steps before and after the trial window to preserve -- this is important when applying temporal filters that have greater temporal extent"`
 	Channels     int     `desc:"total number of channels to process"`
-	Channel      int     `desc:"#CONDSHOW_ON_channels:1 specific channel to process, if input has multiple channels, and we only process one of them (-1 = process all)"`
-	WinSamples   int     `desc:"#READ_ONLY #SHOW total number of samples to process (win_msec * .001 * sample_rate)"`
-	StepSamples  int     `desc:"#READ_ONLY #SHOW total number of samples to step input by (step_msec * .001 * sample_rate)"`
-	TrialSamples int     `desc:"#READ_ONLY #SHOW total number of samples in a trial  (trail_msec * .001 * sample_rate)"`
-	TrialSteps   int     `desc:"#READ_ONLY #SHOW total number of steps in a trial  (trail_msec / step_msec)"`
-	TotalSteps   int     `desc:"#READ_ONLY #SHOW 2*border_steps + trial_steps -- total in full window"`
+	Channel      int     `viewif:"Channels=1" desc:"specific channel to process, if input has multiple channels, and we only process one of them (-1 = process all)"`
+	WinSamples   int     `inactive:"+" desc:"total number of samples to process (win_msec * .001 * sample_rate)"`
+	StepSamples  int     `inactive:"+" desc:"total number of samples to step input by (step_msec * .001 * sample_rate)"`
+	TrialSamples int     `inactive:"+" desc:"total number of samples in a trial  (trail_msec * .001 * sample_rate)"`
+	TrialSteps   int     `inactive:"+" desc:"total number of steps in a trial  (trail_msec / step_msec)"`
+	TotalSteps   int     `inactive:"+" desc:"2*border_steps + trial_steps -- total in full window"`
 }
 
 //Initialize initializes the AudInputSpec
@@ -92,11 +92,11 @@ func (ais *AudInputSpec) InitFromSound(snd *Sound, nChannels int, channel int) {
 
 // AudDftSpec discrete fourier transform (dft) specifications
 type AudDftSpec struct {
-	LogPow         bool    `desc:"#DEF_true compute the log of the power and save that to a separate table -- generaly more useful for visualization of power than raw power values"`
-	LogOff         float32 `desc:"#CONDSHOW_ON_log_pow #DEF_0 add this amount when taking the log of the dft power -- e.g., 1.0 makes everything positive -- affects the relative contrast of the outputs"`
-	LogMin         float32 `desc:"#CONDSHOW_ON_log_pow #DEF_-100 minimum value a log can produce -- puts a lower limit on log output"`
-	PreviousSmooth float32 `desc:"#DEF_0 how much of the previous step's power value to include in this one -- smooths out the power spectrum which can be artificially bumpy due to discrete window samples"`
-	CurrentSmooth  float32 `desc:"#READ_ONLY #EXPERT 1 - prv_smooth -- how much of current power to include"`
+	LogPow         bool    `"def:"true" desc:"compute the log of the power and save that to a separate table -- generaly more useful for visualization of power than raw power values"`
+	LogOff         float32 `viewif:"LogPow" def:"0" desc:"add this amount when taking the log of the dft power -- e.g., 1.0 makes everything positive -- affects the relative contrast of the outputs"`
+	LogMin         float32 `viewif:"LogPow" def:"-100" desc:"minimum value a log can produce -- puts a lower limit on log output"`
+	PreviousSmooth float32 `def:"0" desc:"how much of the previous step's power value to include in this one -- smooths out the power spectrum which can be artificially bumpy due to discrete window samples"`
+	CurrentSmooth  float32 `inactive:"+" desc:"how much of current power to include"`
 }
 
 //Initialize initializes the AudDftSpec
@@ -111,9 +111,9 @@ func (ad *AudDftSpec) Initialize() {
 // AudRenormSpec holds the auditory renormalization parameters
 type AudRenormSpec struct {
 	On          bool    `desc:"perform renormalization of this level of the auditory signal"`
-	RenormMin   float32 `desc:"#CONDSHOW_ON_on minimum value to use for renormalization -- you must experiment with range of inputs to determine appropriate values"`
-	RenormMax   float32 `desc:"#CONDSHOW_ON_on maximum value to use for renormalization -- you must experiment with range of inputs to determine appropriate values"`
-	RenormScale float32 `desc:"#READ_ONLY 1.0 / (ren_max - ren_min)"`
+	RenormMin   float32 `viewif:"On" desc:"minimum value to use for renormalization -- you must experiment with range of inputs to determine appropriate values"`
+	RenormMax   float32 `viewif:"On" desc:"maximum value to use for renormalization -- you must experiment with range of inputs to determine appropriate values"`
+	RenormScale float32 `inactive:"+" desc:"1.0 / (ren_max - ren_min)"`
 }
 
 //Initialize initializes the AudRenormSpec
@@ -129,20 +129,20 @@ func (ar *AudRenormSpec) Initialize() {
 // has elongated frequency-band specific tuning, not a parallel horizontal tuning -- and has multiple of these
 type AudGaborSpec struct {
 	On              bool    `desc:"use this gabor filtering of the time-frequency space filtered input (time in terms of steps of the DFT transform, and discrete frequency factors based on the FFT window and input sample rate)"`
-	SizeTime        int     `desc:"#CONDSHOW_ON_on #DEF_6;8;12;16;24 size of the filter in the time (horizontal) domain, in terms of steps of the underlying DFT filtering steps"`
-	SizeFreq        int     `desc:"#CONDSHOW_ON_on #DEF_6;8;12;16;24 size of the filter in the frequency domain, in terms of discrete frequency factors based on the FFT window and input sample rate"`
-	SpaceTime       int     `desc:"#CONDSHOW_ON_on spacing in the time (horizontal) domain, in terms of steps"`
-	SpaceFreq       int     `desc:"#CONDSHOW_ON_on spacing in the frequency (vertical) domain"`
-	WaveLen         float32 `desc:"#CONDSHOW_ON_on #DEF_1.5;2 wavelength of the sine waves in normalized units"`
-	SigmaLen        float32 `desc:"#CONDSHOW_ON_on #DEF_0.6 gaussian sigma for the length dimension (elongated axis perpendicular to the sine waves) -- normalized as a function of filter size in relevant dimension"`
-	SigmaWidth      float32 `desc:"#CONDSHOW_ON_on #DEF_0.3 gaussian sigma for the width dimension (in the direction of the sine waves) -- normalized as a function of filter size in relevant dimension"`
-	HorizSigmaLen   float32 `desc:"#CONDSHOW_ON_on #DEF_0.3 gaussian sigma for the length of special horizontal narrow-band filters -- normalized as a function of filter size in relevant dimension"`
-	HorizSigmaWidth float32 `desc:"#CONDSHOW_ON_on #DEF_0.1 gaussian sigma for the horizontal dimension for special horizontal narrow-band filters -- normalized as a function of filter size in relevant dimension"`
-	Gain            float32 `desc:"#CONDSHOW_ON_on #DEF_2 overall gain multiplier applied after gabor filtering -- only relevant if not using renormalization (otherwize it just gets renormed awaY"`
-	NHoriz          int     `desc:"#CONDSHOW_ON_on #DEF_4 number of horizontally-elongated,  pure time-domain, frequency-band specific filters to include, evenly spaced over the available frequency space for this filter set -- in addition to these, there are two diagonals (45, 135) and a vertically-elongated (wide frequency band) filter"`
-	PhaseOffset     float32 `desc:"#CONDSHOW_ON_on #DEF_0;1.5708 offset for the sine phase -- default is an asymmetric sine wave -- can make it into a symmetric cosine gabor by using PI/2 = 1.5708"`
-	CircleEdge      bool    `desc:"#CONDSHOW_ON_on #DEF_true cut off the filter (to zero) outside a circle of diameter filter_size -- makes the filter more radially symmetric"`
-	NFilters        int     `desc:"#CONDSHOW_ON_on #READ_ONLY #SHOW total number of filters = 3 + n_horiz"`
+	SizeTime        int     `viewif:"On" def:"6,8,12,16,24" desc:" #DEF_6;8;12;16;24 size of the filter in the time (horizontal) domain, in terms of steps of the underlying DFT filtering steps"`
+	SizeFreq        int     `viewif:"On" def:"6,8,12,16,24" desc:" #DEF_6;8;12;16;24 size of the filter in the frequency domain, in terms of discrete frequency factors based on the FFT window and input sample rate"`
+	SpaceTime       int     `viewif:"On" desc:" spacing in the time (horizontal) domain, in terms of steps"`
+	SpaceFreq       int     `viewif:"On" desc:" spacing in the frequency (vertical) domain"`
+	WaveLen         float32 `viewif:"On" def:"1.5,2" desc:"wavelength of the sine waves in normalized units"`
+	SigmaLen        float32 `viewif:"On" def:"0.6" desc:"gaussian sigma for the length dimension (elongated axis perpendicular to the sine waves) -- normalized as a function of filter size in relevant dimension"`
+	SigmaWidth      float32 `viewif:"On" def:"0.3" desc:"gaussian sigma for the width dimension (in the direction of the sine waves) -- normalized as a function of filter size in relevant dimension"`
+	HorizSigmaLen   float32 `viewif:"On" def:"0.3" desc:"gaussian sigma for the length of special horizontal narrow-band filters -- normalized as a function of filter size in relevant dimension"`
+	HorizSigmaWidth float32 `viewif:"On" def:"0.1" desc:"gaussian sigma for the horizontal dimension for special horizontal narrow-band filters -- normalized as a function of filter size in relevant dimension"`
+	Gain            float32 `viewif:"On" def:"2" desc:"overall gain multiplier applied after gabor filtering -- only relevant if not using renormalization (otherwize it just gets renormed awaY"`
+	NHoriz          int     `viewif:"On" def:"4" desc:"number of horizontally-elongated,  pure time-domain, frequency-band specific filters to include, evenly spaced over the available frequency space for this filter set -- in addition to these, there are two diagonals (45, 135) and a vertically-elongated (wide frequency band) filter"`
+	PhaseOffset     float32 `viewif:"On" def:"0,1.5708" desc:"offset for the sine phase -- default is an asymmetric sine wave -- can make it into a symmetric cosine gabor by using PI/2 = 1.5708"`
+	CircleEdge      bool    `viewif:"On" def:"true" desc:"cut off the filter (to zero) outside a circle of diameter filter_size -- makes the filter more radially symmetric"`
+	NFilters        int     `viewif:"On" desc:" #READ_ONLY total number of filters = 3 + n_horiz"`
 }
 
 //Initialize initializes the AudGaborSpec
@@ -264,13 +264,13 @@ func (ag *AudGaborSpec) RenderFilters(filters etensor.Float32) {
 // MelFBankSpec contains mel frequency feature bank sampling parameters
 type MelFBankSpec struct {
 	On       bool    `desc:"perform mel-frequency filtering of the fft input"`
-	NFilters int     `desc:"#DEF_32;26 #CONDSHOW_ON_on number of Mel frequency filters to compute"`
-	LoHz     float32 `desc:"#DEF_120;300 #CONDSHOW_ON_on low frequency end of mel frequency spectrum"`
-	HiHz     float32 `desc:"#DEF_10000;8000 #CONDSHOW_ON_on high frequency end of mel frequency spectrum -- must be <= sample_rate / 2 (i.e., less than the Nyquist frequencY"`
-	LogOff   float32 `desc:"#CONDSHOW_ON_on #DEF_0 on add this amount when taking the log of the Mel filter sums to produce the filter-bank output -- e.g., 1.0 makes everything positive -- affects the relative contrast of the outputs"`
-	LogMin   float32 `desc:"#CONDSHOW_ON_on #DEF_-10 minimum value a log can produce -- puts a lower limit on log output"`
-	LoMel    float32 `desc:"#READ_ONLY #SHOW #CONDSHOW_ON_on low end of mel scale in mel units"`
-	HiMel    float32 `desc:"#READ_ONLY #SHOW #CONDSHOW_ON_on high end of mel scale in mel units"`
+	NFilters int     `viewif:"On" def:"32,26" desc:"number of Mel frequency filters to compute"`
+	LoHz     float32 `viewif:"On" def:"120,300" desc:"low frequency end of mel frequency spectrum"`
+	HiHz     float32 `viewif:"On" def:"10000,8000" desc:"high frequency end of mel frequency spectrum -- must be <= sample_rate / 2 (i.e., less than the Nyquist frequencY"`
+	LogOff   float32 `viewif:"On" def:"0" desc:"on add this amount when taking the log of the Mel filter sums to produce the filter-bank output -- e.g., 1.0 makes everything positive -- affects the relative contrast of the outputs"`
+	LogMin   float32 `viewif:"On" def:"-10" desc:"minimum value a log can produce -- puts a lower limit on log output"`
+	LoMel    float32 `viewif:"On" inactive:"+" desc:" low end of mel scale in mel units"`
+	HiMel    float32 `viewif:"On" inactive:"+" desc:" high end of mel scale in mel units"`
 }
 
 // FreqToMel converts frequency to mel scale
@@ -303,7 +303,7 @@ func (mfb *MelFBankSpec) Initialize() {
 // MelCepstrumSpec holds the mel frequency sampling parameters
 type MelCepstrumSpec struct {
 	On     bool `desc:"perform cepstrum discrete cosine transform (dct) of the mel-frequency filter bank features"`
-	NCoeff int  `desc:"#CONDSHOW_ON_on #DEF_13 number of mfcc coefficients to output -- typically 1/2 of the number of filterbank features"`
+	NCoeff int  `def:"13" desc:"number of mfcc coefficients to output -- typically 1/2 of the number of filterbank features"`
 }
 
 //Initialize initializes the MelCepstrumSpec
@@ -320,57 +320,57 @@ type AuditoryProc struct {
 	Input       AudInputSpec    `desc:"specifications of the raw auditory input"`
 	Dft         AudDftSpec      `desc:"specifications for how to compute the discrete fourier transform (DFT, using FFT)"`
 	MelFBank    MelFBankSpec    `desc:"specifications of the mel feature bank frequency sampling of the DFT (FFT) of the input sound"`
-	FBankRenorm AudRenormSpec   `desc:"#CONDSHOW_ON_mel_fbank.on renormalization parmeters for the mel_fbank values -- performed prior to further processing"`
-	Gabor1      AudGaborSpec    `desc:"#CONDSHOW_ON_mel_fbank.on full set of frequency / time gabor filters -- first size"`
-	Gabor2      AudGaborSpec    `desc:"#CONDSHOW_ON_mel_fbank.on full set of frequency / time gabor filters -- second size"`
-	Gabor3      AudGaborSpec    `desc:"#CONDSHOW_ON_mel_fbank.on full set of frequency / time gabor filters -- third size"`
-	Mfcc        MelCepstrumSpec `desc:"#CONDSHOW_ON_mel_fbank.on specifications of the mel cepstrum discrete cosine transform of the mel fbank filter features"`
+	FBankRenorm AudRenormSpec   `viewif:"MelFBank.On=true desc:"renormalization parmeters for the mel_fbank values -- performed prior to further processing"`
+	Gabor1      AudGaborSpec    `viewif:"MelFBank.On=true desc:"full set of frequency / time gabor filters -- first size"`
+	Gabor2      AudGaborSpec    `viewif:"MelFBank.On=true desc:"full set of frequency / time gabor filters -- second size"`
+	Gabor3      AudGaborSpec    `viewif:"MelFBank.On=true desc:"full set of frequency / time gabor filters -- third size"`
+	Mfcc        MelCepstrumSpec `viewif:"MelFBank.On=true desc:"specifications of the mel cepstrum discrete cosine transform of the mel fbank filter features"`
 
 	// Filters
-	DftSize        int `desc:"#READ_ONLY #NO_SAVE full size of fft output -- should be input.win_samples"`
-	DftUse         int `desc:"#READ_ONLY #NO_SAVE number of dft outputs to actually use -- should be dft_size / 2 + 1"`
-	MelNFiltersEff int `desc:"#READ_ONLY #NO_SAVE effective number of mel filters: mel.n_filters + 2"`
+	DftSize        int `inactive:"+" desc:" #NO_SAVE full size of fft output -- should be input.win_samples"`
+	DftUse         int `inactive:"+" desc:" #NO_SAVE number of dft outputs to actually use -- should be dft_size / 2 + 1"`
+	MelNFiltersEff int `inactive:"+" desc:" #NO_SAVE effective number of mel filters: mel.n_filters + 2"`
 
-	MelPtsMel        etensor.Float32 `desc:"#READ_ONLY #NO_SAVE [mel_n_filters_eff] scale points in mel units (mels)"`
-	MelPtsHz         etensor.Float32 `desc:"#READ_ONLY #NO_SAVE [mel_n_filters_eff] mel scale points in hz units"`
-	MelPtsBin        etensor.Int32   `desc:"#READ_ONLY #NO_SAVE [mel_n_filters_eff] mel scale points in fft bins"`
-	MelFilters       etensor.Float32 `desc:"#READ_ONLY #NO_SAVE [mel_filt_max_bins][mel.n_filters] the actual filters for actual number of mel filters"`
-	MelFilterMaxBins int             `desc:"#READ_ONLY #NO_SAVE maximum number of bins for mel filter -- number of bins in highest filter"`
+	MelPtsMel        etensor.Float32 `inactive:"+" desc:" #NO_SAVE [mel_n_filters_eff] scale points in mel units (mels)"`
+	MelPtsHz         etensor.Float32 `inactive:"+" desc:" #NO_SAVE [mel_n_filters_eff] mel scale points in hz units"`
+	MelPtsBin        etensor.Int32   `inactive:"+" desc:" #NO_SAVE [mel_n_filters_eff] mel scale points in fft bins"`
+	MelFilters       etensor.Float32 `inactive:"+" desc:" #NO_SAVE [mel_filt_max_bins][mel.n_filters] the actual filters for actual number of mel filters"`
+	MelFilterMaxBins int             `inactive:"+" desc:" #NO_SAVE maximum number of bins for mel filter -- number of bins in highest filter"`
 
-	Gabor1Filters etensor.Float32 `desc:"#READ_ONLY #NO_SAVE full gabor filters"`
-	Gabor2Filters etensor.Float32 `desc:"#READ_ONLY #NO_SAVE full gabor filters"`
-	Gabor3Filters etensor.Float32 `desc:"#READ_ONLY #NO_SAVE full gabor filters"`
+	Gabor1Filters etensor.Float32 `inactive:"+" desc:" #NO_SAVE full gabor filters"`
+	Gabor2Filters etensor.Float32 `inactive:"+" desc:" #NO_SAVE full gabor filters"`
+	Gabor3Filters etensor.Float32 `inactive:"+" desc:" #NO_SAVE full gabor filters"`
 
 	// Outputs
-	FirstStep     bool        `desc:"#READ_ONLY #NO_SAVE #SHOW is this the first step of processing -- turns of prv smoothing of dft power"`
-	InputPos      int         `desc:"#READ_ONLY #NO_SAVE #SHOW current position in the sound_full input -- in terms of sample number"`
-	TrialStartPos int         `desc:"#READ_ONLY #NO_SAVE #SHOW starting position of the current trial -- in terms of sample number"`
-	TrialEndPos   int         `desc:"#READ_ONLY #NO_SAVE #SHOW ending position of the current trial -- in terms of sample number"`
-	Gabor1Shape   image.Point `desc:"#CONDSHOW_ON_gabor1.on #READ_ONLY #SHOW overall geometry of gabor1 output (group-level geometry -- feature / unit level geometry is n_features, 2)"`
-	Gabor2Shape   image.Point `desc:"#CONDSHOW_ON_gabor2.on #READ_ONLY #SHOW overall geometry of gabor2 output (group-level geometry -- feature / unit level geometry is n_features, 2)"`
-	Gabor3Shape   image.Point `desc:"#CONDSHOW_ON_gabor3.on #READ_ONLY #SHOW overall geometry of gabor3 output (group-level geometry -- feature / unit level geometry is n_features, 2)"`
+	FirstStep     bool        `inactive:"+" desc:" #NO_SAVE is this the first step of processing -- turns of prv smoothing of dft power"`
+	InputPos      int         `inactive:"+" desc:" #NO_SAVE current position in the sound_full input -- in terms of sample number"`
+	TrialStartPos int         `inactive:"+" desc:" #NO_SAVE starting position of the current trial -- in terms of sample number"`
+	TrialEndPos   int         `inactive:"+" desc:" #NO_SAVE ending position of the current trial -- in terms of sample number"`
+	Gabor1Shape   image.Point `viewif:Gabor1.On=true" inactive:"+" desc:"overall geometry of gabor1 output (group-level geometry -- feature / unit level geometry is n_features, 2)"`
+	Gabor2Shape   image.Point `viewif:Gabor2.On=true" inactive:"+" desc:"overall geometry of gabor2 output (group-level geometry -- feature / unit level geometry is n_features, 2)"`
+	Gabor3Shape   image.Point `viewif:Gabor3.On=true" inactive:"+" desc:"overall geometry of gabor3 output (group-level geometry -- feature / unit level geometry is n_features, 2)"`
 
-	SoundFull           etensor.Float32    `desc:"#READ_ONLY #NO_SAVE the full sound input obtained from the sound input"`
-	WindowIn            etensor.Float32    `desc:"#READ_ONLY #NO_SAVE [input.win_samples] the raw sound input, one channel at a time"`
-	DftOut              etensor.Complex128 `desc:"#READ_ONLY #NO_SAVE [dft_size] discrete fourier transform (fft) output complex representation"`
-	DftPowerOut         etensor.Float32    `desc:"#READ_ONLY #NO_SAVE [dft_use] power of the dft, up to the nyquist limit frequency (1/2 input.win_samples)"`
-	DftLogPowerOut      etensor.Float32    `desc:"#READ_ONLY #NO_SAVE [dft_use] log power of the dft, up to the nyquist limit frequency (1/2 input.win_samples)"`
-	DftPowerTrialOut    etensor.Float32    `desc:"#READ_ONLY #NO_SAVE [dft_use][input.total_steps][input.channels] full trial's worth of power of the dft, up to the nyquist limit frequency (1/2 input.win_samples)"`
-	DftLogPowerTrialOut etensor.Float32    `desc:"#READ_ONLY #NO_SAVE [dft_use][input.total_steps][input.channels] full trial's worth of log power of the dft, up to the nyquist limit frequency (1/2 input.win_samples)"`
+	SoundFull           etensor.Float32    `inactive:"+" desc:" #NO_SAVE the full sound input obtained from the sound input"`
+	WindowIn            etensor.Float32    `inactive:"+" desc:" #NO_SAVE [input.win_samples] the raw sound input, one channel at a time"`
+	DftOut              etensor.Complex128 `inactive:"+" desc:" #NO_SAVE [dft_size] discrete fourier transform (fft) output complex representation"`
+	DftPowerOut         etensor.Float32    `inactive:"+" desc:" #NO_SAVE [dft_use] power of the dft, up to the nyquist limit frequency (1/2 input.win_samples)"`
+	DftLogPowerOut      etensor.Float32    `inactive:"+" desc:" #NO_SAVE [dft_use] log power of the dft, up to the nyquist limit frequency (1/2 input.win_samples)"`
+	DftPowerTrialOut    etensor.Float32    `inactive:"+" desc:" #NO_SAVE [dft_use][input.total_steps][input.channels] full trial's worth of power of the dft, up to the nyquist limit frequency (1/2 input.win_samples)"`
+	DftLogPowerTrialOut etensor.Float32    `inactive:"+" desc:" #NO_SAVE [dft_use][input.total_steps][input.channels] full trial's worth of log power of the dft, up to the nyquist limit frequency (1/2 input.win_samples)"`
 
-	MelFBankOut      etensor.Float32 `desc:"#READ_ONLY #NO_SAVE [mel.n_filters] mel scale transformation of dft_power, using triangular filters, resulting in the mel filterbank output -- the natural log of this is typically applied"`
-	MelFBankTrialOut etensor.Float32 `desc:"#READ_ONLY #NO_SAVE [mel.n_filters][input.total_steps][input.channels] full trial's worth of mel feature-bank output -- only if using gabors"`
+	MelFBankOut      etensor.Float32 `inactive:"+" desc:" #NO_SAVE [mel.n_filters] mel scale transformation of dft_power, using triangular filters, resulting in the mel filterbank output -- the natural log of this is typically applied"`
+	MelFBankTrialOut etensor.Float32 `inactive:"+" desc:" #NO_SAVE [mel.n_filters][input.total_steps][input.channels] full trial's worth of mel feature-bank output -- only if using gabors"`
 
-	GaborGci  etensor.Float32 `desc:"#READ_ONLY #NO_SAVE inhibitory conductances, for computing kwta"`
-	Gabor1Raw etensor.Float32 `desc:"#READ_ONLY #NO_SAVE [gabor.n_filters*2][mel.n_filters][input.trial_steps][input.channels] raw output of gabor1 -- full trial's worth of gabor steps"`
-	Gabor1Out etensor.Float32 `desc:"#READ_ONLY #NO_SAVE [gabor.n_filters*2][mel.n_filters][input.trial_steps][input.channels] post-kwta output of full trial's worth of gabor steps"`
-	Gabor2Raw etensor.Float32 `desc:"#READ_ONLY #NO_SAVE [gabor.n_filters*2][mel.n_filters][input.trial_steps][input.channels] raw output of gabor1 -- full trial's worth of gabor steps"`
-	Gabor2Out etensor.Float32 `desc:"#READ_ONLY #NO_SAVE [gabor.n_filters*2][mel.n_filters][input.trial_steps][input.channels] post-kwta output of full trial's worth of gabor steps"`
-	Gabor3Raw etensor.Float32 `desc:"#READ_ONLY #NO_SAVE [gabor.n_filters*2][mel.n_filters][input.trial_steps][input.channels] raw output of gabor1 -- full trial's worth of gabor steps"`
-	Gabor3Out etensor.Float32 `desc:"#READ_ONLY #NO_SAVE [gabor.n_filters*2][mel.n_filters][input.trial_steps][input.channels] post-kwta output of full trial's worth of gabor steps"`
+	GaborGci  etensor.Float32 `inactive:"+" desc:" #NO_SAVE inhibitory conductances, for computing kwta"`
+	Gabor1Raw etensor.Float32 `inactive:"+" desc:" #NO_SAVE [gabor.n_filters*2][mel.n_filters][input.trial_steps][input.channels] raw output of gabor1 -- full trial's worth of gabor steps"`
+	Gabor1Out etensor.Float32 `inactive:"+" desc:" #NO_SAVE [gabor.n_filters*2][mel.n_filters][input.trial_steps][input.channels] post-kwta output of full trial's worth of gabor steps"`
+	Gabor2Raw etensor.Float32 `inactive:"+" desc:" #NO_SAVE [gabor.n_filters*2][mel.n_filters][input.trial_steps][input.channels] raw output of gabor1 -- full trial's worth of gabor steps"`
+	Gabor2Out etensor.Float32 `inactive:"+" desc:" #NO_SAVE [gabor.n_filters*2][mel.n_filters][input.trial_steps][input.channels] post-kwta output of full trial's worth of gabor steps"`
+	Gabor3Raw etensor.Float32 `inactive:"+" desc:" #NO_SAVE [gabor.n_filters*2][mel.n_filters][input.trial_steps][input.channels] raw output of gabor1 -- full trial's worth of gabor steps"`
+	Gabor3Out etensor.Float32 `inactive:"+" desc:" #NO_SAVE [gabor.n_filters*2][mel.n_filters][input.trial_steps][input.channels] post-kwta output of full trial's worth of gabor steps"`
 
-	MfccDctOut      etensor.Float32 `desc:"#READ_ONLY #NO_SAVE discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
-	MfccDctTrialOut etensor.Float32 `desc:"#READ_ONLY #NO_SAVE full trial's worth of discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
+	MfccDctOut      etensor.Float32 `inactive:"+" desc:" #NO_SAVE discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
+	MfccDctTrialOut etensor.Float32 `inactive:"+" desc:" #NO_SAVE full trial's worth of discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
 }
 
 // InitFilters
