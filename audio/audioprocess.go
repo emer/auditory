@@ -450,16 +450,16 @@ func (ap *AuditoryProc) InitOutMatrix() bool {
 		ap.MelFBankOut.SetShape([]int{ap.MelFBank.NFilters}, nil, nil)
 		ap.MelFBankTrialOut.SetShape([]int{ap.MelFBank.NFilters, ap.Input.TotalSteps, ap.Input.Channels}, nil, nil)
 		if ap.Gabor1.On {
-			ap.Gabor1Raw.SetShape([]int{ap.Gabor1.NFilters, 2, ap.Gabor1Shape.Y, ap.Gabor1Shape.X, ap.Input.Channels}, nil, nil)
-			ap.Gabor1Out.SetShape([]int{ap.Gabor1.NFilters, 2, ap.Gabor1Shape.Y, ap.Gabor1Shape.X, ap.Input.Channels}, nil, nil)
+			ap.Gabor1Raw.SetShape([]int{ap.Input.Channels, ap.Gabor1.NFilters, 2, ap.Gabor1Shape.Y, ap.Gabor1Shape.X}, nil, nil)
+			ap.Gabor1Out.SetShape([]int{ap.Input.Channels, ap.Gabor1.NFilters, 2, ap.Gabor1Shape.Y, ap.Gabor1Shape.X}, nil, nil)
 		}
 		if ap.Gabor2.On {
-			ap.Gabor2Raw.SetShape([]int{ap.Gabor2.NFilters, 2, ap.Gabor2Shape.Y, ap.Gabor2Shape.X, ap.Input.Channels}, nil, nil)
-			ap.Gabor2Out.SetShape([]int{ap.Gabor2.NFilters, 2, ap.Gabor2Shape.Y, ap.Gabor2Shape.X, ap.Input.Channels}, nil, nil)
+			ap.Gabor2Raw.SetShape([]int{ap.Input.Channels, ap.Gabor2.NFilters, 2, ap.Gabor2Shape.Y, ap.Gabor2Shape.X}, nil, nil)
+			ap.Gabor2Out.SetShape([]int{ap.Input.Channels, ap.Gabor2.NFilters, 2, ap.Gabor2Shape.Y, ap.Gabor2Shape.X}, nil, nil)
 		}
 		if ap.Gabor3.On {
-			ap.Gabor3Raw.SetShape([]int{ap.Gabor3.NFilters, 2, ap.Gabor3Shape.Y, ap.Gabor3Shape.X, ap.Input.Channels}, nil, nil)
-			ap.Gabor3Out.SetShape([]int{ap.Gabor3.NFilters, 2, ap.Gabor3Shape.Y, ap.Gabor3Shape.X, ap.Input.Channels}, nil, nil)
+			ap.Gabor3Raw.SetShape([]int{ap.Input.Channels, ap.Gabor3.NFilters, 2, ap.Gabor3Shape.Y, ap.Gabor3Shape.X}, nil, nil)
+			ap.Gabor3Out.SetShape([]int{ap.Input.Channels, ap.Gabor3.NFilters, 2, ap.Gabor3Shape.Y, ap.Gabor3Shape.X}, nil, nil)
 		}
 		if ap.Mfcc.On {
 			ap.MfccDctOut.SetShape([]int{ap.MelFBank.NFilters}, nil, nil)
@@ -838,14 +838,14 @@ func (ap *AuditoryProc) GaborFilter(ch int, spec AudGaborSpec, filters etensor.F
 	tIdx := 0
 	for s := tMin; s < tMax; s, tIdx = s+spec.SpaceTime, tIdx+1 {
 		inSt := s - tOff
-		if tIdx > outRaw.Dim(3) {
+		if tIdx > outRaw.Dim(4) {
 			fmt.Printf("GaborFilter: time index %v out of range: %v", tIdx, outRaw.Dim(3))
 			break
 		}
 
 		fIdx := 0
 		for flt := fMin; flt < fMax; flt, fIdx = flt+spec.SpaceFreq, fIdx+1 {
-			if fIdx > outRaw.Dim(2) {
+			if fIdx > outRaw.Dim(3) {
 				fmt.Printf("GaborFilter: freq index %v out of range: %v", tIdx, outRaw.Dim(2))
 				break
 			}
@@ -862,35 +862,33 @@ func (ap *AuditoryProc) GaborFilter(ch int, spec AudGaborSpec, filters etensor.F
 				pos := fSum >= 0.0
 				act := spec.Gain * math32.Abs(fSum)
 				if pos {
-					outRaw.SetFloat([]int{fi, 0, fIdx, tIdx, ch}, float64(act))
-					outRaw.SetFloat([]int{fi, 1, fIdx, tIdx, ch}, 0)
-					out.SetFloat([]int{fi, 0, fIdx, tIdx, ch}, float64(act))
-					out.SetFloat([]int{fi, 1, fIdx, tIdx, ch}, 0)
+					outRaw.SetFloat([]int{ch, fi, 0, fIdx, tIdx}, float64(act))
+					outRaw.SetFloat([]int{ch, fi, 1, fIdx, tIdx}, 0)
+					out.SetFloat([]int{ch, fi, 0, fIdx, tIdx}, float64(act))
+					out.SetFloat([]int{ch, fi, 1, fIdx, tIdx}, 0)
 				} else {
-					outRaw.SetFloat([]int{fi, 0, fIdx, tIdx, ch}, 0)
-					outRaw.SetFloat([]int{fi, 1, fIdx, tIdx, ch}, float64(act))
-					out.SetFloat([]int{fi, 0, fIdx, tIdx, ch}, 0)
-					out.SetFloat([]int{fi, 1, fIdx, tIdx, ch}, float64(act))
+					outRaw.SetFloat([]int{ch, fi, 0, fIdx, tIdx}, 0)
+					outRaw.SetFloat([]int{ch, fi, 1, fIdx, tIdx}, float64(act))
+					out.SetFloat([]int{ch, fi, 0, fIdx, tIdx}, 0)
+					out.SetFloat([]int{ch, fi, 1, fIdx, tIdx}, float64(act))
 				}
 			}
 		}
 	}
 
-	// todo: ******* not yet implemented *******
+	// todo: ******* in progress *******
 	if ap.UseInhib {
-		// old emergent did a memcpy - not sure if it is faster in go that the simple loop setting done above
-		// if you change to copy() the shape needs to be modified to get a correct subspace - code below is not right!
 		rawFrame, err := outRaw.SubSpace(outRaw.NumDims()-1, []int{ch})
 		if err != nil {
 			fmt.Printf("GaborFilter: SubSpace error: %v", err)
 		}
-
 		outFrame, err := out.SubSpace(outRaw.NumDims()-1, []int{ch})
 		if err != nil {
 			fmt.Printf("GaborFilter: SubSpace error: %v", err)
 		}
 		ap.Kwta.Initialize()
 		ap.Kwta.ComputeOutputsInhib(rawFrame, outFrame, &ap.GaborGci)
+		fmt.Printf("kwta done")
 	}
 	//if (gabor_kwta.On()) {
 	//	gabor_kwta.Compute_Inhib(*raw_frm, *out_frm, gabor_gci);
@@ -1014,9 +1012,9 @@ func (ap *AuditoryProc) MelOutputToTable(dt *etable.Table, ch int, fmtOnly bool)
 			for s := 0; s < ap.Gabor1Shape.X; s++ {
 				for i := 0; i < ap.Gabor1Shape.Y; i++ {
 					for ti := 0; ti < nf; ti++ {
-						val0 := ap.Gabor1Raw.FloatVal([]int{ti, 0, i, s, ch})
+						val0 := ap.Gabor1Raw.FloatVal([]int{ch, ti, 0, i, s})
 						dout.SetFloat([]int{i, s, 0, ti}, val0)
-						val1 := ap.Gabor1Raw.FloatVal([]int{ti, 1, i, s, ch})
+						val1 := ap.Gabor1Raw.FloatVal([]int{ch, ti, 1, i, s})
 						dout.SetFloat([]int{i, s, 1, ti}, val1)
 					}
 				}
@@ -1043,9 +1041,9 @@ func (ap *AuditoryProc) MelOutputToTable(dt *etable.Table, ch int, fmtOnly bool)
 			for s := 0; s < ap.Gabor1Shape.X; s++ {
 				for i := 0; i < ap.Gabor1Shape.Y; i++ {
 					for ti := 0; ti < nf; ti++ {
-						val0 := ap.Gabor1Out.FloatVal([]int{ti, 0, i, s, ch})
+						val0 := ap.Gabor1Out.FloatVal([]int{ch, ti, 0, i, s})
 						dout.SetFloat([]int{i, s, 0, ti}, val0)
-						val1 := ap.Gabor1Out.FloatVal([]int{ti, 1, i, s, ch})
+						val1 := ap.Gabor1Out.FloatVal([]int{ch, ti, 1, i, s})
 						dout.SetFloat([]int{i, s, 1, ti}, val1)
 					}
 				}
@@ -1074,9 +1072,9 @@ func (ap *AuditoryProc) MelOutputToTable(dt *etable.Table, ch int, fmtOnly bool)
 			for s := 0; s < ap.Gabor2Shape.X; s++ {
 				for i := 0; i < ap.Gabor2Shape.Y; i++ {
 					for ti := 0; ti < nf; ti++ {
-						val0 := ap.Gabor2Raw.FloatVal([]int{ti, 0, i, s, ch})
+						val0 := ap.Gabor2Raw.FloatVal([]int{ch, ti, 0, i, s})
 						dout.SetFloat([]int{i, s, 0, ti}, val0)
-						val1 := ap.Gabor2Raw.FloatVal([]int{ti, 1, i, s, ch})
+						val1 := ap.Gabor2Raw.FloatVal([]int{ch, ti, 1, i, s})
 						dout.SetFloat([]int{i, s, 1, ti}, val1)
 					}
 				}
@@ -1103,9 +1101,9 @@ func (ap *AuditoryProc) MelOutputToTable(dt *etable.Table, ch int, fmtOnly bool)
 			for s := 0; s < ap.Gabor2Shape.X; s++ {
 				for i := 0; i < ap.Gabor2Shape.Y; i++ {
 					for ti := 0; ti < nf; ti++ {
-						val0 := ap.Gabor2Out.FloatVal([]int{ti, 0, i, s, ch})
+						val0 := ap.Gabor2Out.FloatVal([]int{ch, ti, 0, i, s})
 						dout.SetFloat([]int{i, s, 0, ti}, val0)
-						val1 := ap.Gabor2Out.FloatVal([]int{ti, 1, i, s, ch})
+						val1 := ap.Gabor2Out.FloatVal([]int{ch, ti, 1, i, s})
 						dout.SetFloat([]int{i, s, 1, ti}, val1)
 					}
 				}
@@ -1134,9 +1132,9 @@ func (ap *AuditoryProc) MelOutputToTable(dt *etable.Table, ch int, fmtOnly bool)
 			for s := 0; s < ap.Gabor3Shape.X; s++ {
 				for i := 0; i < ap.Gabor3Shape.Y; i++ {
 					for ti := 0; ti < nf; ti++ {
-						val0 := ap.Gabor3Raw.FloatVal([]int{ti, 0, i, s, ch})
+						val0 := ap.Gabor3Raw.FloatVal([]int{ch, ti, 0, i, s})
 						dout.SetFloat([]int{i, s, 0, ti}, val0)
-						val1 := ap.Gabor3Raw.FloatVal([]int{ti, 1, i, s, ch})
+						val1 := ap.Gabor3Raw.FloatVal([]int{ch, ti, 1, i, s})
 						dout.SetFloat([]int{i, s, 1, ti}, val1)
 					}
 				}
@@ -1163,9 +1161,9 @@ func (ap *AuditoryProc) MelOutputToTable(dt *etable.Table, ch int, fmtOnly bool)
 			for s := 0; s < ap.Gabor3Shape.X; s++ {
 				for i := 0; i < ap.Gabor3Shape.Y; i++ {
 					for ti := 0; ti < nf; ti++ {
-						val0 := ap.Gabor3Out.FloatVal([]int{ti, 0, i, s, ch})
+						val0 := ap.Gabor3Out.FloatVal([]int{ch, ti, 0, i, s})
 						dout.SetFloat([]int{i, s, 0, ti}, val0)
-						val1 := ap.Gabor3Out.FloatVal([]int{ti, 1, i, s, ch})
+						val1 := ap.Gabor3Out.FloatVal([]int{ch, ti, 1, i, s})
 						dout.SetFloat([]int{i, s, 1, ti}, val1)
 					}
 				}
@@ -1231,6 +1229,8 @@ type Kwta struct {
 	GblERevSubThrL float32 // #READ_ONLY #NO_SAVE #HIDDEN kwta.GBarL * (e_rev_l - thr) -- used for compute_ithresh
 	ThrSubERevI    float32 // #READ_ONLY #NO_SAVE #HIDDEN thr - e_rev_i used for compute_ithresh
 	ThrSubERevE    float32 // #READ_ONLY #NO_SAVE #HIDDEN thr - e_rev_e used for compute_ethresh
+
+	XX1 XX1Params
 }
 
 func (kwta *Kwta) Initialize() {
@@ -1268,8 +1268,17 @@ func (kwta *Kwta) ComputeOutputsInhib(inputs, outputs, gcIMat *etensor.Float32) 
 		return false
 	}
 
+	gxs := inputs.Dim(0) // within pool x
+	gys := inputs.Dim(1) // within pool y
+	ixs := inputs.Dim(2) // pools (groups) x
+	iys := inputs.Dim(3) // pools (groups) y
+	if gxs == 0 || gys == 0 || ixs == 0 || iys == 0 {
+		fmt.Printf("ComputeOutputsInhib: input matrix has zero length dimension")
+		return false
+	}
+
 	kwta.Cycle = 0
-	gcIMat.SetShape([]int{4, inputs.Dim(1), inputs.Dim(2)}, nil, nil)
+	gcIMat.SetShape([]int{4, ixs, iys}, nil, nil)
 	for i := 0; i < kwta.NCycles; i++ {
 		kwta.ComputeFFFB(inputs, outputs, gcIMat)
 		//kwta.ComputeAct(inputs, outputs, gcIMat);
@@ -1320,10 +1329,8 @@ func (kwta *Kwta) ComputeFFFB(inputs, outputs, gcIMat *etensor.Float32) {
 			}
 			avgAct *= float32(normval)
 			layAvgAct += avgAct
-			nwFfi := float32(.5) // todo: just to get a compile
-			nwFbi := float32(.5)
-			//nwFfi := kwta.FFInhib(avgNetin)
-			//nwFbi := kwta.FBInhib(avgAct)
+			nwFfi := kwta.FFInhib(avgNetin)
+			nwFbi := kwta.FBInhib(avgAct)
 
 			fbi := gcIMat.Value([]int{1, ix, iy})
 			fbi = kwta.FbDt*nwFbi + dtc*fbi
@@ -1336,21 +1343,99 @@ func (kwta *Kwta) ComputeFFFB(inputs, outputs, gcIMat *etensor.Float32) {
 	layAvgNetin *= float32(layNormval)
 	layAvgAct *= float32(layNormval)
 
-	nwFfi := float32(.5) // todo: just to get a compile
-	nwFbi := float32(.5)
-	//nwFfi := kwta.FFInhib(layAvgNetin)
-	//nwFbi := kwta.FBInhib(layAvgAct)
+	nwFfi := kwta.FFInhib(layAvgNetin)
+	nwFbi := kwta.FBInhib(layAvgAct)
 	fbi := gcIMat.Value([]int{3, 0, 0}) // 3 = extra guy for layer
 	fbi = kwta.FbDt*nwFbi + dtc*fbi
 	layI := kwta.LayGi * (nwFfi + nwFbi)
 
+	fmt.Println("computefffb before write to gcIMat")
 	for iy := 0; iy < iys; iy++ {
 		for ix := 0; ix < ixs; ix++ {
 			gig := gcIMat.Value([]int{0, ix, iy})
 			gig = math32.Max(gig, layI)
 			gcIMat.SetFloat([]int{0, ix, iy}, float64(gig))
 		}
+		fmt.Println("computefffb done")
 	}
+}
+
+// FFInhib computes feedforward inhibition value as function of netinput
+func (kwta *Kwta) FFInhib(netin float32) float32 {
+	ffi := float32(0.0)
+	if netin > kwta.Ff0 {
+		ffi = kwta.Ff * float32(netin-kwta.Ff0)
+	}
+	return ffi
+}
+
+// FBInhib computes feedback inhibition value as function of activation
+func (kwta *Kwta) FBInhib(act float32) float32 {
+	return kwta.Fb * act
+}
+
+func (kwta *Kwta) ComputeAct(inputs, outputs, gcIMat etensor.Float32) {
+	gxs := inputs.Dim(0)
+	gys := inputs.Dim(1)
+	ixs := inputs.Dim(2)
+	iys := inputs.Dim(3)
+
+	dtc := 1.0 - kwta.ActDt
+	kwta.MaxDa = 0.0
+	for iy := 0; iy < iys; iy++ {
+		for ix := 0; ix < ixs; ix++ {
+			gig := gcIMat.Value([]int{ix, iy})
+			for gy := 0; gy < gys; gy++ {
+				for gx := 0; gx < gxs; gx++ {
+					raw := inputs.Value([]int{gx, gy, ix, iy})
+					ge := kwta.GBarE * raw
+					act := kwta.ComputeActFmIn(ge, gig)
+					//float& out := outputs.FastEl4d(gx, gy, ix, iy)
+					out := outputs.Value([]int{gx, gy, ix, iy})
+					da := math.Abs(float64(act - out))
+					kwta.MaxDa = float32(math.Max(da, float64(kwta.MaxDa)))
+					out = kwta.ActDt*act + dtc*out
+				}
+			}
+		}
+	}
+}
+
+func (kwta *Kwta) ComputeActFmVmNxx1(val, tthr float32) float32 {
+	var newAct float32
+	//valSubThr := val - tthr
+	//if valSubThr <= nxx1_fun.x_range.min {
+	//	newAct = 0.0
+	//} else if valSubThr >= nxx1_fun.x_range.max {
+	//	valSubThr *= kwta.Gain
+	//	newAct = float32(valSubThr) / float32(valSubThr + 1.0))
+	//} else {
+	newAct = kwta.XX1.XX1(val)
+	//newAct = nxx1_fun.Eval(valSubThr)
+	//}
+	return newAct
+}
+
+// ComputeIThresh computes inhibitory threshold value -- amount of inhibition to put unit right at firing threshold membrane potential
+func (kwta *Kwta) ComputeIThresh(gcE float32) float32 {
+	return (gcE*kwta.ERevSubThrE + kwta.GblERevSubThrL) / kwta.ThrSubERevI
+}
+
+// ComputeEqVm computes excitatory threshold value -- amount of excitation to put unit right at firing threshold membrane potential
+func (kwta *Kwta) ComputeEThresh(gcI float32) float32 {
+	return (gcI*kwta.ERevSubThrI + kwta.GblERevSubThrL) / kwta.ThrSubERevE
+}
+
+// ComputeEqVm computes equilibrium membrane potential from excitatory (gcE) and inhibitory (gcI) input currents (gcE = raw filter value, gcI = inhibition computed from kwta) -- in normalized units (ERevE = 1), and Inhib ERevI = ERevL
+func (kwta *Kwta) ComputeEqVm(gcE, gcI float32) float32 {
+	newVM := (gcE*kwta.ERevE + kwta.GBarL + (gcI * kwta.ERevL)) / (gcE + kwta.GBarL + gcI)
+	return newVM
+}
+
+func (kwta *Kwta) ComputeActFmIn(gcE, gcI float32) float32 {
+	// gelin version:
+	geThr := kwta.ComputeEThresh(gcI)
+	return kwta.ComputeActFmVmNxx1(gcE, geThr)
 }
 
 // FFFBParams parameterizes feedforward (FF) and feedback (FB) inhibition (FFFB)
