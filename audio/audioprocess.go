@@ -12,6 +12,7 @@ import (
 	"github.com/chewxy/math32"
 	"github.com/emer/etable/etable"
 	"github.com/emer/etable/etensor"
+	"github.com/emer/leabra/leabra"
 	"gonum.org/v1/gonum/fourier"
 )
 
@@ -323,7 +324,6 @@ type AuditoryProc struct {
 	Gabor3      AudGaborSpec    `viewif:"MelFBank.On=true desc:"full set of frequency / time gabor filters -- third size"`
 	Mfcc        MelCepstrumSpec `viewif:"MelFBank.On=true desc:"specifications of the mel cepstrum discrete cosine transform of the mel fbank filter features"`
 	UseInhib    bool            `viewif:"Gabor1.On=true" desc:"k-winner-take-all inhibitory dynamics for the time-gabor output"`
-	Kwta        Kwta
 
 	// Filters
 	DftSize        int `inactive:"+" desc:" #NO_SAVE full size of fft output -- should be input.win_samples"`
@@ -370,6 +370,9 @@ type AuditoryProc struct {
 
 	MfccDctOut      etensor.Float32 `inactive:"+" desc:" #NO_SAVE discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
 	MfccDctTrialOut etensor.Float32 `inactive:"+" desc:" #NO_SAVE full trial's worth of discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
+
+	NCycles int
+	Layer   *leabra.Layer
 }
 
 // InitFilters
@@ -547,6 +550,7 @@ func (ap *AuditoryProc) Init() bool {
 	ap.Data = &etable.Table{}
 	ap.InitDataTable()
 	ap.InitSound()
+	ap.NCycles = 20
 	ap.UseInhib = true
 	return true
 }
@@ -877,26 +881,40 @@ func (ap *AuditoryProc) GaborFilter(ch int, spec AudGaborSpec, filters etensor.F
 	}
 
 	// todo: ******* in progress *******
+
 	if ap.UseInhib {
+		ap.Layer.Inhib.Pool.On = true
 		rawFrame, err := outRaw.SubSpace(outRaw.NumDims()-1, []int{ch})
 		if err != nil {
 			fmt.Printf("GaborFilter: SubSpace error: %v", err)
 		}
+
+		values := rawFrame.Values
+		for i := 0; i < len(values); i++ {
+			ap.Layer.Neurons[i].Act = values[i]
+		}
+
+		ltime := leabra.Time{}
+		ltime.Cycle = 0
+		for cy := 0; cy < ap.NCycles; cy++ {
+			//ap.Layer.AvgMaxGe(&ltime)
+			//ap.Layer.InhibFmGeAct(&ltime)
+			//ap.Layer.ActFmG(&ltime)
+			//ap.Layer.AvgMaxAct(&ltime)
+			ltime.Cycle += 1
+		}
+
 		outFrame, err := out.SubSpace(outRaw.NumDims()-1, []int{ch})
 		if err != nil {
 			fmt.Printf("GaborFilter: SubSpace error: %v", err)
 		}
-		ap.Kwta.Initialize()
-		ap.Kwta.ComputeOutputsInhib(rawFrame, outFrame, &ap.GaborGci)
-		fmt.Printf("kwta done")
-	}
-	//if (gabor_kwta.On()) {
-	//	gabor_kwta.Compute_Inhib(*raw_frm, *out_frm, gabor_gci);
-	//} else {
-	//	memcpy(out_frm->el, raw_frm->el, raw_frm->size * sizeof(float));
-	//copy(outFrame.Values, rawFrame.Values)
-	//}
 
+		for i := 0; i < outFrame.Len(); i++ {
+			v := float64(ap.Layer.Neurons[i].Act)
+			//fmt.Printf("%v\n", v)
+			outFrame.SetFloat1D(i, v)
+		}
+	}
 }
 
 // FilterWindow filters the current window_in input data according to current settings -- called by ProcessStep, but can be called separately
@@ -1198,432 +1216,4 @@ func (ap *AuditoryProc) MelOutputToTable(dt *etable.Table, ch int, fmtOnly bool)
 		}
 	}
 	return true
-}
-
-type Kwta struct {
-	Gi        float32 // #CONDSHOW_ON_on #DEF_1.5:2 typically between 1.5-2 -- sets overall level of inhibition for feedforward / feedback inhibition at the unit group level (see lay_gi for layer level parameter)
-	LayGi     float32 // #CONDSHOW_ON_on #DEF_1:2 sets overall level of inhibition for feedforward / feedback inhibition for the entire layer level -- the actual inhibition at each unit group is then the MAX of this computed inhibition and that computed for the unit group individually
-	Ff        float32 // #HIDDEN #NO_SAVE #DEF_1 overall inhibitory contribution from feedforward inhibition -- computed from average netinput -- fixed to 1
-	Fb        float32 // #HIDDEN #NO_SAVE #DEF_0.5 overall inhibitory contribution from feedback inhibition -- computed from average activation
-	NCycles   int     // #HIDDEN #NO_SAVE #DEF_20 number of cycle iterations to perform on fffb inhib
-	Cycle     int     // #HIDDEN #NO_SAVE current cycle of fffb settling
-	ActDt     float32 // #HIDDEN #NO_SAVE #DEF_0.3 time constant for integrating activations -- only for FFFB inhib
-	FbDt      float32 // #HIDDEN #NO_SAVE #DEF_0.7 time constant for integrating fb inhib
-	MaxDa     float32 // #HIDDEN #NO_SAVE current max delta activation for fffb settling
-	MaxDaCrit float32 // #HIDDEN #NO_SAVE stopping criterion for activation change for fffb
-	Ff0       float32 // #HIDDEN #NO_SAVE #DEF_0.1 feedforward zero point in terms of average netinput -- below this level, no FF inhibition is computed -- the 0.1 default should be good for most cases -- fixed to 0.1
-	Gain      float32 // #CONDSHOW_ON_on #DEF_20;40;80 gain on the NXX1 activation function (based on g_e - g_e_Thr value -- i.e. the gelin version of the function)
-	NVar      float32 // #CONDSHOW_ON_on #DEF_0.01 noise variance to convolve with XX1 function to obtain NOISY_XX1 function -- higher values make the function more gradual at the bottom
-	GBarL     float32 // #CONDSHOW_ON_on #DEF_0.1;0.3 leak current conductance value -- determines neural response to weak inputs -- a higher value can damp the neural response
-	GBarE     float32 // #HIDDEN #NO_SAVE excitatory conductance multiplier -- multiplies filter input value prior to computing membrane potential -- general target is to have max excitatory input = .5, so with 0-1 normalized inputs, this value is automatically set to .5
-	ERevE     float32 // #HIDDEN #NO_SAVE excitatory reversal potential -- automatically set to default value of 1 in normalized units
-	ERevL     float32 // #HIDDEN #NO_SAVE leak and inhibition reversal potential -- automatically set to 0.3 (gelin default)
-	Thr       float32 // #HIDDEN #NO_SAVE firing Threshold -- automatically set to default value of .5 (gelin default)
-
-	Nxx1Fun   etensor.Float32 // #HIDDEN #NO_SAVE #NO_INHERIT #CAT_Activation convolved gaussian and x/x+1 function as lookup table
-	NoiseConv etensor.Float32 // #HIDDEN #NO_SAVE #NO_INHERIT #CAT_Activation gaussian for convolution
-
-	GlEl           float32 // #READ_ONLY #NO_SAVE kwta.GBarL * e_rev_l -- just a compute time saver
-	ERevSubThrE    float32 // #READ_ONLY #NO_SAVE #HIDDEN e_rev_e - thr -- used for compute_ithresh
-	ERevSubThrI    float32 // #READ_ONLY #NO_SAVE #HIDDEN e_rev_i - thr -- used for compute_ithresh
-	GblERevSubThrL float32 // #READ_ONLY #NO_SAVE #HIDDEN kwta.GBarL * (e_rev_l - thr) -- used for compute_ithresh
-	ThrSubERevI    float32 // #READ_ONLY #NO_SAVE #HIDDEN thr - e_rev_i used for compute_ithresh
-	ThrSubERevE    float32 // #READ_ONLY #NO_SAVE #HIDDEN thr - e_rev_e used for compute_ethresh
-
-	XX1 XX1Params
-}
-
-func (kwta *Kwta) Initialize() {
-	kwta.Gi = 2.0
-	kwta.LayGi = 1.5
-	kwta.Ff = 1.0
-	kwta.Fb = 0.5
-	kwta.Cycle = 0
-	kwta.NCycles = 20
-	kwta.ActDt = 0.3
-	kwta.FbDt = 0.7
-	kwta.MaxDaCrit = 0.005
-	kwta.Ff0 = 0.1
-	kwta.Gain = 80.0
-	kwta.NVar = 0.01
-	kwta.GBarL = 0.1
-
-	// gelin defaults:
-	kwta.GBarE = 0.5
-	kwta.ERevE = 1.0
-	kwta.ERevL = 0.3
-	kwta.Thr = 0.5
-
-	kwta.GlEl = kwta.GBarL * kwta.ERevL
-	kwta.ERevSubThrE = kwta.ERevE - kwta.Thr
-	kwta.ERevSubThrI = kwta.ERevL - kwta.Thr
-	kwta.GblERevSubThrL = kwta.GBarL * (kwta.ERevL - kwta.Thr)
-	kwta.ThrSubERevI = kwta.Thr - kwta.ERevL
-	kwta.ThrSubERevE = kwta.Thr - kwta.ERevE
-}
-
-func (kwta *Kwta) ComputeOutputsInhib(inputs, outputs, gcIMat *etensor.Float32) bool {
-	if inputs.NumDims() != 4 {
-		fmt.Printf("ComputeOutputsInhib: input matrix must have 4 dimensions (equivalent to pools and neurons)")
-		return false
-	}
-
-	gxs := inputs.Dim(0) // within pool x
-	gys := inputs.Dim(1) // within pool y
-	ixs := inputs.Dim(2) // pools (groups) x
-	iys := inputs.Dim(3) // pools (groups) y
-	if gxs == 0 || gys == 0 || ixs == 0 || iys == 0 {
-		fmt.Printf("ComputeOutputsInhib: input matrix has zero length dimension")
-		return false
-	}
-
-	kwta.Cycle = 0
-	gcIMat.SetShape([]int{4, ixs, iys}, nil, nil)
-	for i := 0; i < kwta.NCycles; i++ {
-		kwta.ComputeFFFB(inputs, outputs, gcIMat)
-		//kwta.ComputeAct(inputs, outputs, gcIMat);
-		kwta.Cycle++
-		if kwta.MaxDa < kwta.MaxDaCrit {
-			break
-		}
-	}
-	return true
-}
-
-func (kwta *Kwta) ComputeFFFB(inputs, outputs, gcIMat *etensor.Float32) {
-	gxs := inputs.Dim(0) // within pool x
-	gys := inputs.Dim(1) // within pool y
-	ixs := inputs.Dim(2) // pools (groups) x
-	iys := inputs.Dim(3) // pools (groups) y
-	if gxs == 0 || gys == 0 || ixs == 0 || iys == 0 {
-		return
-	}
-	normval := 1.0 / float32((gxs * gys))
-	layNormval := 1.0 / float32((ixs * iys))
-
-	dtc := 1.0 - kwta.FbDt
-	layAvgNetin := float32(0.0)
-	layAvgAct := float32(0.0)
-
-	maxGi := 0.0
-	for iy := 0; iy < iys; iy++ {
-		for ix := 0; ix < ixs; ix++ {
-			avgNetin := float32(0.0)
-			if kwta.Cycle == 0 {
-				for gy := 0; gy < gys; gy++ {
-					for gx := 0; gx < gxs; gx++ {
-						avgNetin += inputs.Value([]int{gx, gy, ix, iy})
-					}
-				}
-				avgNetin *= float32(normval)
-				gcIMat.SetFloat([]int{2, ix, iy}, float64(avgNetin))
-			} else {
-				avgNetin = gcIMat.Value([]int{2, ix, iy})
-			}
-			layAvgNetin += avgNetin
-			avgAct := float32(0.0)
-			for gy := 0; gy < gys; gy++ {
-				for gx := 0; gx < gxs; gx++ {
-					avgAct += outputs.Value([]int{gx, gy, ix, iy})
-				}
-			}
-			avgAct *= float32(normval)
-			layAvgAct += avgAct
-			nwFfi := kwta.FFInhib(avgNetin)
-			nwFbi := kwta.FBInhib(avgAct)
-
-			fbi := gcIMat.Value([]int{1, ix, iy})
-			fbi = kwta.FbDt*nwFbi + dtc*fbi
-
-			nwGi := float32(kwta.Gi * (nwFfi + nwFbi))
-			gcIMat.SetFloat([]int{0, ix, iy}, float64(nwGi))
-			maxGi = math.Max(maxGi, float64(nwGi))
-		}
-	}
-	layAvgNetin *= float32(layNormval)
-	layAvgAct *= float32(layNormval)
-
-	nwFfi := kwta.FFInhib(layAvgNetin)
-	nwFbi := kwta.FBInhib(layAvgAct)
-	fbi := gcIMat.Value([]int{3, 0, 0}) // 3 = extra guy for layer
-	fbi = kwta.FbDt*nwFbi + dtc*fbi
-	layI := kwta.LayGi * (nwFfi + nwFbi)
-
-	fmt.Println("computefffb before write to gcIMat")
-	for iy := 0; iy < iys; iy++ {
-		for ix := 0; ix < ixs; ix++ {
-			gig := gcIMat.Value([]int{0, ix, iy})
-			gig = math32.Max(gig, layI)
-			gcIMat.SetFloat([]int{0, ix, iy}, float64(gig))
-		}
-		fmt.Println("computefffb done")
-	}
-}
-
-// FFInhib computes feedforward inhibition value as function of netinput
-func (kwta *Kwta) FFInhib(netin float32) float32 {
-	ffi := float32(0.0)
-	if netin > kwta.Ff0 {
-		ffi = kwta.Ff * float32(netin-kwta.Ff0)
-	}
-	return ffi
-}
-
-// FBInhib computes feedback inhibition value as function of activation
-func (kwta *Kwta) FBInhib(act float32) float32 {
-	return kwta.Fb * act
-}
-
-func (kwta *Kwta) ComputeAct(inputs, outputs, gcIMat etensor.Float32) {
-	gxs := inputs.Dim(0)
-	gys := inputs.Dim(1)
-	ixs := inputs.Dim(2)
-	iys := inputs.Dim(3)
-
-	dtc := 1.0 - kwta.ActDt
-	kwta.MaxDa = 0.0
-	for iy := 0; iy < iys; iy++ {
-		for ix := 0; ix < ixs; ix++ {
-			gig := gcIMat.Value([]int{ix, iy})
-			for gy := 0; gy < gys; gy++ {
-				for gx := 0; gx < gxs; gx++ {
-					raw := inputs.Value([]int{gx, gy, ix, iy})
-					ge := kwta.GBarE * raw
-					act := kwta.ComputeActFmIn(ge, gig)
-					//float& out := outputs.FastEl4d(gx, gy, ix, iy)
-					out := outputs.Value([]int{gx, gy, ix, iy})
-					da := math.Abs(float64(act - out))
-					kwta.MaxDa = float32(math.Max(da, float64(kwta.MaxDa)))
-					out = kwta.ActDt*act + dtc*out
-				}
-			}
-		}
-	}
-}
-
-func (kwta *Kwta) ComputeActFmVmNxx1(val, tthr float32) float32 {
-	var newAct float32
-	//valSubThr := val - tthr
-	//if valSubThr <= nxx1_fun.x_range.min {
-	//	newAct = 0.0
-	//} else if valSubThr >= nxx1_fun.x_range.max {
-	//	valSubThr *= kwta.Gain
-	//	newAct = float32(valSubThr) / float32(valSubThr + 1.0))
-	//} else {
-	newAct = kwta.XX1.XX1(val)
-	//newAct = nxx1_fun.Eval(valSubThr)
-	//}
-	return newAct
-}
-
-// ComputeIThresh computes inhibitory threshold value -- amount of inhibition to put unit right at firing threshold membrane potential
-func (kwta *Kwta) ComputeIThresh(gcE float32) float32 {
-	return (gcE*kwta.ERevSubThrE + kwta.GblERevSubThrL) / kwta.ThrSubERevI
-}
-
-// ComputeEqVm computes excitatory threshold value -- amount of excitation to put unit right at firing threshold membrane potential
-func (kwta *Kwta) ComputeEThresh(gcI float32) float32 {
-	return (gcI*kwta.ERevSubThrI + kwta.GblERevSubThrL) / kwta.ThrSubERevE
-}
-
-// ComputeEqVm computes equilibrium membrane potential from excitatory (gcE) and inhibitory (gcI) input currents (gcE = raw filter value, gcI = inhibition computed from kwta) -- in normalized units (ERevE = 1), and Inhib ERevI = ERevL
-func (kwta *Kwta) ComputeEqVm(gcE, gcI float32) float32 {
-	newVM := (gcE*kwta.ERevE + kwta.GBarL + (gcI * kwta.ERevL)) / (gcE + kwta.GBarL + gcI)
-	return newVM
-}
-
-func (kwta *Kwta) ComputeActFmIn(gcE, gcI float32) float32 {
-	// gelin version:
-	geThr := kwta.ComputeEThresh(gcI)
-	return kwta.ComputeActFmVmNxx1(gcE, geThr)
-}
-
-// FFFBParams parameterizes feedforward (FF) and feedback (FB) inhibition (FFFB)
-// based on average (or maximum) netinput (FF) and activation (FB)
-type FFFBParams struct {
-	On       bool    `desc:"enable this level of inhibition"`
-	Gi       float32 `min:"0" def:"1.8" desc:"[1.5-2.3 typical, can go lower or higher as needed] overall inhibition gain -- this is main parameter to adjust to change overall activation levels -- it scales both the the ff and fb factors uniformly"`
-	FF       float32 `viewif:"On" min:"0" def:"1" desc:"overall inhibitory contribution from feedforward inhibition -- multiplies average netinput (i.e., synaptic drive into layer) -- this anticipates upcoming changes in excitation, but if set too high, it can make activity slow to emerge -- see also ff0 for a zero-point for this value"`
-	FB       float32 `viewif:"On" min:"0" def:"1" desc:"overall inhibitory contribution from feedback inhibition -- multiplies average activation -- this reacts to layer activation levels and works more like a thermostat (turning up when the 'heat' in the layer is too high)"`
-	FBTau    float32 `viewif:"On" min:"0" def:"1.4,3,5" desc:"time constant in cycles, which should be milliseconds typically (roughly, how long it takes for value to change significantly -- 1.4x the half-life) for integrating feedback inhibitory values -- prevents oscillations that otherwise occur -- the fast default of 1.4 should be used for most cases but sometimes a slower value (3 or higher) can be more robust, especially when inhibition is strong or inputs are more rapidly changing"`
-	MaxVsAvg float32 `viewif:"On" def:"0,0.5,1" desc:"what proportion of the maximum vs. average netinput to use in the feedforward inhibition computation -- 0 = all average, 1 = all max, and values in between = proportional mix between average and max (ff_netin = avg + ff_max_vs_avg * (max - avg)) -- including more max can be beneficial especially in situations where the average can vary significantly but the activity should not -- max is more robust in many situations but less flexible and sensitive to the overall distribution -- max is better for cases more closely approximating single or strictly fixed winner-take-all behavior -- 0.5 is a good compromise in many cases and generally requires a reduction of .1 or slightly more (up to .3-.5) from the gi value for 0"`
-	FF0      float32 `viewif:"On" def:"0.1" desc:"feedforward zero point for average netinput -- below this level, no FF inhibition is computed based on avg netinput, and this value is subtraced from the ff inhib contribution above this value -- the 0.1 default should be good for most cases (and helps FF_FB produce k-winner-take-all dynamics), but if average netinputs are lower than typical, you may need to lower it"`
-
-	FBDt float32 `inactive:"+" view:"-" desc:"rate = 1 / tau"`
-}
-
-func (fb *FFFBParams) Update() {
-	fb.FBDt = 1 / fb.FBTau
-}
-
-func (fb *FFFBParams) Defaults() {
-	fb.Gi = 1.8
-	fb.FF = 1
-	fb.FB = 1
-	fb.FBTau = 1.4
-	fb.MaxVsAvg = 0
-	fb.FF0 = 0.1
-	fb.Update()
-}
-
-// FFInhib returns the feedforward inhibition value based on average and max excitatory conductance within
-// relevant scope
-func (fb *FFFBParams) FFInhib(avgGe, maxGe float32) float32 {
-	ffNetin := avgGe + fb.MaxVsAvg*(maxGe-avgGe)
-	var ffi float32
-	if ffNetin > fb.FF0 {
-		ffi = fb.FF * (ffNetin - fb.FF0)
-	}
-	return ffi
-}
-
-// FBInhib computes feedback inhibition value as function of average activation
-func (fb *FFFBParams) FBInhib(avgAct float32) float32 {
-	fbi := fb.FB * avgAct
-	return fbi
-}
-
-// FBUpdt updates feedback inhibition using time-integration rate constant
-func (fb *FFFBParams) FBUpdt(fbi *float32, newFbi float32) {
-	*fbi += fb.FBDt * (newFbi - *fbi)
-}
-
-// Inhib is full inhibition computation for given pool activity levels and inhib state
-func (fb *FFFBParams) Inhib(avgGe, maxGe, avgAct float32, inh *FFFBInhib) {
-	if !fb.On {
-		inh.Init()
-		return
-	}
-
-	ffi := fb.FFInhib(avgGe, maxGe)
-	fbi := fb.FBInhib(avgAct)
-
-	inh.FFi = ffi
-	fb.FBUpdt(&inh.FBi, fbi)
-
-	inh.Gi = fb.Gi * (ffi + inh.FBi)
-	inh.GiOrig = inh.Gi
-}
-
-// FFFBInhib contains values for computed FFFB inhibition
-type FFFBInhib struct {
-	FFi    float32 `desc:"computed feedforward inhibition"`
-	FBi    float32 `desc:"computed feedback inhibition (total)"`
-	Gi     float32 `desc:"overall value of the inhibition -- this is what is added into the unit Gi inhibition level (along with any synaptic unit-driven inhibition)"`
-	GiOrig float32 `desc:"original value of the inhibition (before any  group effects set in)"`
-	LayGi  float32 `desc:"for pools, this is the layer-level inhibition that is MAX'd with the pool-level inhibition to produce the net inhibition"`
-}
-
-func (fi *FFFBInhib) Init() {
-	fi.FFi = 0
-	fi.FBi = 0
-	fi.Gi = 0
-	fi.GiOrig = 0
-	fi.LayGi = 0
-}
-
-///////////////////////////////////////////////////////////////////////
-//  XX1Params
-
-// XX1Params are the X/(X+1) rate-coded activation function parameters for leabra
-// using the GeLin (g_e linear) rate coded activation function
-type XX1Params struct {
-	Thr          float32 `def:"0.5" desc:"threshold value Theta (Q) for firing output activation (.5 is more accurate value based on AdEx biological parameters and normalization"`
-	Gain         float32 `def:"80,100,40,20" min:"0" desc:"gain (gamma) of the rate-coded activation functions -- 100 is default, 80 works better for larger models, and 20 is closer to the actual spiking behavior of the AdEx model -- use lower values for more graded signals, generally in lower input/sensory layers of the network"`
-	NVar         float32 `def:"0.005,0.01" min:"0" desc:"variance of the Gaussian noise kernel for convolving with XX1 in NOISY_XX1 and NOISY_LINEAR -- determines the level of curvature of the activation function near the threshold -- increase for more graded responding there -- note that this is not actual stochastic noise, just constant convolved gaussian smoothness to the activation function"`
-	VmActThr     float32 `def:"0.01" desc:"threshold on activation below which the direct vm - act.thr is used -- this should be low -- once it gets active should use net - g_e_thr ge-linear dynamics (gelin)"`
-	SigMult      float32 `def:"0.33" view:"-" desc:"multiplier on sigmoid used for computing values for net < thr"`
-	SigMultPow   float32 `def:"0.8" view:"-" desc:"power for computing sig_mult_eff as function of gain * nvar"`
-	SigGain      float32 `def:"3" view:"-" desc:"gain multipler on (net - thr) for sigmoid used for computing values for net < thr"`
-	InterpRange  float32 `def:"0.01" view:"-" desc:"interpolation range above zero to use interpolation"`
-	GainCorRange float32 `def:"10" view:"-" desc:"range in units of nvar over which to apply gain correction to compensate for convolution"`
-	GainCor      float32 `def:"0.1" view:"-" desc:"gain correction multiplier -- how much to correct gains"`
-
-	SigGainNVar float32 `view:"-" desc:"sig_gain / nvar"`
-	SigMultEff  float32 `view:"-" desc:"overall multiplier on sigmoidal component for values below threshold = sig_mult * pow(gain * nvar, sig_mult_pow)"`
-	SigValAt0   float32 `view:"-" desc:"0.5 * sig_mult_eff -- used for interpolation portion"`
-	InterpVal   float32 `view:"-" desc:"function value at interp_range - sig_val_at_0 -- for interpolation"`
-}
-
-func (xp *XX1Params) Update() {
-	xp.SigGainNVar = xp.SigGain / xp.NVar
-	xp.SigMultEff = xp.SigMult * math32.Pow(xp.Gain*xp.NVar, xp.SigMultPow)
-	xp.SigValAt0 = 0.5 * xp.SigMultEff
-	xp.InterpVal = xp.XX1GainCor(xp.InterpRange) - xp.SigValAt0
-}
-
-func (xp *XX1Params) Defaults() {
-	xp.Thr = 0.5
-	xp.Gain = 100
-	xp.NVar = 0.005
-	xp.VmActThr = 0.01
-	xp.SigMult = 0.33
-	xp.SigMultPow = 0.8
-	xp.SigGain = 3.0
-	xp.InterpRange = 0.01
-	xp.GainCorRange = 10.0
-	xp.GainCor = 0.1
-	xp.Update()
-}
-
-// XX1 computes the basic x/(x+1) function
-func (xp *XX1Params) XX1(x float32) float32 { return x / (x + 1) }
-
-// XX1GainCor computes x/(x+1) with gain correction within GainCorRange
-// to compensate for convolution effects
-func (xp *XX1Params) XX1GainCor(x float32) float32 {
-	gainCorFact := (xp.GainCorRange - (x / xp.NVar)) / xp.GainCorRange
-	if gainCorFact < 0 {
-		return xp.XX1(xp.Gain * x)
-	}
-	newGain := xp.Gain * (1 - xp.GainCor*gainCorFact)
-	return xp.XX1(newGain * x)
-}
-
-// NoisyXX1 computes the Noisy x/(x+1) function -- directly computes close approximation
-// to x/(x+1) convolved with a gaussian noise function with variance nvar.
-// No need for a lookup table -- very reasonable approximation for standard range of parameters
-// (nvar = .01 or less -- higher values of nvar are less accurate with large gains,
-// but ok for lower gains)
-func (xp *XX1Params) NoisyXX1(x float32) float32 {
-	if x < 0 { // sigmoidal for < 0
-		return xp.SigMultEff / (1 + math32.Exp(-(x * xp.SigGainNVar)))
-	} else if x < xp.InterpRange {
-		interp := 1 - ((xp.InterpRange - x) / xp.InterpRange)
-		return xp.SigValAt0 + interp*xp.InterpVal
-	} else {
-		return xp.XX1GainCor(x)
-	}
-}
-
-// X11GainCorGain computes x/(x+1) with gain correction within GainCorRange
-// to compensate for convolution effects -- using external gain factor
-func (xp *XX1Params) XX1GainCorGain(x, gain float32) float32 {
-	gainCorFact := (xp.GainCorRange - (x / xp.NVar)) / xp.GainCorRange
-	if gainCorFact < 0 {
-		return xp.XX1(gain * x)
-	}
-	newGain := gain * (1 - xp.GainCor*gainCorFact)
-	return xp.XX1(newGain * x)
-}
-
-// NoisyXX1Gain computes the noisy x/(x+1) function -- directly computes close approximation
-// to x/(x+1) convolved with a gaussian noise function with variance nvar.
-// No need for a lookup table -- very reasonable approximation for standard range of parameters
-// (nvar = .01 or less -- higher values of nvar are less accurate with large gains,
-// but ok for lower gains).  Using external gain factor.
-func (xp *XX1Params) NoisyXX1Gain(x, gain float32) float32 {
-	if x < xp.InterpRange {
-		sigMultEffArg := xp.SigMult * math32.Pow(gain*xp.NVar, xp.SigMultPow)
-		sigValAt0Arg := 0.5 * sigMultEffArg
-
-		if x < 0 { // sigmoidal for < 0
-			return sigMultEffArg / (1 + math32.Exp(-(x * xp.SigGainNVar)))
-		} else { // else x < interp_range
-			interp := 1 - ((xp.InterpRange - x) / xp.InterpRange)
-			return sigValAt0Arg + interp*xp.InterpVal
-		}
-	} else {
-		return xp.XX1GainCorGain(x, gain)
-	}
 }
