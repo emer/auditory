@@ -12,6 +12,7 @@ import (
 	"github.com/chewxy/math32"
 	"github.com/emer/etable/etable"
 	"github.com/emer/etable/etensor"
+	"github.com/emer/etable/minmax"
 	"github.com/emer/leabra/leabra"
 	"gonum.org/v1/gonum/fourier"
 )
@@ -112,8 +113,8 @@ func (ad *AudDftSpec) Initialize() {
 // AudRenormSpec holds the auditory renormalization parameters
 type AudRenormSpec struct {
 	On          bool    `desc:"perform renormalization of this level of the auditory signal"`
-	RenormMin   float32 `viewif:"On" desc:"minimum value to use for renormalization -- you must experiment with range of inputs to determine appropriate values"`
-	RenormMax   float32 `viewif:"On" desc:"maximum value to use for renormalization -- you must experiment with range of inputs to determine appropriate values"`
+	RenormMin   float32 `viewif:"On" desc:"minimum value to use for renormalization -- you must exx1eriment with range of inputs to determine appropriate values"`
+	RenormMax   float32 `viewif:"On" desc:"maximum value to use for renormalization -- you must exx1eriment with range of inputs to determine appropriate values"`
 	RenormScale float32 `inactive:"+" desc:"1.0 / (ren_max - ren_min)"`
 }
 
@@ -360,7 +361,7 @@ type AuditoryProc struct {
 	MelFBankOut      etensor.Float32 `inactive:"+" desc:" #NO_SAVE [mel.n_filters] mel scale transformation of dft_power, using triangular filters, resulting in the mel filterbank output -- the natural log of this is typically applied"`
 	MelFBankTrialOut etensor.Float32 `inactive:"+" desc:" #NO_SAVE [mel.n_filters][input.total_steps][input.channels] full trial's worth of mel feature-bank output -- only if using gabors"`
 
-	GaborGci  etensor.Float32 `inactive:"+" desc:" #NO_SAVE inhibitory conductances, for computing kwta"`
+	//GaborGci  etensor.Float32 `inactive:"+" desc:" #NO_SAVE inhibitory conductances, for computing kwta"`
 	Gabor1Raw etensor.Float32 `inactive:"+" desc:" #NO_SAVE [gabor.n_filters*2][mel.n_filters][input.trial_steps][input.channels] raw output of gabor1 -- full trial's worth of gabor steps"`
 	Gabor1Out etensor.Float32 `inactive:"+" desc:" #NO_SAVE [gabor.n_filters*2][mel.n_filters][input.trial_steps][input.channels] post-kwta output of full trial's worth of gabor steps"`
 	Gabor2Raw etensor.Float32 `inactive:"+" desc:" #NO_SAVE [gabor.n_filters*2][mel.n_filters][input.trial_steps][input.channels] raw output of gabor1 -- full trial's worth of gabor steps"`
@@ -880,39 +881,76 @@ func (ap *AuditoryProc) GaborFilter(ch int, spec AudGaborSpec, filters etensor.F
 		}
 	}
 
-	// todo: ******* in progress *******
-
 	if ap.UseInhib {
 		ap.Layer.Inhib.Pool.On = true
 		rawFrame, err := outRaw.SubSpace(outRaw.NumDims()-1, []int{ch})
 		if err != nil {
 			fmt.Printf("GaborFilter: SubSpace error: %v", err)
 		}
-
-		values := rawFrame.Values
-		for i := 0; i < len(values); i++ {
-			ap.Layer.Neurons[i].Act = values[i]
-		}
-
-		ltime := leabra.Time{}
-		ltime.Cycle = 0
-		for cy := 0; cy < ap.NCycles; cy++ {
-			//ap.Layer.AvgMaxGe(&ltime)
-			//ap.Layer.InhibFmGeAct(&ltime)
-			//ap.Layer.ActFmG(&ltime)
-			//ap.Layer.AvgMaxAct(&ltime)
-			ltime.Cycle += 1
-		}
-
 		outFrame, err := out.SubSpace(outRaw.NumDims()-1, []int{ch})
 		if err != nil {
 			fmt.Printf("GaborFilter: SubSpace error: %v", err)
 		}
 
-		for i := 0; i < outFrame.Len(); i++ {
-			v := float64(ap.Layer.Neurons[i].Act)
-			//fmt.Printf("%v\n", v)
-			outFrame.SetFloat1D(i, v)
+		// Chans are ion channels used in computing point-neuron activation function
+		type Chans struct {
+			E float32 `desc:"excitatory sodium (Na) AMPA channels activated by synaptic glutamate"`
+			L float32 `desc:"constant leak (potassium, K+) channels -- determines resting potential (typically higher than resting potential of K)"`
+			I float32 `desc:"inhibitory chloride (Cl-) channels activated by synaptic GABA"`
+			K float32 `desc:"gated / active potassium channels -- typically hyperpolarizing relative to leak / rest"`
+		}
+
+		type ActParams struct {
+			Gbar       Chans `view:"inline" desc:"[Defaults: 1, .2, 1, 1] maximal conductances levels for channels"`
+			Erev       Chans `view:"inline" desc:"[Defaults: 1, .3, .25, .1] reversal potentials for each channel"`
+			ErevSubThr Chans `inactive:"+" view:"-" desc:"Erev - Act.Thr for each channel -- used in computing GeThrFmG among others"`
+		}
+
+		xx1 := leabra.XX1Params{}
+		xx1.Defaults()
+		xx1.Gain = .9
+
+		inhibPars := leabra.FFFBParams{}
+		inhibPars.Defaults()
+		inhib := leabra.FFFBInhib{}
+
+		values := rawFrame.Values // these are ge
+		acts := make([]float32, 0)
+		acts = append(acts, values...)
+		avgMaxGe := minmax.AvgMax32{}
+		avgMaxAct := minmax.AvgMax32{}
+		for i, ge := range acts {
+			avgMaxGe.UpdateVal(ge, i)
+		}
+		actParams := ActParams{}
+		actParams.Gbar.E = 1.0
+		actParams.Gbar.L = 0.2
+		actParams.Gbar.I = 1.0
+		actParams.Gbar.K = 1.0
+		actParams.Erev.E = 1.0
+		actParams.Erev.L = 0.3
+		actParams.Erev.I = 0.25
+		actParams.Erev.K = 0.1
+
+		// these really should be calculated - see update method in Act
+		actParams.ErevSubThr.E = 0.5
+		actParams.ErevSubThr.L = -0.19999999
+		actParams.ErevSubThr.I = -0.25
+		actParams.ErevSubThr.K = -0.4
+
+		cycles := 20
+		for cy := 0; cy < cycles; cy++ {
+			inhibPars.Inhib(avgMaxGe.Avg, avgMaxGe.Max, avgMaxAct.Avg, &inhib)
+			geThr := float32((actParams.Gbar.I*inhib.Gi*actParams.ErevSubThr.I + actParams.Gbar.L*actParams.ErevSubThr.L) / actParams.ErevSubThr.E)
+			for i, act := range acts {
+				nwAct := xx1.NoisyXX1(act*float32(actParams.Gbar.E) - geThr) // act is ge
+				avgMaxAct.UpdateVal(nwAct, i)
+				acts[i] = nwAct
+			}
+		}
+		for i, act := range acts {
+			fmt.Printf("%v\n", act)
+			outFrame.SetFloat1D(i, float64(act))
 		}
 	}
 }
