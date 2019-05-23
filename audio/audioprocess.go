@@ -885,11 +885,12 @@ func (ap *AuditoryProc) GaborFilter(ch int, spec AudGaborSpec, filters etensor.F
 
 	if ap.UseInhib {
 		ap.Layer.Inhib.Pool.On = true
-		rawFrame, err := outRaw.SubSpace(outRaw.NumDims()-1, []int{ch})
+		rawSS, err := outRaw.SubSpace(outRaw.NumDims()-1, []int{ch})
 		if err != nil {
 			fmt.Printf("GaborFilter: SubSpace error: %v", err)
 		}
-		outFrame, err := out.SubSpace(outRaw.NumDims()-1, []int{ch})
+		raw := rawSS.(*etensor.Float32)
+		outSS, err := out.SubSpace(outRaw.NumDims()-1, []int{ch})
 		if err != nil {
 			fmt.Printf("GaborFilter: SubSpace error: %v", err)
 		}
@@ -932,7 +933,7 @@ func (ap *AuditoryProc) GaborFilter(ch int, spec AudGaborSpec, filters etensor.F
 
 		//max_delta_crit := float32(.005)
 
-		values := rawFrame.Values // these are ge
+		values := raw.Values // these are ge
 		acts := make([]float32, 0)
 		acts = append(acts, values...)
 		avgMaxGe := minmax.AvgMax32{}
@@ -959,7 +960,7 @@ func (ap *AuditoryProc) GaborFilter(ch int, spec AudGaborSpec, filters etensor.F
 		}
 		for i, act := range acts {
 			//fmt.Printf("%v\n", act)
-			outFrame.SetFloat1D(i, float64(act))
+			outSS.SetFloat1D(i, float64(act))
 		}
 	}
 }
