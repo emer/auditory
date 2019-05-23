@@ -113,8 +113,8 @@ func (ad *AudDftSpec) Initialize() {
 // AudRenormSpec holds the auditory renormalization parameters
 type AudRenormSpec struct {
 	On          bool    `desc:"perform renormalization of this level of the auditory signal"`
-	RenormMin   float32 `viewif:"On" desc:"minimum value to use for renormalization -- you must exx1eriment with range of inputs to determine appropriate values"`
-	RenormMax   float32 `viewif:"On" desc:"maximum value to use for renormalization -- you must exx1eriment with range of inputs to determine appropriate values"`
+	RenormMin   float32 `viewif:"On" desc:"minimum value to use for renormalization -- you must experiment with range of inputs to determine appropriate values"`
+	RenormMax   float32 `viewif:"On" desc:"maximum value to use for renormalization -- you must experiment with range of inputs to determine appropriate values"`
 	RenormScale float32 `inactive:"+" desc:"1.0 / (ren_max - ren_min)"`
 }
 
@@ -542,7 +542,9 @@ func (ap *AuditoryProc) Init() bool {
 	ap.FBankRenorm.Initialize()
 	ap.Gabor1.Initialize()
 	ap.Gabor2.Initialize()
+	ap.Gabor2.On = false
 	ap.Gabor3.Initialize()
+	ap.Gabor3.On = false
 	ap.UpdateConfig()
 	ap.Mfcc.Initialize()
 
@@ -906,13 +908,29 @@ func (ap *AuditoryProc) GaborFilter(ch int, spec AudGaborSpec, filters etensor.F
 			ErevSubThr Chans `inactive:"+" view:"-" desc:"Erev - Act.Thr for each channel -- used in computing GeThrFmG among others"`
 		}
 
+		ac := ActParams{}
+		ac.Gbar.E = 1.0
+		ac.Gbar.L = 0.2
+		ac.Gbar.I = 1.0
+		ac.Gbar.K = 1.0
+		ac.Erev.E = 1.0
+		ac.Erev.L = 0.3
+		ac.Erev.I = 0.25
+		ac.Erev.K = 0.1
+		// these really should be calculated - see update method in Act
+		ac.ErevSubThr.E = 0.5
+		ac.ErevSubThr.L = -0.19999999
+		ac.ErevSubThr.I = -0.25
+		ac.ErevSubThr.K = -0.4
+
 		xx1 := leabra.XX1Params{}
 		xx1.Defaults()
-		xx1.Gain = .9
 
 		inhibPars := leabra.FFFBParams{}
 		inhibPars.Defaults()
 		inhib := leabra.FFFBInhib{}
+
+		//max_delta_crit := float32(.005)
 
 		values := rawFrame.Values // these are ge
 		acts := make([]float32, 0)
@@ -922,34 +940,25 @@ func (ap *AuditoryProc) GaborFilter(ch int, spec AudGaborSpec, filters etensor.F
 		for i, ge := range acts {
 			avgMaxGe.UpdateVal(ge, i)
 		}
-		actParams := ActParams{}
-		actParams.Gbar.E = 1.0
-		actParams.Gbar.L = 0.2
-		actParams.Gbar.I = 1.0
-		actParams.Gbar.K = 1.0
-		actParams.Erev.E = 1.0
-		actParams.Erev.L = 0.3
-		actParams.Erev.I = 0.25
-		actParams.Erev.K = 0.1
 
-		// these really should be calculated - see update method in Act
-		actParams.ErevSubThr.E = 0.5
-		actParams.ErevSubThr.L = -0.19999999
-		actParams.ErevSubThr.I = -0.25
-		actParams.ErevSubThr.K = -0.4
-
+		fmt.Println()
 		cycles := 20
 		for cy := 0; cy < cycles; cy++ {
 			inhibPars.Inhib(avgMaxGe.Avg, avgMaxGe.Max, avgMaxAct.Avg, &inhib)
-			geThr := float32((actParams.Gbar.I*inhib.Gi*actParams.ErevSubThr.I + actParams.Gbar.L*actParams.ErevSubThr.L) / actParams.ErevSubThr.E)
+			fmt.Printf("geAvg: %v, geMax: %v, actMax: %v\n", avgMaxGe.Avg, avgMaxGe.Max, avgMaxAct.Max)
+			geThr := float32((ac.Gbar.I*inhib.Gi*ac.ErevSubThr.I + ac.Gbar.L*ac.ErevSubThr.L) / ac.ErevSubThr.E)
+			//max := avgMaxAct.Max
 			for i, act := range acts {
-				nwAct := xx1.NoisyXX1(act*float32(actParams.Gbar.E) - geThr) // act is ge
-				avgMaxAct.UpdateVal(nwAct, i)
+				nwAct := xx1.NoisyXX1(act*float32(ac.Gbar.E) - geThr) // act is ge
 				acts[i] = nwAct
+				avgMaxAct.UpdateVal(nwAct, i)
 			}
+			//if avgMaxAct.Max - max < max_delta_crit {
+			//	break
+			//}
 		}
 		for i, act := range acts {
-			fmt.Printf("%v\n", act)
+			//fmt.Printf("%v\n", act)
 			outFrame.SetFloat1D(i, float64(act))
 		}
 	}
