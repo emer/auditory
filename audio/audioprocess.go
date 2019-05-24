@@ -701,15 +701,8 @@ func (ap *AuditoryProc) GaborFilter(ch int, spec Gabor, filters etensor.Float32,
 
 	if ap.UseInhib {
 		ap.Layer.Inhib.Pool.On = true
-		rawSS, err := outRaw.SubSpace(outRaw.NumDims()-1, []int{ch})
-		if err != nil {
-			fmt.Printf("GaborFilter: SubSpace error: %v", err)
-		}
-		raw := rawSS.(*etensor.Float32)
-		outSS, err := out.SubSpace(outRaw.NumDims()-1, []int{ch})
-		if err != nil {
-			fmt.Printf("GaborFilter: SubSpace error: %v", err)
-		}
+		rawSS := outRaw.SubSpace(outRaw.NumDims()-1, []int{ch}).(*etensor.Float32)
+		outSS := out.SubSpace(outRaw.NumDims()-1, []int{ch}).(*etensor.Float32)
 
 		// Chans are ion channels used in computing point-neuron activation function
 		type Chans struct {
@@ -749,7 +742,7 @@ func (ap *AuditoryProc) GaborFilter(ch int, spec Gabor, filters etensor.Float32,
 
 		//max_delta_crit := float32(.005)
 
-		values := raw.Values // these are ge
+		values := rawSS.Values // these are ge
 		acts := make([]float32, 0)
 		acts = append(acts, values...)
 		avgMaxGe := minmax.AvgMax32{}
@@ -828,7 +821,7 @@ func (ap *AuditoryProc) MelOutputToTable(dt *etable.Table, ch int, fmtOnly bool)
 
 	if fmtOnly == false {
 		colAsF32 := dt.ColByName(cn).(*etensor.Float32)
-		dout, err := colAsF32.SubSpace(2, []int{dt.Rows - 1})
+		dout, err := colAsF32.SubSpaceTry(2, []int{dt.Rows - 1})
 		if err != nil {
 			fmt.Printf("MelOutputToTable: subspacing error")
 			return false
@@ -858,7 +851,7 @@ func (ap *AuditoryProc) MelOutputToTable(dt *etable.Table, ch int, fmtOnly bool)
 		}
 		if fmtOnly == false {
 			colAsF32 := dt.ColByName(cn).(*etensor.Float32)
-			dout, err := colAsF32.SubSpace(2, []int{dt.Rows - 1})
+			dout, err := colAsF32.SubSpaceTry(2, []int{dt.Rows - 1})
 			if err != nil {
 				fmt.Printf("MelOutputToTable: subspacing error")
 				return false
@@ -885,7 +878,7 @@ func (ap *AuditoryProc) MelOutputToTable(dt *etable.Table, ch int, fmtOnly bool)
 
 		if fmtOnly == false {
 			colAsF32 := dt.ColByName(cn).(*etensor.Float32)
-			dout, err := colAsF32.SubSpace(4, []int{dt.Rows - 1})
+			dout, err := colAsF32.SubSpaceTry(4, []int{dt.Rows - 1})
 			if err != nil {
 				fmt.Printf("MelOutputToTable: mel_gabor1_raw subspacing error")
 				return false
@@ -914,7 +907,7 @@ func (ap *AuditoryProc) MelOutputToTable(dt *etable.Table, ch int, fmtOnly bool)
 		}
 		if fmtOnly == false {
 			colAsF32 := dt.ColByName(cn).(*etensor.Float32)
-			dout, err := colAsF32.SubSpace(4, []int{dt.Rows - 1})
+			dout, err := colAsF32.SubSpaceTry(4, []int{dt.Rows - 1})
 			if err != nil {
 				fmt.Printf("MelOutputToTable: mel_gabor1 subspacing error")
 				return false
@@ -945,7 +938,7 @@ func (ap *AuditoryProc) MelOutputToTable(dt *etable.Table, ch int, fmtOnly bool)
 		}
 		if fmtOnly == false {
 			colAsF32 := dt.ColByName(cn).(*etensor.Float32)
-			dout, err := colAsF32.SubSpace(4, []int{dt.Rows - 1})
+			dout, err := colAsF32.SubSpaceTry(4, []int{dt.Rows - 1})
 			if err != nil {
 				fmt.Printf("MelOutputToTable: mel_gabor2_raw subspacing error")
 				return false
@@ -974,7 +967,7 @@ func (ap *AuditoryProc) MelOutputToTable(dt *etable.Table, ch int, fmtOnly bool)
 		}
 		if fmtOnly == false {
 			colAsF32 := dt.ColByName(cn).(*etensor.Float32)
-			dout, err := colAsF32.SubSpace(4, []int{dt.Rows - 1})
+			dout, err := colAsF32.SubSpaceTry(4, []int{dt.Rows - 1})
 			if err != nil {
 				fmt.Printf("MelOutputToTable: mel_gabor2 subspacing error")
 				return false
@@ -1005,7 +998,7 @@ func (ap *AuditoryProc) MelOutputToTable(dt *etable.Table, ch int, fmtOnly bool)
 		}
 		if fmtOnly == false {
 			colAsF32 := dt.ColByName(cn).(*etensor.Float32)
-			dout, err := colAsF32.SubSpace(4, []int{dt.Rows - 1})
+			dout, err := colAsF32.SubSpaceTry(4, []int{dt.Rows - 1})
 			if err != nil {
 				fmt.Printf("MelOutputToTable: mel_gabor3_raw subspacing error")
 				return false
@@ -1034,7 +1027,7 @@ func (ap *AuditoryProc) MelOutputToTable(dt *etable.Table, ch int, fmtOnly bool)
 		}
 		if fmtOnly == false {
 			colAsF32 := dt.ColByName(cn).(*etensor.Float32)
-			dout, err := colAsF32.SubSpace(4, []int{dt.Rows - 1})
+			dout, err := colAsF32.SubSpaceTry(4, []int{dt.Rows - 1})
 			if err != nil {
 				fmt.Printf("MelOutputToTable: mel_gabor3 subspacing error")
 				return false
@@ -1066,7 +1059,7 @@ func (ap *AuditoryProc) MelOutputToTable(dt *etable.Table, ch int, fmtOnly bool)
 		}
 		if fmtOnly == false {
 			colAsF32 := dt.ColByName(cn).(*etensor.Float32)
-			dout, err := colAsF32.SubSpace(2, []int{dt.Rows - 1})
+			dout, err := colAsF32.SubSpaceTry(2, []int{dt.Rows - 1})
 			if err != nil {
 				fmt.Printf("MelOutputToTable: mel_mfcc subspacing error")
 				return false
