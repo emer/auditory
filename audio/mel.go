@@ -1,8 +1,12 @@
 package audio
 
 import (
+	"fmt"
+	"math"
+
 	"github.com/chewxy/math32"
 	"github.com/emer/etable/etensor"
+	"gonum.org/v1/gonum/fourier"
 )
 
 // RenormSpec holds the auditory renormalization parameters
@@ -46,7 +50,16 @@ type Mel struct {
 	MelFBankOut      etensor.Float32 `inactive:"+" desc:" #NO_SAVE [mel.n_filters] mel scale transformation of dft_power, using triangular filters, resulting in the mel filterbank output -- the natural log of this is typically applied"`
 	MelFBankTrialOut etensor.Float32 `inactive:"+" desc:" #NO_SAVE [mel.n_filters][input.total_steps][input.channels] full trial's worth of mel feature-bank output -- only if using gabors"`
 
-	DftUse int `inactive:"+" desc:" #NO_SAVE number of dft outputs to actually use -- should be dft_size / 2 + 1"`
+	Dft                 AudDftSpec         `desc:"specifications for how to compute the discrete fourier transform (DFT, using FFT)"`
+	DftUse              int                `inactive:"+" desc:" #NO_SAVE number of dft outputs to actually use -- should be dft_size / 2 + 1"`
+	DftOut              etensor.Complex128 `inactive:"+" desc:" #NO_SAVE [dft_size] discrete fourier transform (fft) output complex representation"`
+	DftPowerOut         etensor.Float32    `inactive:"+" desc:" #NO_SAVE [dft_use] power of the dft, up to the nyquist limit frequency (1/2 input.win_samples)"`
+	DftLogPowerOut      etensor.Float32    `inactive:"+" desc:" #NO_SAVE [dft_use] log power of the dft, up to the nyquist liit frequency (1/2 input.win_samples)"`
+	DftPowerTrialOut    etensor.Float32    `inactive:"+" desc:" #NO_SAVE [dft_use][input.total_steps][input.channels] full trial's worth of power of the dft, up to the nyquist limit frequency (1/2 input.win_samples)"`
+	DftLogPowerTrialOut etensor.Float32    `inactive:"+" desc:" #NO_SAVE [dft_use][input.total_steps][input.channels] full trial's worth of log power of the dft, up to the nyquist limit frequency (1/2 input.win_samples)"`
+	Mfcc                MelCepstrumSpec    `viewif:"MelFBank.On=true desc:"specifications of the mel cepstrum discrete cosine transform of the mel fbank filter features"`
+	MfccDctOut          etensor.Float32    `inactive:"+" desc:" #NO_SAVE discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
+	MfccDctTrialOut     etensor.Float32    `inactive:"+" desc:" #NO_SAVE full trial's worth of discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
 }
 
 // InitFiltersMel
@@ -166,4 +179,109 @@ type MelCepstrumSpec struct {
 func (mc *MelCepstrumSpec) Initialize() {
 	mc.On = false
 	mc.NCoeff = 13
+}
+
+// FilterWindow filters the current window_in input data according to current settings -- called by ProcessStep, but can be called separately
+func (mel *Mel) FilterWindow(ch int, step int, windowIn etensor.Float32, firstStep bool) bool {
+	mel.FftReal(mel.DftOut, windowIn)
+	mel.DftInput(windowIn.Floats1D(), windowIn)
+	if mel.MelFBank.On {
+		mel.PowerOfDft(ch, step, firstStep)
+		mel.MelFilterDft(ch, step, &mel.DftPowerOut)
+		if mel.Mfcc.On {
+			mel.CepstrumDctMel(ch, step)
+		}
+	}
+	return true
+}
+
+// FftReal
+func (mel *Mel) FftReal(out etensor.Complex128, in etensor.Float32) bool {
+	if !out.IsEqual(&in.Shape) {
+		fmt.Printf("FftReal: out shape different from in shape - modifying out to match")
+		out.CopyShape(&in.Shape)
+	}
+	if out.NumDims() == 1 {
+		for i := 0; i < out.Len(); i++ {
+			out.SetFloat1D(i, in.FloatVal1D(i))
+			out.SetFloat1DImag(i, 0)
+		}
+	}
+	return true
+}
+
+// DftInput applies dft (fft) to input
+func (mel *Mel) DftInput(windowInVals []float64, windowIn etensor.Float32) {
+	mel.FftReal(mel.DftOut, windowIn)
+	fft := fourier.NewCmplxFFT(mel.DftOut.Len())
+	mel.DftOut.Values = fft.Coefficients(nil, mel.DftOut.Values)
+}
+
+// PowerOfDft
+func (mel *Mel) PowerOfDft(ch, step int, firstStep bool) {
+	// Mag() is absolute value   SqMag is square of it - r*r + i*i
+	for k := 0; k < int(mel.DftUse); k++ {
+		rl := mel.DftOut.FloatVal1D(k)
+		im := mel.DftOut.FloatVal1DImag(k)
+		powr := float64(rl*rl + im*im) // why is complex converted to float here
+		if firstStep == false {
+			powr = float64(mel.Dft.PreviousSmooth)*mel.DftPowerOut.FloatVal1D(k) + float64(mel.Dft.CurrentSmooth)*powr
+		}
+		mel.DftPowerOut.SetFloat1D(k, powr)
+		mel.DftPowerTrialOut.SetFloat([]int{k, step, ch}, powr)
+
+		var logp float64
+		if mel.Dft.LogPow {
+			powr += float64(mel.Dft.LogOff)
+			if powr == 0 {
+				logp = float64(mel.Dft.LogMin)
+			} else {
+				logp = math.Log(powr)
+			}
+			mel.DftLogPowerOut.SetFloat1D(k, logp)
+			mel.DftLogPowerTrialOut.SetFloat([]int{k, step, ch}, logp)
+		}
+	}
+}
+
+// CopyStepFromStep
+func (mel *Mel) CopyStepFromStep(toStep, fmStep, ch int) bool {
+	for i := 0; i < int(mel.DftUse); i++ {
+		val := mel.DftPowerTrialOut.Value([]int{i, fmStep, ch})
+		mel.DftPowerTrialOut.Set([]int{i, toStep, ch}, val)
+		if mel.Dft.LogPow {
+			val := mel.DftLogPowerTrialOut.Value([]int{i, fmStep, ch})
+			mel.DftLogPowerTrialOut.Set([]int{i, toStep, ch}, val)
+		}
+	}
+	if mel.MelFBank.On {
+		for i := 0; i < int(mel.MelFBank.NFilters); i++ {
+			val := mel.MelFBankTrialOut.Value([]int{i, fmStep, ch})
+			mel.MelFBankTrialOut.Set([]int{i, toStep, ch}, val)
+		}
+		if mel.Mfcc.On {
+			for i := 0; i < int(mel.MelFBank.NFilters); i++ {
+				val := mel.MfccDctTrialOut.Value([]int{i, fmStep, ch})
+				mel.MfccDctTrialOut.Set([]int{i, toStep, ch}, val)
+			}
+		}
+	}
+	return true
+}
+
+// CepstrumDctMel
+func (mel *Mel) CepstrumDctMel(ch, step int) {
+	sz := copy(mel.MfccDctOut.Values, mel.MelFBankOut.Values)
+	if sz != len(mel.MfccDctOut.Values) {
+		fmt.Printf("CepstrumDctMel: memory copy size wrong")
+	}
+
+	dct := fourier.NewDCT(len(mel.MfccDctOut.Values))
+	var mfccDctOut []float64
+	mfccDctOut = dct.Transform(mfccDctOut, mel.MfccDctOut.Floats1D())
+	el0 := mfccDctOut[0]
+	mfccDctOut[0] = math.Log(1.0 + el0*el0) // replace with log energy instead..
+	for i := 0; i < mel.MelFBank.NFilters; i++ {
+		mel.MfccDctTrialOut.SetFloat([]int{i, step, ch}, mfccDctOut[i])
+	}
 }

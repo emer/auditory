@@ -6,7 +6,6 @@ package audio
 import (
 	"fmt"
 	"image"
-	"math"
 	"strconv"
 
 	"github.com/chewxy/math32"
@@ -14,7 +13,6 @@ import (
 	"github.com/emer/etable/etensor"
 	"github.com/emer/etable/minmax"
 	"github.com/emer/leabra/leabra"
-	"gonum.org/v1/gonum/fourier"
 )
 
 // InitSound
@@ -63,29 +61,10 @@ func (ad *AudDftSpec) Initialize() {
 	ad.LogMin = -100
 }
 
-// AudRenormSpec holds the auditory renormalization parameters
-type AudRenormSpec struct {
-	On          bool    `desc:"perform renormalization of this level of the auditory signal"`
-	RenormMin   float32 `viewif:"On" desc:"minimum value to use for renormalization -- you must experiment with range of inputs to determine appropriate values"`
-	RenormMax   float32 `viewif:"On" desc:"maximum value to use for renormalization -- you must experiment with range of inputs to determine appropriate values"`
-	RenormScale float32 `inactive:"+" desc:"1.0 / (ren_max - ren_min)"`
-}
-
-//Initialize initializes the AudRenormSpec
-func (ar *AudRenormSpec) Initialize() {
-	ar.On = true
-	ar.RenormMin = -5.0
-	ar.RenormMax = 9.0
-	ar.RenormScale = 1.0 / (ar.RenormMax - ar.RenormMin)
-}
-
 type AuditoryProc struct {
-	Mel   Mel
-	Data  *etable.Table `desc:"data table for saving filter results for viewing and applying to networks etc"`
-	Input Input         `desc:"specifications of the raw auditory input"`
-	Dft   AudDftSpec    `desc:"specifications for how to compute the discrete fourier transform (DFT, using FFT)"`
-	//MelFBank      MelFBankSpec    `desc:"specifications of the mel feature bank frequency sampling of the DFT (FFT) of the input sound"`
-	//FBankRenorm   AudRenormSpec   `viewif:"MelFBank.On=true desc:"renormalization parmeters for the mel_fbank values -- performed prior to further processing"`
+	Mel           Mel
+	Data          *etable.Table   `desc:"data table for saving filter results for viewing and applying to networks etc"`
+	Input         Input           `desc:"specifications of the raw auditory input"`
 	Gabor1        Gabor           `viewif:"MelFBank.On=true desc:"full set of frequency / time gabor filters -- first size"`
 	Gabor2        Gabor           `viewif:"MelFBank.On=true desc:"full set of frequency / time gabor filters -- second size"`
 	Gabor3        Gabor           `viewif:"MelFBank.On=true desc:"full set of frequency / time gabor filters -- third size"`
@@ -93,8 +72,7 @@ type AuditoryProc struct {
 	Gabor2Filters etensor.Float32 `inactive:"+" desc:" #NO_SAVE full gabor filters"`
 	Gabor3Filters etensor.Float32 `inactive:"+" desc:" #NO_SAVE full gabor filters"`
 
-	Mfcc     MelCepstrumSpec `viewif:"MelFBank.On=true desc:"specifications of the mel cepstrum discrete cosine transform of the mel fbank filter features"`
-	UseInhib bool            `viewif:"Gabor1.On=true" desc:"k-winner-take-all inhibitory dynamics for the time-gabor output"`
+	UseInhib bool `viewif:"Gabor1.On=true" desc:"k-winner-take-all inhibitory dynamics for the time-gabor output"`
 
 	// Filters
 	DftSize int `inactive:"+" desc:" #NO_SAVE full size of fft output -- should be input.win_samples"`
@@ -109,16 +87,8 @@ type AuditoryProc struct {
 	Gabor2Shape   image.Point `viewif:Gabor2.On=true" inactive:"+" desc:"overall geometry of gabor2 output (group-level geometry -- feature / unit level geometry is n_features, 2)"`
 	Gabor3Shape   image.Point `viewif:Gabor3.On=true" inactive:"+" desc:"overall geometry of gabor3 output (group-level geometry -- feature / unit level geometry is n_features, 2)"`
 
-	SoundFull           etensor.Float32    `inactive:"+" desc:" #NO_SAVE the full sound input obtained from the sound input"`
-	WindowIn            etensor.Float32    `inactive:"+" desc:" #NO_SAVE [input.win_samples] the raw sound input, one channel at a time"`
-	DftOut              etensor.Complex128 `inactive:"+" desc:" #NO_SAVE [dft_size] discrete fourier transform (fft) output complex representation"`
-	DftPowerOut         etensor.Float32    `inactive:"+" desc:" #NO_SAVE [dft_use] power of the dft, up to the nyquist limit frequency (1/2 input.win_samples)"`
-	DftLogPowerOut      etensor.Float32    `inactive:"+" desc:" #NO_SAVE [dft_use] log power of the dft, up to the nyquist liit frequency (1/2 input.win_samples)"`
-	DftPowerTrialOut    etensor.Float32    `inactive:"+" desc:" #NO_SAVE [dft_use][input.total_steps][input.channels] full trial's worth of power of the dft, up to the nyquist limit frequency (1/2 input.win_samples)"`
-	DftLogPowerTrialOut etensor.Float32    `inactive:"+" desc:" #NO_SAVE [dft_use][input.total_steps][input.channels] full trial's worth of log power of the dft, up to the nyquist limit frequency (1/2 input.win_samples)"`
-
-	//MelFBankOut      etensor.Float32 `inactive:"+" desc:" #NO_SAVE [mel.n_filters] mel scale transformation of dft_power, using triangular filters, resulting in the mel filterbank output -- the natural log of this is typically applied"`
-	//MelFBankTrialOut etensor.Float32 `inactive:"+" desc:" #NO_SAVE [mel.n_filters][input.total_steps][input.channels] full trial's worth of mel feature-bank output -- only if using gabors"`
+	SoundFull etensor.Float32 `inactive:"+" desc:" #NO_SAVE the full sound input obtained from the sound input"`
+	WindowIn  etensor.Float32 `inactive:"+" desc:" #NO_SAVE [input.win_samples] the raw sound input, one channel at a time"`
 
 	//GaborGci  etensor.Float32 `inactive:"+" desc:" #NO_SAVE inhibitory conductances, for computing kwta"`
 	Gabor1Raw etensor.Float32 `inactive:"+" desc:" #NO_SAVE [gabor.n_filters*2][mel.n_filters][input.trial_steps][input.channels] raw output of gabor1 -- full trial's worth of gabor steps"`
@@ -127,12 +97,6 @@ type AuditoryProc struct {
 	Gabor2Out etensor.Float32 `inactive:"+" desc:" #NO_SAVE [gabor.n_filters*2][mel.n_filters][input.trial_steps][input.channels] post-kwta output of full trial's worth of gabor steps"`
 	Gabor3Raw etensor.Float32 `inactive:"+" desc:" #NO_SAVE [gabor.n_filters*2][mel.n_filters][input.trial_steps][input.channels] raw output of gabor1 -- full trial's worth of gabor steps"`
 	Gabor3Out etensor.Float32 `inactive:"+" desc:" #NO_SAVE [gabor.n_filters*2][mel.n_filters][input.trial_steps][input.channels] post-kwta output of full trial's worth of gabor steps"`
-
-	MfccDctOut      etensor.Float32 `inactive:"+" desc:" #NO_SAVE discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
-	MfccDctTrialOut etensor.Float32 `inactive:"+" desc:" #NO_SAVE full trial's worth of discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
-
-	NCycles int
-	Layer   *leabra.Layer
 }
 
 // InitFilters
@@ -148,16 +112,16 @@ func (ap *AuditoryProc) InitGaborFilters() {
 	}
 }
 
-// InitOutMatrix
+// InitOutMatrices sets the shape of all output matrices
 func (ap *AuditoryProc) InitOutMatrix() bool {
 	ap.WindowIn.SetShape([]int{ap.Input.WinSamples}, nil, nil)
-	ap.DftOut.SetShape([]int{ap.DftSize}, nil, nil)
-	ap.DftPowerOut.SetShape([]int{ap.DftUse}, nil, nil)
-	ap.DftPowerTrialOut.SetShape([]int{ap.DftUse, ap.Input.TotalSteps, ap.Input.Channels}, nil, nil)
+	ap.Mel.DftOut.SetShape([]int{ap.DftSize}, nil, nil)
+	ap.Mel.DftPowerOut.SetShape([]int{ap.DftUse}, nil, nil)
+	ap.Mel.DftPowerTrialOut.SetShape([]int{ap.DftUse, ap.Input.TotalSteps, ap.Input.Channels}, nil, nil)
 
-	if ap.Dft.LogPow {
-		ap.DftLogPowerOut.SetShape([]int{ap.DftUse}, nil, nil)
-		ap.DftLogPowerTrialOut.SetShape([]int{ap.DftUse, ap.Input.TotalSteps, ap.Input.Channels}, nil, nil)
+	if ap.Mel.Dft.LogPow {
+		ap.Mel.DftLogPowerOut.SetShape([]int{ap.DftUse}, nil, nil)
+		ap.Mel.DftLogPowerTrialOut.SetShape([]int{ap.DftUse, ap.Input.TotalSteps, ap.Input.Channels}, nil, nil)
 	}
 
 	if ap.Mel.MelFBank.On {
@@ -175,9 +139,9 @@ func (ap *AuditoryProc) InitOutMatrix() bool {
 			ap.Gabor3Raw.SetShape([]int{ap.Input.Channels, ap.Gabor3.NFilters, 2, ap.Gabor3Shape.Y, ap.Gabor3Shape.X}, nil, nil)
 			ap.Gabor3Out.SetShape([]int{ap.Input.Channels, ap.Gabor3.NFilters, 2, ap.Gabor3Shape.Y, ap.Gabor3Shape.X}, nil, nil)
 		}
-		if ap.Mfcc.On {
-			ap.MfccDctOut.SetShape([]int{ap.Mel.MelFBank.NFilters}, nil, nil)
-			ap.MfccDctTrialOut.SetShape([]int{ap.Mel.MelFBank.NFilters, ap.Input.TotalSteps, ap.Input.Channels}, nil, nil)
+		if ap.Mel.Mfcc.On {
+			ap.Mel.MfccDctOut.SetShape([]int{ap.Mel.MelFBank.NFilters}, nil, nil)
+			ap.Mel.MfccDctTrialOut.SetShape([]int{ap.Mel.MelFBank.NFilters, ap.Input.TotalSteps, ap.Input.Channels}, nil, nil)
 		}
 	}
 	return true
@@ -232,30 +196,27 @@ func (ap *AuditoryProc) NeedsInit() bool {
 
 }
 
-// UpdateConfig sets the shape of each gabor
-func (ap *AuditoryProc) UpdateConfig() {
-	ap.Gabor1Shape.X = ((ap.Input.TrialSteps - 1) / ap.Gabor1.SpaceTime) + 1
-	ap.Gabor1Shape.Y = ((ap.Mel.MelFBank.NFilters - ap.Gabor1.SizeFreq - 1) / ap.Gabor1.SpaceFreq) + 1
-
-	ap.Gabor2Shape.X = ((ap.Input.TrialSteps - 1) / ap.Gabor2.SpaceTime) + 1
-	ap.Gabor2Shape.Y = ((ap.Mel.MelFBank.NFilters - ap.Gabor2.SizeFreq - 1) / ap.Gabor2.SpaceFreq) + 1
-
-	ap.Gabor3Shape.X = ((ap.Input.TrialSteps - 1) / ap.Gabor3.SpaceTime) + 1
-	ap.Gabor3Shape.Y = ((ap.Mel.MelFBank.NFilters - ap.Gabor3.SizeFreq - 1) / ap.Gabor3.SpaceFreq) + 1
+// SetGaborShape sets the shape of a gabor based on parameters of gabor mel filters and input
+func (ap *AuditoryProc) SetGaborShape(gabor Gabor, gaborShape *image.Point) {
+	gaborShape.X = ((ap.Input.TrialSteps - 1) / gabor.SpaceTime) + 1
+	gaborShape.Y = ((ap.Mel.MelFBank.NFilters - gabor.SizeFreq - 1) / gabor.SpaceFreq) + 1
 }
 
 // Init initializes AuditoryProc fields
 func (ap *AuditoryProc) Init() bool {
 	ap.Input.Initialize()
-	ap.Dft.Initialize()
+	ap.Mel.Dft.Initialize()
 	ap.Mel.MelFBank.Initialize()
 	ap.Gabor1.Initialize()
+	ap.Gabor1.On = true
+	ap.SetGaborShape(ap.Gabor1, &ap.Gabor1Shape)
 	ap.Gabor2.Initialize()
 	ap.Gabor2.On = false
+	ap.SetGaborShape(ap.Gabor2, &ap.Gabor2Shape)
 	ap.Gabor3.Initialize()
 	ap.Gabor3.On = false
-	ap.UpdateConfig()
-	ap.Mfcc.Initialize()
+	ap.SetGaborShape(ap.Gabor3, &ap.Gabor3Shape)
+	ap.Mel.Mfcc.Initialize()
 
 	ap.DftSize = ap.Input.WinSamples
 	ap.DftUse = ap.DftSize/2 + 1
@@ -265,7 +226,6 @@ func (ap *AuditoryProc) Init() bool {
 	ap.Data = &etable.Table{}
 	ap.InitDataTable()
 	ap.InitSound()
-	ap.NCycles = 20
 	ap.UseInhib = true
 	return true
 }
@@ -278,18 +238,11 @@ func (ap *AuditoryProc) InitDataTable() bool {
 	}
 	if ap.Input.Channels > 1 {
 		for ch := 0; ch < int(ap.Input.Channels); ch++ {
-			ap.InitDataTableChan(ch)
+			ap.MelOutputToTable(ap.Data, ch, true)
 		}
 	} else {
-		ap.InitDataTableChan(int(ap.Input.Channel))
-	}
-	return true
-}
+		ap.MelOutputToTable(ap.Data, ap.Input.Channel, true)
 
-// InitDataTableChan initializes ap.Data by channel
-func (ap *AuditoryProc) InitDataTableChan(ch int) bool {
-	if ap.Mel.MelFBank.On {
-		ap.MelOutputToTable(ap.Data, ch, true)
 	}
 	return true
 }
@@ -377,7 +330,7 @@ func (ap *AuditoryProc) WrapBorder(ch int) bool {
 	borderEff := 2 * ap.Input.BorderSteps
 	srcStStep := ap.Input.TotalSteps - borderEff
 	for s := 0; s < int(borderEff); s++ {
-		ap.CopyStepFromStep(s, int(srcStStep)+s, ch)
+		ap.Mel.CopyStepFromStep(s, int(srcStStep)+s, ch)
 	}
 	return true
 }
@@ -386,32 +339,7 @@ func (ap *AuditoryProc) WrapBorder(ch int) bool {
 func (ap *AuditoryProc) StepForward(ch int) bool {
 	totalM1 := ap.Input.TotalSteps - 1
 	for s := 0; s < int(totalM1); s++ {
-		ap.CopyStepFromStep(s, s+1, ch)
-	}
-	return true
-}
-
-// CopyStepFromStep
-func (ap *AuditoryProc) CopyStepFromStep(toStep, fmStep, ch int) bool {
-	for i := 0; i < int(ap.DftUse); i++ {
-		val := ap.DftPowerTrialOut.Value([]int{i, fmStep, ch})
-		ap.DftPowerTrialOut.Set([]int{i, toStep, ch}, val)
-		if ap.Dft.LogPow {
-			val := ap.DftLogPowerTrialOut.Value([]int{i, fmStep, ch})
-			ap.DftLogPowerTrialOut.Set([]int{i, toStep, ch}, val)
-		}
-	}
-	if ap.Mel.MelFBank.On {
-		for i := 0; i < int(ap.Mel.MelFBank.NFilters); i++ {
-			val := ap.Mel.MelFBankTrialOut.Value([]int{i, fmStep, ch})
-			ap.Mel.MelFBankTrialOut.Set([]int{i, toStep, ch}, val)
-		}
-		if ap.Mfcc.On {
-			for i := 0; i < int(ap.Mel.MelFBank.NFilters); i++ {
-				val := ap.MfccDctTrialOut.Value([]int{i, fmStep, ch})
-				ap.MfccDctTrialOut.Set([]int{i, toStep, ch}, val)
-			}
-		}
+		ap.Mel.CopyStepFromStep(s, s+1, ch)
 	}
 	return true
 }
@@ -419,62 +347,13 @@ func (ap *AuditoryProc) CopyStepFromStep(toStep, fmStep, ch int) bool {
 // ProcessStep process a step worth of sound input from current input_pos, and increment input_pos by input.step_samples
 func (ap *AuditoryProc) ProcessStep(ch int, step int) bool {
 	ap.SoundToWindow(ap.InputPos, ch)
-	ap.FilterWindow(int(ch), int(step))
+	ap.Mel.FilterWindow(int(ch), int(step), ap.WindowIn, ap.FirstStep)
 	ap.InputPos = ap.InputPos + ap.Input.StepSamples
 	ap.FirstStep = false
 	return true
 }
 
-// FftReal
-func (ap *AuditoryProc) FftReal(out etensor.Complex128, in etensor.Float32) bool {
-	if !out.IsEqual(&in.Shape) {
-		fmt.Printf("FftReal: out shape different from in shape - modifying out to match")
-		out.CopyShape(&in.Shape)
-	}
-	if out.NumDims() == 1 {
-		for i := 0; i < out.Len(); i++ {
-			out.SetFloat1D(i, in.FloatVal1D(i))
-			out.SetFloat1DImag(i, 0)
-		}
-	}
-	return true
-}
-
-// DftInput applies dft (fft) to input
-func (ap *AuditoryProc) DftInput(windowInVals []float64) {
-	ap.FftReal(ap.DftOut, ap.WindowIn)
-	fft := fourier.NewCmplxFFT(ap.DftOut.Len())
-	ap.DftOut.Values = fft.Coefficients(nil, ap.DftOut.Values)
-}
-
-// PowerOfDft
-func (ap *AuditoryProc) PowerOfDft(ch, step int) {
-	// Mag() is absolute value   SqMag is square of it - r*r + i*i
-	for k := 0; k < int(ap.DftUse); k++ {
-		rl := ap.DftOut.FloatVal1D(k)
-		im := ap.DftOut.FloatVal1DImag(k)
-		powr := float64(rl*rl + im*im) // why is complex converted to float here
-		if ap.FirstStep == false {
-			powr = float64(ap.Dft.PreviousSmooth)*ap.DftPowerOut.FloatVal1D(k) + float64(ap.Dft.CurrentSmooth)*powr
-		}
-		ap.DftPowerOut.SetFloat1D(k, powr)
-		ap.DftPowerTrialOut.SetFloat([]int{k, step, ch}, powr)
-
-		var logp float64
-		if ap.Dft.LogPow {
-			powr += float64(ap.Dft.LogOff)
-			if powr == 0 {
-				logp = float64(ap.Dft.LogMin)
-			} else {
-				logp = math.Log(powr)
-			}
-			ap.DftLogPowerOut.SetFloat1D(k, logp)
-			ap.DftLogPowerTrialOut.SetFloat([]int{k, step, ch}, logp)
-		}
-	}
-}
-
-// FilterTrial process filters that operate over an entire trial at a time
+// FilterTrial processes filters that operate over an entire trial at a time
 func (ap *AuditoryProc) FilterTrial(ch int) bool {
 	if ap.Gabor1.On {
 		ap.GaborFilter(ch, ap.Gabor1, ap.Gabor1Filters, ap.Gabor1Raw, ap.Gabor1Out)
@@ -486,23 +365,6 @@ func (ap *AuditoryProc) FilterTrial(ch int) bool {
 		ap.GaborFilter(ch, ap.Gabor3, ap.Gabor3Filters, ap.Gabor3Raw, ap.Gabor3Out)
 	}
 	return true
-}
-
-// CepstrumDctMel
-func (ap *AuditoryProc) CepstrumDctMel(ch, step int) {
-	sz := copy(ap.MfccDctOut.Values, ap.Mel.MelFBankOut.Values)
-	if sz != len(ap.MfccDctOut.Values) {
-		fmt.Printf("CepstrumDctMel: memory copy size wrong")
-	}
-
-	dct := fourier.NewDCT(len(ap.MfccDctOut.Values))
-	var mfccDctOut []float64
-	mfccDctOut = dct.Transform(mfccDctOut, ap.MfccDctOut.Floats1D())
-	el0 := mfccDctOut[0]
-	mfccDctOut[0] = math.Log(1.0 + el0*el0) // replace with log energy instead..
-	for i := 0; i < ap.Mel.MelFBank.NFilters; i++ {
-		ap.MfccDctTrialOut.SetFloat([]int{i, step, ch}, mfccDctOut[i])
-	}
 }
 
 // GaborFilter process filters that operate over an entire trial at a time
@@ -560,7 +422,6 @@ func (ap *AuditoryProc) GaborFilter(ch int, spec Gabor, filters etensor.Float32,
 	}
 
 	if ap.UseInhib {
-		ap.Layer.Inhib.Pool.On = true
 		rawSS := outRaw.SubSpace(outRaw.NumDims()-1, []int{ch}).(*etensor.Float32)
 		outSS := out.SubSpace(outRaw.NumDims()-1, []int{ch}).(*etensor.Float32)
 
@@ -634,20 +495,6 @@ func (ap *AuditoryProc) GaborFilter(ch int, spec Gabor, filters etensor.Float32,
 	}
 }
 
-// FilterWindow filters the current window_in input data according to current settings -- called by ProcessStep, but can be called separately
-func (ap *AuditoryProc) FilterWindow(ch int, step int) bool {
-	ap.FftReal(ap.DftOut, ap.WindowIn)
-	ap.DftInput(ap.WindowIn.Floats1D())
-	if ap.Mel.MelFBank.On {
-		ap.PowerOfDft(ch, step)
-		ap.Mel.MelFilterDft(ch, step, &ap.DftPowerOut)
-		if ap.Mfcc.On {
-			ap.CepstrumDctMel(ch, step)
-		}
-	}
-	return true
-}
-
 // OutputToTable
 func (ap *AuditoryProc) OutputToTable(ch int) bool {
 	if ap.Data == nil {
@@ -688,11 +535,11 @@ func (ap *AuditoryProc) MelOutputToTable(dt *etable.Table, ch int, fmtOnly bool)
 		}
 		for s := 0; s < int(ap.Input.TotalSteps); s++ {
 			for i := 0; i < int(ap.DftUse); i++ {
-				if ap.Dft.LogPow {
-					val := ap.DftLogPowerTrialOut.FloatVal([]int{i, s, ch})
+				if ap.Mel.Dft.LogPow {
+					val := ap.Mel.DftLogPowerTrialOut.FloatVal([]int{i, s, ch})
 					dout.SetFloat([]int{s, i}, val)
 				} else {
-					val := ap.DftPowerTrialOut.FloatVal([]int{i, s, ch})
+					val := ap.Mel.DftPowerTrialOut.FloatVal([]int{i, s, ch})
 					dout.SetFloat([]int{s, i}, val)
 				}
 			}
@@ -907,7 +754,7 @@ func (ap *AuditoryProc) MelOutputToTable(dt *etable.Table, ch int, fmtOnly bool)
 	}
 
 	// todo: this one needs to be checked
-	if ap.Mfcc.On {
+	if ap.Mel.Mfcc.On {
 		cn = "AudProc" + "_mel_mfcc" + colSfx // column name
 		col = dt.ColByName(cn)
 		if col == nil {
@@ -925,8 +772,8 @@ func (ap *AuditoryProc) MelOutputToTable(dt *etable.Table, ch int, fmtOnly bool)
 				return false
 			}
 			for s := 0; s < int(ap.Input.TotalSteps); s++ {
-				for i := 0; i < ap.Mfcc.NCoeff; i++ {
-					val := ap.MfccDctTrialOut.FloatVal([]int{i, s, ch})
+				for i := 0; i < ap.Mel.Mfcc.NCoeff; i++ {
+					val := ap.Mel.MfccDctTrialOut.FloatVal([]int{i, s, ch})
 					dout.SetFloat([]int{s, i}, val)
 				}
 			}
