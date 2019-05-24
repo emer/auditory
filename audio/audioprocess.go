@@ -131,16 +131,20 @@ func (mc *MelCepstrumSpec) Initialize() {
 }
 
 type AuditoryProc struct {
-	Data        *etable.Table   `desc:"data table for saving filter results for viewing and applying to networks etc"`
-	Input       Input           `desc:"specifications of the raw auditory input"`
-	Dft         AudDftSpec      `desc:"specifications for how to compute the discrete fourier transform (DFT, using FFT)"`
-	MelFBank    MelFBankSpec    `desc:"specifications of the mel feature bank frequency sampling of the DFT (FFT) of the input sound"`
-	FBankRenorm AudRenormSpec   `viewif:"MelFBank.On=true desc:"renormalization parmeters for the mel_fbank values -- performed prior to further processing"`
-	Gabor1      Gabor           `viewif:"MelFBank.On=true desc:"full set of frequency / time gabor filters -- first size"`
-	Gabor2      Gabor           `viewif:"MelFBank.On=true desc:"full set of frequency / time gabor filters -- second size"`
-	Gabor3      Gabor           `viewif:"MelFBank.On=true desc:"full set of frequency / time gabor filters -- third size"`
-	Mfcc        MelCepstrumSpec `viewif:"MelFBank.On=true desc:"specifications of the mel cepstrum discrete cosine transform of the mel fbank filter features"`
-	UseInhib    bool            `viewif:"Gabor1.On=true" desc:"k-winner-take-all inhibitory dynamics for the time-gabor output"`
+	Data          *etable.Table   `desc:"data table for saving filter results for viewing and applying to networks etc"`
+	Input         Input           `desc:"specifications of the raw auditory input"`
+	Dft           AudDftSpec      `desc:"specifications for how to compute the discrete fourier transform (DFT, using FFT)"`
+	MelFBank      MelFBankSpec    `desc:"specifications of the mel feature bank frequency sampling of the DFT (FFT) of the input sound"`
+	FBankRenorm   AudRenormSpec   `viewif:"MelFBank.On=true desc:"renormalization parmeters for the mel_fbank values -- performed prior to further processing"`
+	Gabor1        Gabor           `viewif:"MelFBank.On=true desc:"full set of frequency / time gabor filters -- first size"`
+	Gabor2        Gabor           `viewif:"MelFBank.On=true desc:"full set of frequency / time gabor filters -- second size"`
+	Gabor3        Gabor           `viewif:"MelFBank.On=true desc:"full set of frequency / time gabor filters -- third size"`
+	Gabor1Filters etensor.Float32 `inactive:"+" desc:" #NO_SAVE full gabor filters"`
+	Gabor2Filters etensor.Float32 `inactive:"+" desc:" #NO_SAVE full gabor filters"`
+	Gabor3Filters etensor.Float32 `inactive:"+" desc:" #NO_SAVE full gabor filters"`
+
+	Mfcc     MelCepstrumSpec `viewif:"MelFBank.On=true desc:"specifications of the mel cepstrum discrete cosine transform of the mel fbank filter features"`
+	UseInhib bool            `viewif:"Gabor1.On=true" desc:"k-winner-take-all inhibitory dynamics for the time-gabor output"`
 
 	// Filters
 	DftSize        int `inactive:"+" desc:" #NO_SAVE full size of fft output -- should be input.win_samples"`
@@ -152,10 +156,6 @@ type AuditoryProc struct {
 	MelPtsBin        etensor.Int32   `inactive:"+" desc:" #NO_SAVE [mel_n_filters_eff] mel scale points in fft bins"`
 	MelFilters       etensor.Float32 `inactive:"+" desc:" #NO_SAVE [mel_filt_max_bins][mel.n_filters] the actual filters for actual number of mel filters"`
 	MelFilterMaxBins int             `inactive:"+" desc:" #NO_SAVE maximum number of bins for mel filter -- number of bins in highest filter"`
-
-	Gabor1Filters etensor.Float32 `inactive:"+" desc:" #NO_SAVE full gabor filters"`
-	Gabor2Filters etensor.Float32 `inactive:"+" desc:" #NO_SAVE full gabor filters"`
-	Gabor3Filters etensor.Float32 `inactive:"+" desc:" #NO_SAVE full gabor filters"`
 
 	// Outputs
 	FirstStep     bool        `inactive:"+" desc:" #NO_SAVE is this the first step of processing -- turns of prv smoothing of dft power"`
@@ -193,23 +193,16 @@ type AuditoryProc struct {
 }
 
 // InitFilters
-func (ap *AuditoryProc) InitFilters() bool {
-	ap.DftSize = ap.Input.WinSamples
-	ap.DftUse = ap.DftSize/2 + 1
-	ap.InitFiltersMel()
+func (ap *AuditoryProc) InitGaborFilters() {
 	if ap.Gabor1.On {
-		ap.Gabor1Filters.SetShape([]int{ap.Gabor1.SizeTime, ap.Gabor1.SizeFreq, ap.Gabor1.NFilters}, nil, nil)
-		ap.Gabor1.RenderFilters(ap.Gabor1Filters)
+		ap.Gabor1.InitFilters(&ap.Gabor1Filters)
 	}
 	if ap.Gabor2.On {
-		ap.Gabor2Filters.SetShape([]int{ap.Gabor2.SizeTime, ap.Gabor2.SizeFreq, ap.Gabor2.NFilters}, nil, nil)
-		ap.Gabor2.RenderFilters(ap.Gabor2Filters)
+		ap.Gabor2.InitFilters(&ap.Gabor2Filters)
 	}
 	if ap.Gabor3.On {
-		ap.Gabor3Filters.SetShape([]int{ap.Gabor3.SizeTime, ap.Gabor3.SizeFreq, ap.Gabor3.NFilters}, nil, nil)
-		ap.Gabor3.RenderFilters(ap.Gabor3Filters)
+		ap.Gabor3.InitFilters(&ap.Gabor3Filters)
 	}
-	return true
 }
 
 // InitFiltersMel
@@ -364,13 +357,16 @@ func (ap *AuditoryProc) Init() bool {
 	ap.UpdateConfig()
 	ap.Mfcc.Initialize()
 
-	ap.InitFilters()
+	ap.DftSize = ap.Input.WinSamples
+	ap.DftUse = ap.DftSize/2 + 1
+	ap.InitFiltersMel()
+	ap.InitGaborFilters()
 	ap.InitOutMatrix()
 	ap.Data = &etable.Table{}
 	ap.InitDataTable()
 	ap.InitSound()
 	ap.NCycles = 20
-	ap.UseInhib = true
+	ap.UseInhib = false
 	return true
 }
 

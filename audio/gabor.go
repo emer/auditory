@@ -27,47 +27,53 @@ type Gabor struct {
 }
 
 //Initialize initializes the Gabor
-func (ag *Gabor) Initialize() {
-	ag.On = true
-	ag.Gain = 2.0
-	ag.NHoriz = 4
-	ag.SizeTime = 6.0
-	ag.SizeFreq = 6.0
-	ag.SpaceTime = 2.0
-	ag.SpaceFreq = 2.0
-	ag.WaveLen = 2.0
-	ag.SigmaLen = 0.6
-	ag.SigmaWidth = 0.3
-	ag.HorizSigmaLen = 0.3
-	ag.HorizSigmaWidth = 0.1
-	ag.PhaseOffset = 0.0
-	ag.CircleEdge = true
-	ag.NFilters = 3 + ag.NHoriz // 3 is number of angle filters
+func (ga *Gabor) Initialize() {
+	ga.On = true
+	ga.Gain = 2.0
+	ga.NHoriz = 4
+	ga.SizeTime = 6.0
+	ga.SizeFreq = 6.0
+	ga.SpaceTime = 2.0
+	ga.SpaceFreq = 2.0
+	ga.WaveLen = 2.0
+	ga.SigmaLen = 0.6
+	ga.SigmaWidth = 0.3
+	ga.HorizSigmaLen = 0.3
+	ga.HorizSigmaWidth = 0.1
+	ga.PhaseOffset = 0.0
+	ga.CircleEdge = true
+	ga.NFilters = 3 + ga.NHoriz // 3 is number of angle filters
 }
 
-// RenderFilters generates filters into the given matrix, which is formatted as: [ag.SizeTime_steps][ag.SizeFreq][n_filters]
-func (ag *Gabor) RenderFilters(filters etensor.Float32) {
-	ctrTime := (float32(ag.SizeTime) - 1) / 2.0
-	ctrFreq := (float32(ag.SizeFreq) - 1) / 2.0
+// InitFilters
+func (ga *Gabor) InitFilters(filter *etensor.Float32) {
+	filter.SetShape([]int{ga.SizeTime, ga.SizeFreq, ga.NFilters}, nil, nil)
+	ga.RenderFilters(filter)
+}
+
+// RenderFilters generates filters into the given matrix, which is formatted as: [ga.SizeTime_steps][ga.SizeFreq][n_filters]
+func (ga *Gabor) RenderFilters(filters *etensor.Float32) {
+	ctrTime := (float32(ga.SizeTime) - 1) / 2.0
+	ctrFreq := (float32(ga.SizeFreq) - 1) / 2.0
 	angInc := math32.Pi / 4.0
-	radiusTime := float32(ag.SizeTime / 2.0)
-	radiusFreq := float32(ag.SizeFreq / 2.0)
+	radiusTime := float32(ga.SizeTime / 2.0)
+	radiusFreq := float32(ga.SizeFreq / 2.0)
 
-	lenNorm := 1.0 / (2.0 * ag.SigmaLen * ag.SigmaLen)
-	widthNorm := 1.0 / (2.0 * ag.SigmaWidth * ag.SigmaWidth)
-	lenHorizNorm := 1.0 / (2.0 * ag.HorizSigmaLen * ag.HorizSigmaLen)
-	widthHorizNorm := 1.0 / (2.0 * ag.HorizSigmaWidth * ag.HorizSigmaWidth)
+	lenNorm := 1.0 / (2.0 * ga.SigmaLen * ga.SigmaLen)
+	widthNorm := 1.0 / (2.0 * ga.SigmaWidth * ga.SigmaWidth)
+	lenHorizNorm := 1.0 / (2.0 * ga.HorizSigmaLen * ga.HorizSigmaLen)
+	widthHorizNorm := 1.0 / (2.0 * ga.HorizSigmaWidth * ga.HorizSigmaWidth)
 
-	twoPiNorm := (2.0 * math32.Pi) / ag.WaveLen
-	hCtrInc := (ag.SizeFreq - 1) / (ag.NHoriz + 1)
+	twoPiNorm := (2.0 * math32.Pi) / ga.WaveLen
+	hCtrInc := (ga.SizeFreq - 1) / (ga.NHoriz + 1)
 
 	fli := 0
-	for hi := 0; hi < ag.NHoriz; hi, fli = hi+1, fli+1 {
+	for hi := 0; hi < ga.NHoriz; hi, fli = hi+1, fli+1 {
 		hCtrFreq := hCtrInc * (hi + 1)
 		angF := -2.0 * angInc
-		for y := 0; y < ag.SizeFreq; y++ {
+		for y := 0; y < ga.SizeFreq; y++ {
 			var xf, yf, xfn, yfn float32
-			for x := 0; x < ag.SizeTime; x++ {
+			for x := 0; x < ga.SizeTime; x++ {
 				xf = float32(x) - ctrTime
 				yf = float32(y) - float32(hCtrFreq)
 				xfn = xf / radiusTime
@@ -75,11 +81,11 @@ func (ag *Gabor) RenderFilters(filters etensor.Float32) {
 
 				dist := math32.Hypot(xfn, yfn)
 				val := float32(0)
-				if !(ag.CircleEdge && dist > 1.0) {
+				if !(ga.CircleEdge && dist > 1.0) {
 					nx := xfn*math32.Cos(angF) - yfn*math32.Sin(angF)
 					ny := yfn*math32.Cos(angF) + xfn*math32.Sin(angF)
 					gauss := math32.Exp(-(widthHorizNorm*(nx*nx) + lenHorizNorm*(ny*ny)))
-					sinVal := math32.Sin(twoPiNorm*ny + ag.PhaseOffset)
+					sinVal := math32.Sin(twoPiNorm*ny + ga.PhaseOffset)
 					val = gauss * sinVal
 				}
 				filters.Set([]int{x, y, fli}, val)
@@ -87,12 +93,12 @@ func (ag *Gabor) RenderFilters(filters etensor.Float32) {
 		}
 	}
 
-	// fli should be ag.Horiz - 1 at this point
+	// fli should be ga.Horiz - 1 at this point
 	for ang := 1; ang < 4; ang, fli = ang+1, fli+1 {
 		angF := float32(-ang) * angInc
 		var xf, yf, xfn, yfn float32
-		for y := 0; y < ag.SizeFreq; y++ {
-			for x := 0; x < ag.SizeTime; x++ {
+		for y := 0; y < ga.SizeFreq; y++ {
+			for x := 0; x < ga.SizeTime; x++ {
 				xf = float32(x) - ctrTime
 				yf = float32(y) - ctrFreq
 				xfn = xf / radiusTime
@@ -100,11 +106,11 @@ func (ag *Gabor) RenderFilters(filters etensor.Float32) {
 
 				dist := math32.Hypot(xfn, yfn)
 				val := float32(0)
-				if !(ag.CircleEdge && dist > 1.0) {
+				if !(ga.CircleEdge && dist > 1.0) {
 					nx := xfn*math32.Cos(angF) - yfn*math32.Sin(angF)
 					ny := yfn*math32.Cos(angF) + xfn*math32.Sin(angF)
 					gauss := math32.Exp(-(lenNorm*(nx*nx) + widthNorm*(ny*ny)))
-					sinVal := math32.Sin(twoPiNorm*ny + ag.PhaseOffset)
+					sinVal := math32.Sin(twoPiNorm*ny + ga.PhaseOffset)
 					val = gauss * sinVal
 				}
 				filters.Set([]int{x, y, fli}, val)
@@ -113,11 +119,11 @@ func (ag *Gabor) RenderFilters(filters etensor.Float32) {
 	}
 
 	// renorm each half
-	for fli := 0; fli < ag.NFilters; fli++ {
+	for fli := 0; fli < ga.NFilters; fli++ {
 		posSum := float32(0)
 		negSum := float32(0)
-		for y := 0; y < ag.SizeFreq; y++ {
-			for x := 0; x < ag.SizeTime; x++ {
+		for y := 0; y < ga.SizeFreq; y++ {
+			for x := 0; x < ga.SizeTime; x++ {
 				val := float32(filters.Value([]int{x, y, fli}))
 				if val > 0 {
 					posSum += val
@@ -128,8 +134,8 @@ func (ag *Gabor) RenderFilters(filters etensor.Float32) {
 		}
 		posNorm := 1.0 / posSum
 		negNorm := -1.0 / negSum
-		for y := 0; y < ag.SizeFreq; y++ {
-			for x := 0; x < ag.SizeTime; x++ {
+		for y := 0; y < ga.SizeFreq; y++ {
+			for x := 0; x < ga.SizeTime; x++ {
 				val := filters.Value([]int{x, y, fli})
 				if val > 0.0 {
 					val *= posNorm
