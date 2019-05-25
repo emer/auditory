@@ -43,24 +43,6 @@ func (ais *Input) InitFromSound(snd *Sound, nChannels int, channel int) {
 	}
 }
 
-// AudDftSpec discrete fourier transform (dft) specifications
-type AudDftSpec struct {
-	LogPow         bool    `"def:"true" desc:"compute the log of the power and save that to a separate table -- generaly more useful for visualization of power than raw power values"`
-	LogOff         float32 `viewif:"LogPow" def:"0" desc:"add this amount when taking the log of the dft power -- e.g., 1.0 makes everything positive -- affects the relative contrast of the outputs"`
-	LogMin         float32 `viewif:"LogPow" def:"-100" desc:"minimum value a log can produce -- puts a lower limit on log output"`
-	PreviousSmooth float32 `def:"0" desc:"how much of the previous step's power value to include in this one -- smooths out the power spectrum which can be artificially bumpy due to discrete window samples"`
-	CurrentSmooth  float32 `inactive:"+" desc:"how much of current power to include"`
-}
-
-//Initialize initializes the AudDftSpec
-func (ad *AudDftSpec) Initialize() {
-	ad.PreviousSmooth = 0
-	ad.CurrentSmooth = 1.0 - ad.PreviousSmooth
-	ad.LogPow = true
-	ad.LogOff = 0
-	ad.LogMin = -100
-}
-
 type AuditoryProc struct {
 	Mel           Mel
 	Data          *etable.Table   `desc:"data table for saving filter results for viewing and applying to networks etc"`
@@ -72,25 +54,14 @@ type AuditoryProc struct {
 	Gabor2Filters etensor.Float32 `inactive:"+" desc:" #NO_SAVE full gabor filters"`
 	Gabor3Filters etensor.Float32 `inactive:"+" desc:" #NO_SAVE full gabor filters"`
 
-	UseInhib bool `viewif:"Gabor1.On=true" desc:"k-winner-take-all inhibitory dynamics for the time-gabor output"`
+	FirstStep     bool            `inactive:"+" desc:" #NO_SAVE is this the first step of processing -- turns of prv smoothing of dft power"`
+	InputPos      int             `inactive:"+" desc:" #NO_SAVE current position in the sound_full input -- in terms of sample number"`
+	TrialStartPos int             `inactive:"+" desc:" #NO_SAVE starting position of the current trial -- in terms of sample number"`
+	TrialEndPos   int             `inactive:"+" desc:" #NO_SAVE ending position of the current trial -- in terms of sample number"`
+	SoundFull     etensor.Float32 `inactive:"+" desc:" #NO_SAVE the full sound input obtained from the sound input"`
+	WindowIn      etensor.Float32 `inactive:"+" desc:" #NO_SAVE [input.win_samples] the raw sound input, one channel at a time"`
+	UseInhib      bool            `viewif:"Gabor1.On=true" desc:"k-winner-take-all inhibitory dynamics for the time-gabor output"`
 
-	// Filters
-	DftSize int `inactive:"+" desc:" #NO_SAVE full size of fft output -- should be input.win_samples"`
-	DftUse  int `inactive:"+" desc:" #NO_SAVE number of dft outputs to actually use -- should be dft_size / 2 + 1"`
-
-	// Outputs
-	FirstStep     bool        `inactive:"+" desc:" #NO_SAVE is this the first step of processing -- turns of prv smoothing of dft power"`
-	InputPos      int         `inactive:"+" desc:" #NO_SAVE current position in the sound_full input -- in terms of sample number"`
-	TrialStartPos int         `inactive:"+" desc:" #NO_SAVE starting position of the current trial -- in terms of sample number"`
-	TrialEndPos   int         `inactive:"+" desc:" #NO_SAVE ending position of the current trial -- in terms of sample number"`
-	Gabor1Shape   image.Point `viewif:Gabor1.On=true" inactive:"+" desc:"overall geometry of gabor1 output (group-level geometry -- feature / unit level geometry is n_features, 2)"`
-	Gabor2Shape   image.Point `viewif:Gabor2.On=true" inactive:"+" desc:"overall geometry of gabor2 output (group-level geometry -- feature / unit level geometry is n_features, 2)"`
-	Gabor3Shape   image.Point `viewif:Gabor3.On=true" inactive:"+" desc:"overall geometry of gabor3 output (group-level geometry -- feature / unit level geometry is n_features, 2)"`
-
-	SoundFull etensor.Float32 `inactive:"+" desc:" #NO_SAVE the full sound input obtained from the sound input"`
-	WindowIn  etensor.Float32 `inactive:"+" desc:" #NO_SAVE [input.win_samples] the raw sound input, one channel at a time"`
-
-	//GaborGci  etensor.Float32 `inactive:"+" desc:" #NO_SAVE inhibitory conductances, for computing kwta"`
 	Gabor1Raw etensor.Float32 `inactive:"+" desc:" #NO_SAVE [gabor.n_filters*2][mel.n_filters][input.trial_steps][input.channels] raw output of gabor1 -- full trial's worth of gabor steps"`
 	Gabor1Out etensor.Float32 `inactive:"+" desc:" #NO_SAVE [gabor.n_filters*2][mel.n_filters][input.trial_steps][input.channels] post-kwta output of full trial's worth of gabor steps"`
 	Gabor2Raw etensor.Float32 `inactive:"+" desc:" #NO_SAVE [gabor.n_filters*2][mel.n_filters][input.trial_steps][input.channels] raw output of gabor1 -- full trial's worth of gabor steps"`
@@ -99,7 +70,7 @@ type AuditoryProc struct {
 	Gabor3Out etensor.Float32 `inactive:"+" desc:" #NO_SAVE [gabor.n_filters*2][mel.n_filters][input.trial_steps][input.channels] post-kwta output of full trial's worth of gabor steps"`
 }
 
-// InitFilters
+// InitGaborFilters
 func (ap *AuditoryProc) InitGaborFilters() {
 	if ap.Gabor1.On {
 		ap.Gabor1.InitFilters(&ap.Gabor1Filters)
@@ -115,29 +86,29 @@ func (ap *AuditoryProc) InitGaborFilters() {
 // InitOutMatrices sets the shape of all output matrices
 func (ap *AuditoryProc) InitOutMatrix() bool {
 	ap.WindowIn.SetShape([]int{ap.Input.WinSamples}, nil, nil)
-	ap.Mel.DftOut.SetShape([]int{ap.DftSize}, nil, nil)
-	ap.Mel.DftPowerOut.SetShape([]int{ap.DftUse}, nil, nil)
-	ap.Mel.DftPowerTrialOut.SetShape([]int{ap.DftUse, ap.Input.TotalSteps, ap.Input.Channels}, nil, nil)
+	ap.Mel.DftOut.SetShape([]int{ap.Mel.DftSize}, nil, nil)
+	ap.Mel.DftPowerOut.SetShape([]int{ap.Mel.DftUse}, nil, nil)
+	ap.Mel.DftPowerTrialOut.SetShape([]int{ap.Mel.DftUse, ap.Input.TotalSteps, ap.Input.Channels}, nil, nil)
 
 	if ap.Mel.Dft.LogPow {
-		ap.Mel.DftLogPowerOut.SetShape([]int{ap.DftUse}, nil, nil)
-		ap.Mel.DftLogPowerTrialOut.SetShape([]int{ap.DftUse, ap.Input.TotalSteps, ap.Input.Channels}, nil, nil)
+		ap.Mel.DftLogPowerOut.SetShape([]int{ap.Mel.DftUse}, nil, nil)
+		ap.Mel.DftLogPowerTrialOut.SetShape([]int{ap.Mel.DftUse, ap.Input.TotalSteps, ap.Input.Channels}, nil, nil)
 	}
 
 	if ap.Mel.MelFBank.On {
 		ap.Mel.MelFBankOut.SetShape([]int{ap.Mel.MelFBank.NFilters}, nil, nil)
 		ap.Mel.MelFBankTrialOut.SetShape([]int{ap.Mel.MelFBank.NFilters, ap.Input.TotalSteps, ap.Input.Channels}, nil, nil)
 		if ap.Gabor1.On {
-			ap.Gabor1Raw.SetShape([]int{ap.Input.Channels, ap.Gabor1.NFilters, 2, ap.Gabor1Shape.Y, ap.Gabor1Shape.X}, nil, nil)
-			ap.Gabor1Out.SetShape([]int{ap.Input.Channels, ap.Gabor1.NFilters, 2, ap.Gabor1Shape.Y, ap.Gabor1Shape.X}, nil, nil)
+			ap.Gabor1Raw.SetShape([]int{ap.Input.Channels, ap.Gabor1.NFilters, 2, ap.Gabor1.Shape.Y, ap.Gabor1.Shape.X}, nil, nil)
+			ap.Gabor1Out.SetShape([]int{ap.Input.Channels, ap.Gabor1.NFilters, 2, ap.Gabor1.Shape.Y, ap.Gabor1.Shape.X}, nil, nil)
 		}
 		if ap.Gabor2.On {
-			ap.Gabor2Raw.SetShape([]int{ap.Input.Channels, ap.Gabor2.NFilters, 2, ap.Gabor2Shape.Y, ap.Gabor2Shape.X}, nil, nil)
-			ap.Gabor2Out.SetShape([]int{ap.Input.Channels, ap.Gabor2.NFilters, 2, ap.Gabor2Shape.Y, ap.Gabor2Shape.X}, nil, nil)
+			ap.Gabor2Raw.SetShape([]int{ap.Input.Channels, ap.Gabor2.NFilters, 2, ap.Gabor2.Shape.Y, ap.Gabor2.Shape.X}, nil, nil)
+			ap.Gabor2Out.SetShape([]int{ap.Input.Channels, ap.Gabor2.NFilters, 2, ap.Gabor2.Shape.Y, ap.Gabor2.Shape.X}, nil, nil)
 		}
 		if ap.Gabor3.On {
-			ap.Gabor3Raw.SetShape([]int{ap.Input.Channels, ap.Gabor3.NFilters, 2, ap.Gabor3Shape.Y, ap.Gabor3Shape.X}, nil, nil)
-			ap.Gabor3Out.SetShape([]int{ap.Input.Channels, ap.Gabor3.NFilters, 2, ap.Gabor3Shape.Y, ap.Gabor3Shape.X}, nil, nil)
+			ap.Gabor3Raw.SetShape([]int{ap.Input.Channels, ap.Gabor3.NFilters, 2, ap.Gabor3.Shape.Y, ap.Gabor3.Shape.X}, nil, nil)
+			ap.Gabor3Out.SetShape([]int{ap.Input.Channels, ap.Gabor3.NFilters, 2, ap.Gabor3.Shape.Y, ap.Gabor3.Shape.X}, nil, nil)
 		}
 		if ap.Mel.Mfcc.On {
 			ap.Mel.MfccDctOut.SetShape([]int{ap.Mel.MelFBank.NFilters}, nil, nil)
@@ -166,7 +137,7 @@ func (ap *AuditoryProc) LoadSound(snd *Sound) bool {
 	}
 
 	if needsInit {
-		ap.Init()
+		ap.Initialize()
 	}
 
 	if ap.Input.Channels > 1 {
@@ -189,45 +160,41 @@ func (ap *AuditoryProc) StartNewSound() bool {
 
 // NeedsInit checks to see if we need to reinitialize AuditoryProc
 func (ap *AuditoryProc) NeedsInit() bool {
-	if int(ap.DftSize) != ap.Input.WinSamples || ap.Mel.MelNFiltersEff != ap.Mel.MelFBank.NFilters+2 {
+	if int(ap.Mel.DftSize) != ap.Input.WinSamples || ap.Mel.MelNFiltersEff != ap.Mel.MelFBank.NFilters+2 {
 		return true
 	}
 	return false
 
 }
 
-// SetGaborShape sets the shape of a gabor based on parameters of gabor mel filters and input
+// SetGaborShape sets the shape of a gabor based on parameters of gabor, mel filters and input
 func (ap *AuditoryProc) SetGaborShape(gabor Gabor, gaborShape *image.Point) {
 	gaborShape.X = ((ap.Input.TrialSteps - 1) / gabor.SpaceTime) + 1
 	gaborShape.Y = ((ap.Mel.MelFBank.NFilters - gabor.SizeFreq - 1) / gabor.SpaceFreq) + 1
 }
 
 // Init initializes AuditoryProc fields
-func (ap *AuditoryProc) Init() bool {
+func (ap *AuditoryProc) Initialize() {
 	ap.Input.Initialize()
-	ap.Mel.Dft.Initialize()
-	ap.Mel.MelFBank.Initialize()
+	ap.Mel.Initialize(ap.Input.WinSamples, ap.Input.SampleRate)
+
 	ap.Gabor1.Initialize()
 	ap.Gabor1.On = true
-	ap.SetGaborShape(ap.Gabor1, &ap.Gabor1Shape)
-	ap.Gabor2.Initialize()
-	ap.Gabor2.On = false
-	ap.SetGaborShape(ap.Gabor2, &ap.Gabor2Shape)
-	ap.Gabor3.Initialize()
-	ap.Gabor3.On = false
-	ap.SetGaborShape(ap.Gabor3, &ap.Gabor3Shape)
+	ap.Gabor1.SetShape(ap.Input.TrialSteps, ap.Mel.MelFBank.NFilters)
+	//ap.Gabor2.Initialize()
+	//ap.Gabor2.On = false
+	//ap.Gabor2.SetShape(ap.Input.TrialSteps, ap.Mel.MelFBank.NFilters)
+	//ap.Gabor3.Initialize()
+	//ap.Gabor3.On = false
+	//ap.Gabor3.SetShape(ap.Input.TrialSteps, ap.Mel.MelFBank.NFilters)
 	ap.Mel.Mfcc.Initialize()
 
-	ap.DftSize = ap.Input.WinSamples
-	ap.DftUse = ap.DftSize/2 + 1
-	ap.Mel.InitFilters(ap.DftUse, ap.Input.SampleRate)
 	ap.InitGaborFilters()
 	ap.InitOutMatrix()
 	ap.Data = &etable.Table{}
 	ap.InitDataTable()
 	ap.InitSound()
 	ap.UseInhib = true
-	return true
 }
 
 // InitDataTable readies ap.Data, an etable.etable
@@ -256,7 +223,7 @@ func (ap *AuditoryProc) InputStepsLeft() int {
 // ProcessTrial processes a full trial worth of sound -- iterates over steps to fill a trial's worth of sound data
 func (ap *AuditoryProc) ProcessTrial() bool {
 	if ap.NeedsInit() {
-		ap.Init()
+		ap.Initialize()
 	}
 	ap.Data.AddRows(1)
 
@@ -519,7 +486,7 @@ func (ap *AuditoryProc) MelOutputToTable(dt *etable.Table, ch int, fmtOnly bool)
 	cn := "AudProc" + "_dft_pow" + colSfx // column name
 	col := dt.ColByName(cn)
 	if col == nil {
-		err = dt.AddCol(etensor.NewFloat32([]int{rows, int(ap.Input.TotalSteps), int(ap.DftUse)}, nil, nil), cn)
+		err = dt.AddCol(etensor.NewFloat32([]int{rows, int(ap.Input.TotalSteps), int(ap.Mel.DftUse)}, nil, nil), cn)
 		if err != nil {
 			fmt.Printf("MelOutputToTable: column not found or failed to be created")
 			return false
@@ -534,7 +501,7 @@ func (ap *AuditoryProc) MelOutputToTable(dt *etable.Table, ch int, fmtOnly bool)
 			return false
 		}
 		for s := 0; s < int(ap.Input.TotalSteps); s++ {
-			for i := 0; i < int(ap.DftUse); i++ {
+			for i := 0; i < int(ap.Mel.DftUse); i++ {
 				if ap.Mel.Dft.LogPow {
 					val := ap.Mel.DftLogPowerTrialOut.FloatVal([]int{i, s, ch})
 					dout.SetFloat([]int{s, i}, val)
@@ -576,7 +543,7 @@ func (ap *AuditoryProc) MelOutputToTable(dt *etable.Table, ch int, fmtOnly bool)
 		cn := "AudProc" + "_mel_gabor1_raw" + colSfx // column name
 		col := dt.ColByName(cn)
 		if col == nil {
-			err = dt.AddCol(etensor.NewFloat32([]int{rows, ap.Gabor1Shape.Y, ap.Gabor1Shape.X, 2, ap.Gabor1.NFilters}, nil, nil), cn)
+			err = dt.AddCol(etensor.NewFloat32([]int{rows, ap.Gabor1.Shape.Y, ap.Gabor1.Shape.X, 2, ap.Gabor1.NFilters}, nil, nil), cn)
 			if err != nil {
 				fmt.Printf("MelOutputToTable: column not found or failed to be created")
 				return false
@@ -591,8 +558,8 @@ func (ap *AuditoryProc) MelOutputToTable(dt *etable.Table, ch int, fmtOnly bool)
 				return false
 			}
 			nf := ap.Gabor1.NFilters
-			for s := 0; s < ap.Gabor1Shape.X; s++ {
-				for i := 0; i < ap.Gabor1Shape.Y; i++ {
+			for s := 0; s < ap.Gabor1.Shape.X; s++ {
+				for i := 0; i < ap.Gabor1.Shape.Y; i++ {
 					for ti := 0; ti < nf; ti++ {
 						val0 := ap.Gabor1Raw.FloatVal([]int{ch, ti, 0, i, s})
 						dout.SetFloat([]int{i, s, 0, ti}, val0)
@@ -606,7 +573,7 @@ func (ap *AuditoryProc) MelOutputToTable(dt *etable.Table, ch int, fmtOnly bool)
 		cn = "AudProc" + "_mel_gabor1" + colSfx // column name
 		col = dt.ColByName(cn)
 		if col == nil {
-			err = dt.AddCol(etensor.NewFloat32([]int{rows, ap.Gabor1Shape.Y, ap.Gabor1Shape.X, 2, ap.Gabor1.NFilters}, nil, nil), cn)
+			err = dt.AddCol(etensor.NewFloat32([]int{rows, ap.Gabor1.Shape.Y, ap.Gabor1.Shape.X, 2, ap.Gabor1.NFilters}, nil, nil), cn)
 			if err != nil {
 				fmt.Printf("MelOutputToTable: column not found or failed to be created")
 				return false
@@ -620,8 +587,8 @@ func (ap *AuditoryProc) MelOutputToTable(dt *etable.Table, ch int, fmtOnly bool)
 				return false
 			}
 			nf := ap.Gabor1.NFilters
-			for s := 0; s < ap.Gabor1Shape.X; s++ {
-				for i := 0; i < ap.Gabor1Shape.Y; i++ {
+			for s := 0; s < ap.Gabor1.Shape.X; s++ {
+				for i := 0; i < ap.Gabor1.Shape.Y; i++ {
 					for ti := 0; ti < nf; ti++ {
 						val0 := ap.Gabor1Out.FloatVal([]int{ch, ti, 0, i, s})
 						dout.SetFloat([]int{i, s, 0, ti}, val0)
@@ -637,7 +604,7 @@ func (ap *AuditoryProc) MelOutputToTable(dt *etable.Table, ch int, fmtOnly bool)
 		cn := "AudProc" + "_mel_gabor2_raw" + colSfx // column name
 		col := dt.ColByName(cn)
 		if col == nil {
-			err = dt.AddCol(etensor.NewFloat32([]int{rows, ap.Gabor2Shape.Y, ap.Gabor2Shape.X, 2, ap.Gabor2.NFilters}, nil, nil), cn)
+			err = dt.AddCol(etensor.NewFloat32([]int{rows, ap.Gabor2.Shape.Y, ap.Gabor2.Shape.X, 2, ap.Gabor2.NFilters}, nil, nil), cn)
 			if err != nil {
 				fmt.Printf("MelOutputToTable: column not found or failed to be created")
 				return false
@@ -651,8 +618,8 @@ func (ap *AuditoryProc) MelOutputToTable(dt *etable.Table, ch int, fmtOnly bool)
 				return false
 			}
 			nf := ap.Gabor2.NFilters
-			for s := 0; s < ap.Gabor2Shape.X; s++ {
-				for i := 0; i < ap.Gabor2Shape.Y; i++ {
+			for s := 0; s < ap.Gabor2.Shape.X; s++ {
+				for i := 0; i < ap.Gabor2.Shape.Y; i++ {
 					for ti := 0; ti < nf; ti++ {
 						val0 := ap.Gabor2Raw.FloatVal([]int{ch, ti, 0, i, s})
 						dout.SetFloat([]int{i, s, 0, ti}, val0)
@@ -666,7 +633,7 @@ func (ap *AuditoryProc) MelOutputToTable(dt *etable.Table, ch int, fmtOnly bool)
 		cn = "AudProc" + "_mel_gabor2" + colSfx // column name
 		col = dt.ColByName(cn)
 		if col == nil {
-			err = dt.AddCol(etensor.NewFloat32([]int{rows, ap.Gabor2Shape.Y, ap.Gabor2Shape.X, 2, ap.Gabor2.NFilters}, nil, nil), cn)
+			err = dt.AddCol(etensor.NewFloat32([]int{rows, ap.Gabor2.Shape.Y, ap.Gabor2.Shape.X, 2, ap.Gabor2.NFilters}, nil, nil), cn)
 			if err != nil {
 				fmt.Printf("MelOutputToTable: column not found or failed to be created")
 				return false
@@ -680,8 +647,8 @@ func (ap *AuditoryProc) MelOutputToTable(dt *etable.Table, ch int, fmtOnly bool)
 				return false
 			}
 			nf := ap.Gabor2.NFilters
-			for s := 0; s < ap.Gabor2Shape.X; s++ {
-				for i := 0; i < ap.Gabor2Shape.Y; i++ {
+			for s := 0; s < ap.Gabor2.Shape.X; s++ {
+				for i := 0; i < ap.Gabor2.Shape.Y; i++ {
 					for ti := 0; ti < nf; ti++ {
 						val0 := ap.Gabor2Out.FloatVal([]int{ch, ti, 0, i, s})
 						dout.SetFloat([]int{i, s, 0, ti}, val0)
@@ -697,7 +664,7 @@ func (ap *AuditoryProc) MelOutputToTable(dt *etable.Table, ch int, fmtOnly bool)
 		cn := "AudProc" + "_mel_gabor3_raw" + colSfx // column name
 		col := dt.ColByName(cn)
 		if col == nil {
-			err = dt.AddCol(etensor.NewFloat32([]int{rows, ap.Gabor3Shape.Y, ap.Gabor3Shape.X, 2, ap.Gabor3.NFilters}, nil, nil), cn)
+			err = dt.AddCol(etensor.NewFloat32([]int{rows, ap.Gabor3.Shape.Y, ap.Gabor3.Shape.X, 2, ap.Gabor3.NFilters}, nil, nil), cn)
 			if err != nil {
 				fmt.Printf("MelOutputToTable: column not found or failed to be created")
 				return false
@@ -711,8 +678,8 @@ func (ap *AuditoryProc) MelOutputToTable(dt *etable.Table, ch int, fmtOnly bool)
 				return false
 			}
 			nf := ap.Gabor3.NFilters
-			for s := 0; s < ap.Gabor3Shape.X; s++ {
-				for i := 0; i < ap.Gabor3Shape.Y; i++ {
+			for s := 0; s < ap.Gabor3.Shape.X; s++ {
+				for i := 0; i < ap.Gabor3.Shape.Y; i++ {
 					for ti := 0; ti < nf; ti++ {
 						val0 := ap.Gabor3Raw.FloatVal([]int{ch, ti, 0, i, s})
 						dout.SetFloat([]int{i, s, 0, ti}, val0)
@@ -726,7 +693,7 @@ func (ap *AuditoryProc) MelOutputToTable(dt *etable.Table, ch int, fmtOnly bool)
 		cn = "AudProc" + "_mel_gabor3" + colSfx // column name
 		col = dt.ColByName(cn)
 		if col == nil {
-			err = dt.AddCol(etensor.NewFloat32([]int{rows, ap.Gabor3Shape.Y, ap.Gabor3Shape.X, 2, ap.Gabor3.NFilters}, nil, nil), cn)
+			err = dt.AddCol(etensor.NewFloat32([]int{rows, ap.Gabor3.Shape.Y, ap.Gabor3.Shape.X, 2, ap.Gabor3.NFilters}, nil, nil), cn)
 			if err != nil {
 				fmt.Printf("MelOutputToTable: column not found or failed to be created")
 				return false
@@ -740,8 +707,8 @@ func (ap *AuditoryProc) MelOutputToTable(dt *etable.Table, ch int, fmtOnly bool)
 				return false
 			}
 			nf := ap.Gabor3.NFilters
-			for s := 0; s < ap.Gabor3Shape.X; s++ {
-				for i := 0; i < ap.Gabor3Shape.Y; i++ {
+			for s := 0; s < ap.Gabor3.Shape.X; s++ {
+				for i := 0; i < ap.Gabor3.Shape.Y; i++ {
 					for ti := 0; ti < nf; ti++ {
 						val0 := ap.Gabor3Out.FloatVal([]int{ch, ti, 0, i, s})
 						dout.SetFloat([]int{i, s, 0, ti}, val0)
@@ -758,7 +725,7 @@ func (ap *AuditoryProc) MelOutputToTable(dt *etable.Table, ch int, fmtOnly bool)
 		cn = "AudProc" + "_mel_mfcc" + colSfx // column name
 		col = dt.ColByName(cn)
 		if col == nil {
-			err = dt.AddCol(etensor.NewFloat32([]int{rows, ap.Gabor3Shape.Y, ap.Gabor3Shape.X, 2, ap.Gabor3.NFilters}, nil, nil), cn)
+			err = dt.AddCol(etensor.NewFloat32([]int{rows, ap.Gabor3.Shape.Y, ap.Gabor3.Shape.X, 2, ap.Gabor3.NFilters}, nil, nil), cn)
 			if err != nil {
 				fmt.Printf("MelOutputToTable: column not found or failed to be created")
 				return false
