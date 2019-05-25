@@ -5,14 +5,12 @@ package audio
 
 import (
 	"fmt"
-	"image"
-	"strconv"
-
 	"github.com/chewxy/math32"
 	"github.com/emer/etable/etable"
 	"github.com/emer/etable/etensor"
 	"github.com/emer/etable/minmax"
 	"github.com/emer/leabra/leabra"
+	"strconv"
 )
 
 // InitSound
@@ -43,11 +41,10 @@ func (ais *Input) InitFromSound(snd *Sound, nChannels int, channel int) {
 }
 
 type AuditoryProc struct {
-	Mel           Mel
-	Data          *etable.Table   `desc:"data table for saving filter results for viewing and applying to networks etc"`
-	Input         Input           `desc:"specifications of the raw auditory input"`
-	Gabor1        Gabor           `viewif:"MelFBank.On=true desc:"full set of frequency / time gabor filters -- first size"`
-	Gabor1Filters etensor.Float32 `inactive:"+" desc:" #NO_SAVE full gabor filters"`
+	Mel    Mel
+	Data   *etable.Table `desc:"data table for saving filter results for viewing and applying to networks etc"`
+	Input  Input         `desc:"specifications of the raw auditory input"`
+	Gabor1 Gabor         `viewif:"MelFBank.On=true desc:"full set of frequency / time gabor filters -- first size"`
 
 	FirstStep     bool            `inactive:"+" desc:" #NO_SAVE is this the first step of processing -- turns of prv smoothing of dft power"`
 	InputPos      int             `inactive:"+" desc:" #NO_SAVE current position in the sound_full input -- in terms of sample number"`
@@ -61,15 +58,8 @@ type AuditoryProc struct {
 	Gabor1Out etensor.Float32 `inactive:"+" desc:" #NO_SAVE [gabor.n_filters*2][mel.n_filters][input.trial_steps][input.channels] post-kwta output of full trial's worth of gabor steps"`
 }
 
-// InitGaborFilters
-func (ap *AuditoryProc) InitGaborFilters() {
-	if ap.Gabor1.On {
-		ap.Gabor1.InitFilters(&ap.Gabor1Filters)
-	}
-}
-
 // InitOutMatrices sets the shape of all output matrices
-func (ap *AuditoryProc) InitOutMatrix() bool {
+func (ap *AuditoryProc) InitOutputMatrices() bool {
 	ap.WindowIn.SetShape([]int{ap.Input.WinSamples}, nil, nil)
 	ap.Mel.DftOut.SetShape([]int{ap.Mel.DftSize}, nil, nil)
 	ap.Mel.DftPowerOut.SetShape([]int{ap.Mel.DftUse}, nil, nil)
@@ -144,25 +134,15 @@ func (ap *AuditoryProc) NeedsInit() bool {
 
 }
 
-// SetGaborShape sets the shape of a gabor based on parameters of gabor, mel filters and input
-func (ap *AuditoryProc) SetGaborShape(gabor Gabor, gaborShape *image.Point) {
-	gaborShape.X = ((ap.Input.TrialSteps - 1) / gabor.SpaceTime) + 1
-	gaborShape.Y = ((ap.Mel.MelFBank.NFilters - gabor.SizeFreq - 1) / gabor.SpaceFreq) + 1
-}
-
 // Init initializes AuditoryProc fields
 func (ap *AuditoryProc) Initialize() {
 	ap.Input.Initialize()
 	ap.Mel.Initialize(ap.Input.WinSamples, ap.Input.SampleRate)
-
-	ap.Gabor1.Initialize()
+	ap.Gabor1.Initialize(ap.Input.TrialSteps, ap.Mel.MelFBank.NFilters)
 	ap.Gabor1.On = true
-	ap.Gabor1.SetShape(ap.Input.TrialSteps, ap.Mel.MelFBank.NFilters)
-
 	ap.Mel.Mfcc.Initialize()
 
-	ap.InitGaborFilters()
-	ap.InitOutMatrix()
+	ap.InitOutputMatrices()
 	ap.Data = &etable.Table{}
 	ap.InitDataTable()
 	ap.InitSound()
@@ -253,8 +233,7 @@ func (ap *AuditoryProc) SoundToWindow(inPos int, ch int) bool {
 	// pad remainder with zero
 	zeroN := int(ap.Input.WinSamples) - int(samplesCopy)
 	if zeroN > 0 {
-		//sz := zeroN * int(unsafe.Sizeof(Float))
-		sz := zeroN * 4
+		sz := zeroN * 4 // 4 bytes - size of float32
 		copy(ap.WindowIn.Values[samplesCopy:], make([]float32, sz))
 	}
 	return true
@@ -295,12 +274,13 @@ func (ap *AuditoryProc) ProcessStep(ch int, step int) bool {
 // FilterTrial processes filters that operate over an entire trial at a time
 func (ap *AuditoryProc) FilterTrial(ch int) {
 	if ap.Gabor1.On {
-		ap.GaborFilter(ch, ap.Gabor1, ap.Gabor1Filters, ap.Gabor1Raw, ap.Gabor1Out)
+		ap.GaborFilter(ch, ap.Gabor1, ap.Gabor1Raw, ap.Gabor1Out)
 	}
 }
 
-// GaborFilter process filters that operate over an entire trial at a time
-func (ap *AuditoryProc) GaborFilter(ch int, spec Gabor, filters etensor.Float32, outRaw etensor.Float32, out etensor.Float32) {
+// GaborFilter processes input using filters that operate over an entire trial at a time
+func (ap *AuditoryProc) GaborFilter(ch int, spec Gabor, outRaw etensor.Float32, out etensor.Float32) {
+	//func (ap *AuditoryProc) GaborFilter(ch int, spec Gabor, filters etensor.Float32, outRaw etensor.Float32, out etensor.Float32) {
 	tHalfSz := spec.SizeTime / 2
 	tOff := tHalfSz - ap.Input.BorderSteps
 	tMin := tOff
@@ -331,7 +311,7 @@ func (ap *AuditoryProc) GaborFilter(ch int, spec Gabor, filters etensor.Float32,
 				fSum := float32(0.0)
 				for ff := int(0); ff < spec.SizeFreq; ff++ {
 					for ft := int(0); ft < spec.SizeTime; ft++ {
-						fVal := filters.Value([]int{ft, ff, fi})
+						fVal := spec.Filters.Value([]int{ft, ff, fi})
 						iVal := ap.Mel.MelFBankTrialOut.Value([]int{flt + ff, inSt + ft, ch})
 						fSum += fVal * iVal
 					}
