@@ -20,23 +20,22 @@ func (ap *AuditoryProc) InitSound() bool {
 }
 
 // InitFromSound loads a sound and sets the Input channel vars and sample rate
-func (ais *Input) InitFromSound(snd *Sound, nChannels int, channel int) {
+func (in *Input) InitFromSound(snd *Sound, nChannels int, channel int) {
 	if snd == nil {
 		fmt.Printf("InitFromSound: sound nil")
 		return
 	}
-
-	ais.SampleRate = int(snd.SampleRate())
-	ais.ComputeSamples()
+	in.SampleRate = int(snd.SampleRate())
+	in.ComputeSamples()
 	if nChannels < 1 {
-		ais.Channels = int(snd.Channels())
+		in.Channels = int(snd.Channels())
 	} else {
-		ais.Channels = int(math32.Min(float32(nChannels), float32(ais.Channels)))
+		in.Channels = int(math32.Min(float32(nChannels), float32(in.Channels)))
 	}
-	if ais.Channels > 1 {
-		ais.Channel = channel
+	if in.Channels > 1 {
+		in.Channel = channel
 	} else {
-		ais.Channel = 0
+		in.Channel = 0
 	}
 }
 
@@ -88,15 +87,13 @@ func (ap *AuditoryProc) InitOutputMatrices() bool {
 // LoadSound initializes the AuditoryProc with the sound loaded from file by "Sound"
 func (ap *AuditoryProc) LoadSound(snd *Sound) bool {
 	var needsInit = false
-	if ap.NeedsInit() {
+	if ap.Mel.NeedsInit(ap.Input.WinSamples) {
 		needsInit = true
 	}
-
 	if snd == nil || !snd.IsValid() {
 		fmt.Printf("LoadSound: sound nil or invalid")
 		return false
 	}
-
 	if int(snd.SampleRate()) != ap.Input.SampleRate {
 		fmt.Printf("LoadSound: sample rate does not match sound -- re-initializing with new rate of: %v", strconv.Itoa(int(snd.SampleRate())))
 		ap.Input.SampleRate = int(snd.SampleRate())
@@ -106,7 +103,6 @@ func (ap *AuditoryProc) LoadSound(snd *Sound) bool {
 	if needsInit {
 		ap.Initialize()
 	}
-
 	if ap.Input.Channels > 1 {
 		snd.SoundToMatrix(&ap.SoundFull, -1)
 	} else {
@@ -117,21 +113,11 @@ func (ap *AuditoryProc) LoadSound(snd *Sound) bool {
 }
 
 // StartNewSound sets a few vars to 0 before processing a new sound
-func (ap *AuditoryProc) StartNewSound() bool {
+func (ap *AuditoryProc) StartNewSound() {
 	ap.FirstStep = true
 	ap.InputPos = 0
 	ap.TrialStartPos = 0
 	ap.TrialEndPos = int(ap.TrialStartPos) + ap.Input.TrialSamples
-	return true
-}
-
-// NeedsInit checks to see if we need to reinitialize AuditoryProc
-func (ap *AuditoryProc) NeedsInit() bool {
-	if int(ap.Mel.DftSize) != ap.Input.WinSamples || ap.Mel.MelNFiltersEff != ap.Mel.MelFBank.NFilters+2 {
-		return true
-	}
-	return false
-
 }
 
 // Init initializes AuditoryProc fields
@@ -146,7 +132,7 @@ func (ap *AuditoryProc) Initialize() {
 	ap.Data = &etable.Table{}
 	ap.InitDataTable()
 	ap.InitSound()
-	ap.UseInhib = true
+	ap.UseInhib = false
 }
 
 // InitDataTable readies ap.Data, an etable.etable
@@ -174,7 +160,7 @@ func (ap *AuditoryProc) InputStepsLeft() int {
 
 // ProcessTrial processes a full trial worth of sound -- iterates over steps to fill a trial's worth of sound data
 func (ap *AuditoryProc) ProcessTrial() bool {
-	if ap.NeedsInit() {
+	if ap.Mel.NeedsInit(ap.Input.WinSamples) {
 		ap.Initialize()
 	}
 	ap.Data.AddRows(1)

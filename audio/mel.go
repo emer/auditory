@@ -83,6 +83,7 @@ type Mel struct {
 
 // Initialize
 func (mel *Mel) Initialize(winSamples int, sampleRate int) {
+	mel.Dft.Initialize()
 	mel.DftSize = winSamples
 	mel.DftUse = mel.DftSize/2 + 1
 	mel.MelFBank.Initialize()
@@ -129,6 +130,14 @@ func (mel *Mel) InitFilters(dftUse int, sampleRate int) bool {
 		}
 	}
 	return true
+}
+
+// NeedsInit checks to see if we need to reinitialize AuditoryProc
+func (mel *Mel) NeedsInit(winSamples int) bool {
+	if mel.DftSize != winSamples || mel.MelNFiltersEff != mel.MelFBank.NFilters+2 {
+		return true
+	}
+	return false
 }
 
 // MelFilterDft
