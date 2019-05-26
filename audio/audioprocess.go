@@ -8,8 +8,6 @@ import (
 	"github.com/chewxy/math32"
 	"github.com/emer/etable/etable"
 	"github.com/emer/etable/etensor"
-	"github.com/emer/etable/minmax"
-	"github.com/emer/leabra/leabra"
 	"strconv"
 )
 
@@ -132,7 +130,7 @@ func (ap *AuditoryProc) Initialize() {
 	ap.Data = &etable.Table{}
 	ap.InitDataTable()
 	ap.InitSound()
-	ap.UseInhib = false
+	ap.UseInhib = true
 }
 
 // InitDataTable readies ap.Data, an etable.etable
@@ -320,76 +318,10 @@ func (ap *AuditoryProc) GaborFilter(ch int, spec Gabor, outRaw etensor.Float32, 
 	}
 
 	if ap.UseInhib {
+		kwta := kWinnerTakeAll{}
 		rawSS := outRaw.SubSpace(outRaw.NumDims()-1, []int{ch}).(*etensor.Float32)
 		outSS := out.SubSpace(outRaw.NumDims()-1, []int{ch}).(*etensor.Float32)
-
-		// Chans are ion channels used in computing point-neuron activation function
-		type Chans struct {
-			E float32 `desc:"excitatory sodium (Na) AMPA channels activated by synaptic glutamate"`
-			L float32 `desc:"constant leak (potassium, K+) channels -- determines resting potential (typically higher than resting potential of K)"`
-			I float32 `desc:"inhibitory chloride (Cl-) channels activated by synaptic GABA"`
-			K float32 `desc:"gated / active potassium channels -- typically hyperpolarizing relative to leak / rest"`
-		}
-
-		type ActParams struct {
-			Gbar       Chans `view:"inline" desc:"[Defaults: 1, .2, 1, 1] maximal conductances levels for channels"`
-			Erev       Chans `view:"inline" desc:"[Defaults: 1, .3, .25, .1] reversal potentials for each channel"`
-			ErevSubThr Chans `inactive:"+" view:"-" desc:"Erev - Act.Thr for each channel -- used in computing GeThrFmG among others"`
-		}
-
-		ac := ActParams{}
-		ac.Gbar.E = 1.0
-		ac.Gbar.L = 0.2
-		ac.Gbar.I = 1.0
-		ac.Gbar.K = 1.0
-		ac.Erev.E = 1.0
-		ac.Erev.L = 0.3
-		ac.Erev.I = 0.25
-		ac.Erev.K = 0.1
-		// these really should be calculated - see update method in Act
-		ac.ErevSubThr.E = 0.5
-		ac.ErevSubThr.L = -0.19999999
-		ac.ErevSubThr.I = -0.25
-		ac.ErevSubThr.K = -0.4
-
-		xx1 := leabra.XX1Params{}
-		xx1.Defaults()
-
-		inhibPars := leabra.FFFBParams{}
-		inhibPars.Defaults()
-		inhib := leabra.FFFBInhib{}
-
-		//max_delta_crit := float32(.005)
-
-		values := rawSS.Values // these are ge
-		acts := make([]float32, 0)
-		acts = append(acts, values...)
-		avgMaxGe := minmax.AvgMax32{}
-		avgMaxAct := minmax.AvgMax32{}
-		for i, ge := range acts {
-			avgMaxGe.UpdateVal(ge, i)
-		}
-
-		fmt.Println()
-		cycles := 20
-		for cy := 0; cy < cycles; cy++ {
-			inhibPars.Inhib(avgMaxGe.Avg, avgMaxGe.Max, avgMaxAct.Avg, &inhib)
-			fmt.Printf("geAvg: %v, geMax: %v, actMax: %v\n", avgMaxGe.Avg, avgMaxGe.Max, avgMaxAct.Max)
-			geThr := float32((ac.Gbar.I*inhib.Gi*ac.ErevSubThr.I + ac.Gbar.L*ac.ErevSubThr.L) / ac.ErevSubThr.E)
-			//max := avgMaxAct.Max
-			for i, act := range acts {
-				nwAct := xx1.NoisyXX1(act*float32(ac.Gbar.E) - geThr) // act is ge
-				acts[i] = nwAct
-				avgMaxAct.UpdateVal(nwAct, i)
-			}
-			//if avgMaxAct.Max - max < max_delta_crit {
-			//	break
-			//}
-		}
-		for i, act := range acts {
-			//fmt.Printf("%v\n", act)
-			outSS.SetFloat1D(i, float64(act))
-		}
+		kwta.CalcActs(rawSS, outSS)
 	}
 }
 
