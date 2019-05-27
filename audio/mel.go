@@ -220,7 +220,7 @@ func (mc *MelCepstrumSpec) Initialize() {
 // FilterWindow filters the current window_in input data according to current settings -- called by ProcessStep, but can be called separately
 func (mel *Mel) FilterWindow(ch int, step int, windowIn etensor.Float32, firstStep bool) bool {
 	mel.FftReal(mel.DftOut, windowIn)
-	mel.DftInput(windowIn.Floats1D(), windowIn)
+	mel.DftInput(windowIn.Floats(), windowIn)
 	if mel.MelFBank.On {
 		mel.PowerOfDft(ch, step, firstStep)
 		mel.MelFilterDft(ch, step, &mel.DftPowerOut)
@@ -308,7 +308,7 @@ func (mel *Mel) CepstrumDctMel(ch, step int) {
 
 	dct := fourier.NewDCT(len(mel.MfccDctOut.Values))
 	var mfccDctOut []float64
-	mfccDctOut = dct.Transform(mfccDctOut, mel.MfccDctOut.Floats1D())
+	mfccDctOut = dct.Transform(mfccDctOut, mel.MfccDctOut.Floats())
 	el0 := mfccDctOut[0]
 	mfccDctOut[0] = math.Log(1.0 + el0*el0) // replace with log energy instead..
 	for i := 0; i < mel.MelFBank.NFilters; i++ {
