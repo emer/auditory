@@ -58,7 +58,6 @@ type AuditoryProc struct {
 // InitOutMatrices sets the shape of all output matrices
 func (ap *AuditoryProc) InitOutputMatrices() bool {
 	ap.WindowIn.SetShape([]int{ap.Input.WinSamples}, nil, nil)
-	ap.Mel.DftOut.SetShape([]int{ap.Mel.DftSize}, nil, nil)
 	ap.Mel.DftPowerOut.SetShape([]int{ap.Mel.DftUse}, nil, nil)
 	ap.Mel.DftPowerTrialOut.SetShape([]int{ap.Mel.DftUse, ap.Input.TotalSteps, ap.Input.Channels}, nil, nil)
 
