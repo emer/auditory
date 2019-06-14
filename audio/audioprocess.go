@@ -5,10 +5,11 @@ package audio
 
 import (
 	"fmt"
+	"strconv"
+
 	"github.com/chewxy/math32"
 	"github.com/emer/etable/etable"
 	"github.com/emer/etable/etensor"
-	"strconv"
 )
 
 // InitSound
@@ -41,7 +42,8 @@ type AuditoryProc struct {
 	Mel    Mel
 	Data   *etable.Table `desc:"data table for saving filter results for viewing and applying to networks etc"`
 	Input  Input         `desc:"specifications of the raw auditory input"`
-	Gabor1 Gabor         `viewif:"MelFBank.On=true desc:"full set of frequency / time gabor filters -- first size"`
+	Gabor1 Gabor         `viewif:"MelFBank.On" desc:"full set of frequency / time gabor filters -- first size"`
+	KWTA   KWTA          `viewif:"UseInhib" desc:"kwta parameters, using FFFB form"`
 
 	FirstStep     bool            `inactive:"+" desc:" #NO_SAVE is this the first step of processing -- turns of prv smoothing of dft power"`
 	InputPos      int             `inactive:"+" desc:" #NO_SAVE current position in the sound_full input -- in terms of sample number"`
@@ -49,7 +51,6 @@ type AuditoryProc struct {
 	TrialEndPos   int             `inactive:"+" desc:" #NO_SAVE ending position of the current trial -- in terms of sample number"`
 	SoundFull     etensor.Float32 `inactive:"+" desc:" #NO_SAVE the full sound input obtained from the sound input"`
 	WindowIn      etensor.Float32 `inactive:"+" desc:" #NO_SAVE [input.win_samples] the raw sound input, one channel at a time"`
-	UseInhib      bool            `viewif:"Gabor1.On=true" desc:"k-winner-take-all inhibitory dynamics for the time-gabor output"`
 
 	Gabor1Raw etensor.Float32 `inactive:"+" desc:" #NO_SAVE [gabor.n_filters*2][mel.n_filters][input.trial_steps][input.channels] raw output of gabor1 -- full trial's worth of gabor steps"`
 	Gabor1Out etensor.Float32 `inactive:"+" desc:" #NO_SAVE [gabor.n_filters*2][mel.n_filters][input.trial_steps][input.channels] post-kwta output of full trial's worth of gabor steps"`
@@ -124,12 +125,13 @@ func (ap *AuditoryProc) Initialize() {
 	ap.Gabor1.Initialize(ap.Input.TrialSteps, ap.Mel.MelFBank.NFilters)
 	ap.Gabor1.On = true
 	ap.Mel.Mfcc.Initialize()
+	ap.KWTA.Defaults()
+	ap.KWTA.On = true
 
 	ap.InitOutputMatrices()
 	ap.Data = &etable.Table{}
 	ap.InitDataTable()
 	ap.InitSound()
-	ap.UseInhib = true
 }
 
 // InitDataTable readies ap.Data, an etable.etable
@@ -316,11 +318,10 @@ func (ap *AuditoryProc) GaborFilter(ch int, spec Gabor, outRaw etensor.Float32, 
 		}
 	}
 
-	if ap.UseInhib {
-		kwta := kWinnerTakeAll{}
+	if ap.KWTA.On {
 		rawSS := outRaw.SubSpace(outRaw.NumDims()-1, []int{ch}).(*etensor.Float32)
 		outSS := out.SubSpace(outRaw.NumDims()-1, []int{ch}).(*etensor.Float32)
-		kwta.CalcActs(rawSS, outSS)
+		ap.KWTA.KWTA(rawSS, outSS)
 	}
 }
 
