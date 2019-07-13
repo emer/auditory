@@ -1,0 +1,34 @@
+language: go
+
+go:
+  - 1.11.x
+  - 1.12.x
+  - master
+
+addons:
+  apt_packages:
+    - libgl1-mesa-dev
+    - xorg-dev
+
+matrix:
+  fast_finish: true
+  allow_failures:
+    - go: master
+
+script:
+  - go get -d -t -v ./...
+  - go build -v `go list ./... | grep -v python`
+  - go test `go list ./... | grep -v python`
+
+notifications:
+  email:
+    recipients:
+      - emergentdev@grey.colorado.edu
+    on_success: change
+    on_failure: always
+  webhooks:
+    urls:
+      - https://ccnlab.zulipchat.com/api/v1/external/travis?api_key=7lfyOrci6YROdaxqqdDvQnNMWWQBtNuW&stream=emergent&topic=travis
+    on_success: change
+    on_failure: always
+
