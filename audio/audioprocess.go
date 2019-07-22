@@ -10,6 +10,7 @@ import (
 	"github.com/chewxy/math32"
 	"github.com/emer/etable/etable"
 	"github.com/emer/etable/etensor"
+	"github.com/emer/vision/kwta"
 )
 
 // InitSound
@@ -39,11 +40,12 @@ func (in *Input) InitFromSound(snd *Sound, nChannels int, channel int) {
 }
 
 type AuditoryProc struct {
-	Mel    Mel
-	Data   *etable.Table `desc:"data table for saving filter results for viewing and applying to networks etc"`
-	Input  Input         `desc:"specifications of the raw auditory input"`
-	Gabor1 Gabor         `viewif:"MelFBank.On" desc:"full set of frequency / time gabor filters -- first size"`
-	KWTA   KWTA          `viewif:"UseInhib" desc:"kwta parameters, using FFFB form"`
+	Mel       Mel
+	Data      *etable.Table    `desc:"data table for saving filter results for viewing and applying to networks etc"`
+	Input     Input            `desc:"specifications of the raw auditory input"`
+	Gabor1    Gabor            `viewif:"MelFBank.On" desc:"full set of frequency / time gabor filters -- first size"`
+	KWTA      kwta.KWTA        `viewif:"UseInhib" desc:"kwta parameters, using FFFB form"`
+	A1sInhibs []kwta.FFFBInhib `view:"no-inline" desc:"inhibition values for V1s KWTA"`
 
 	FirstStep     bool            `inactive:"+" desc:" #NO_SAVE is this the first step of processing -- turns of prv smoothing of dft power"`
 	InputPos      int             `inactive:"+" desc:" #NO_SAVE current position in the sound_full input -- in terms of sample number"`
@@ -321,7 +323,7 @@ func (ap *AuditoryProc) GaborFilter(ch int, spec Gabor, outRaw etensor.Float32, 
 	if ap.KWTA.On {
 		rawSS := outRaw.SubSpace(outRaw.NumDims()-1, []int{ch}).(*etensor.Float32)
 		outSS := out.SubSpace(outRaw.NumDims()-1, []int{ch}).(*etensor.Float32)
-		ap.KWTA.KWTA(rawSS, outSS)
+		ap.KWTA.KWTAPool(rawSS, outSS, &ap.A1sInhibs)
 	}
 }
 
