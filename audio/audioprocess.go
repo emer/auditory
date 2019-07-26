@@ -122,7 +122,7 @@ func (ap *AuditoryProc) StartNewSound() {
 
 // Init initializes AuditoryProc fields
 func (ap *AuditoryProc) Initialize() {
-	ap.Input.Initialize()
+	ap.Input.Defaults()
 	ap.Mel.Initialize(ap.Input.WinSamples, ap.Input.SampleRate)
 	ap.Gabor1.Initialize(ap.Input.TrialSteps, ap.Mel.MelFBank.NFilters)
 	ap.Gabor1.On = true

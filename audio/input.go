@@ -20,8 +20,8 @@ type Input struct {
 	TotalSteps   int     `inactive:"+" desc:"2*border_steps + trial_steps -- total in full window"`
 }
 
-//Initialize initializes the Input
-func (ais *Input) Initialize() {
+//Defaults initializes the Input
+func (ais *Input) Defaults() {
 	ais.WinMsec = 25.0
 	ais.StepMsec = 5.0
 	ais.TrialMsec = 100.0
