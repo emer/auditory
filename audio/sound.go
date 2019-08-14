@@ -6,6 +6,7 @@ package audio
 import (
 	"errors"
 	"fmt"
+	"github.com/emer/etable/etable"
 	"os"
 	"time"
 
@@ -32,6 +33,7 @@ const (
 
 type Sound struct {
 	Decoder *wav.Decoder
+	T       etable.Table
 }
 
 // LoadSound loads the sound file and decodes it

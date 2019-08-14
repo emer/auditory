@@ -5,6 +5,7 @@ import (
 	"math"
 
 	"github.com/chewxy/math32"
+	"github.com/emer/etable/etable"
 	"github.com/emer/etable/etensor"
 	"gonum.org/v1/gonum/fourier"
 )
@@ -57,28 +58,31 @@ type MelFBank struct {
 }
 
 type Mel struct {
-	MelPtsMel        etensor.Float32 `inactive:"+" desc:" #NO_SAVE [mel_n_filters_eff] scale points in mel units (mels)"`
-	MelPtsHz         etensor.Float32 `inactive:"+" desc:" #NO_SAVE [mel_n_filters_eff] mel scale points in hz units"`
-	MelPtsBin        etensor.Int32   `inactive:"+" desc:" #NO_SAVE [mel_n_filters_eff] mel scale points in fft bins"`
-	MelFilters       etensor.Float32 `inactive:"+" desc:" #NO_SAVE [mel_filt_max_bins][mel.n_filters] the actual filters for actual number of mel filters"`
+	MelPtsMel        etensor.Float32 `view:"no-inline" desc:" #NO_SAVE [mel_n_filters_eff] scale points in mel units (mels)"`
+	MelPtsHz         etensor.Float32 `view:"no-inline" desc:" #NO_SAVE [mel_n_filters_eff] mel scale points in hz units"`
+	MelPtsBin        etensor.Int32   `view:"no-inline" desc:" #NO_SAVE [mel_n_filters_eff] mel scale points in fft bins"`
+	MelFilters       etensor.Float32 `view:"no-inline" desc:" #NO_SAVE [mel_filt_max_bins][mel.n_filters] the actual filters for actual number of mel filters"`
 	MelFilterMaxBins int             `inactive:"+" desc:" #NO_SAVE maximum number of bins for mel filter -- number of bins in highest filter"`
 	MelNFiltersEff   int             `inactive:"+" desc:" #NO_SAVE effective number of mel filters: mel.n_filters + 2"`
 
-	MelFBank         MelFBank
-	MelFBankOut      etensor.Float32 `inactive:"+" desc:" #NO_SAVE [mel.n_filters] mel scale transformation of dft_power, using triangular filters, resulting in the mel filterbank output -- the natural log of this is typically applied"`
-	MelFBankTrialOut etensor.Float32 `inactive:"+" desc:" #NO_SAVE [mel.n_filters][input.total_steps][input.channels] full trial's worth of mel feature-bank output -- only if using gabors"`
+	MelFBank              MelFBank
+	MelFBankOut           etensor.Float32 `view:"no-inline" desc:" #NO_SAVE [mel.n_filters] mel scale transformation of dft_power, using triangular filters, resulting in the mel filterbank output -- the natural log of this is typically applied"`
+	MelFBankTrialOut      etensor.Float32 `view:"no-inline" desc:" #NO_SAVE [mel.n_filters][input.total_steps][input.channels] full trial's worth of mel feature-bank output -- only if using gabors"`
+	MelFBankTrialOutTable etable.Table    `view:"no-inline" desc:" #NO_SAVE [mel.n_filters] MelFBankOutTrial - view only"`
 
 	Dft                 AudDftSpec      `desc:"specifications for how to compute the discrete fourier transform (DFT, using FFT)"`
 	DftSize             int             `inactive:"+" desc:" #NO_SAVE full size of fft output -- should be input.win_samples"`
 	DftUse              int             `inactive:"+" desc:" #NO_SAVE number of dft outputs to actually use -- should be dft_size / 2 + 1"`
 	DftOut              []complex128    `inactive:"+" desc:" #NO_SAVE [dft_size] discrete fourier transform (fft) output complex representation"`
-	DftPowerOut         etensor.Float32 `inactive:"+" desc:" #NO_SAVE [dft_use] power of the dft, up to the nyquist limit frequency (1/2 input.win_samples)"`
-	DftLogPowerOut      etensor.Float32 `inactive:"+" desc:" #NO_SAVE [dft_use] log power of the dft, up to the nyquist liit frequency (1/2 input.win_samples)"`
-	DftPowerTrialOut    etensor.Float32 `inactive:"+" desc:" #NO_SAVE [dft_use][input.total_steps][input.channels] full trial's worth of power of the dft, up to the nyquist limit frequency (1/2 input.win_samples)"`
-	DftLogPowerTrialOut etensor.Float32 `inactive:"+" desc:" #NO_SAVE [dft_use][input.total_steps][input.channels] full trial's worth of log power of the dft, up to the nyquist limit frequency (1/2 input.win_samples)"`
+	DftPowerOut         etensor.Float32 `view:"no-inline" desc:" #NO_SAVE [dft_use] power of the dft, up to the nyquist limit frequency (1/2 input.win_samples)"`
+	DftLogPowerOut      etensor.Float32 `view:"no-inline" desc:" #NO_SAVE [dft_use] log power of the dft, up to the nyquist liit frequency (1/2 input.win_samples)"`
+	DftPowerTrialOut    etensor.Float32 `view:"no-inline" desc:" #NO_SAVE [dft_use][input.total_steps][input.channels] full trial's worth of power of the dft, up to the nyquist limit frequency (1/2 input.win_samples)"`
+	DftLogPowerTrialOut etensor.Float32 `view:"no-inline" desc:" #NO_SAVE [dft_use][input.total_steps][input.channels] full trial's worth of log power of the dft, up to the nyquist limit frequency (1/2 input.win_samples)"`
 	Mfcc                MelCepstrumSpec `viewif:"MelFBank.On=true desc:"specifications of the mel cepstrum discrete cosine transform of the mel fbank filter features"`
-	MfccDctOut          etensor.Float32 `inactive:"+" desc:" #NO_SAVE discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
-	MfccDctTrialOut     etensor.Float32 `inactive:"+" desc:" #NO_SAVE full trial's worth of discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
+	MfccDctOut          etensor.Float32 `view:"no-inline" desc:" #NO_SAVE discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
+	MfccDctTrialOut     etensor.Float32 `view:"no-inline" desc:" #NO_SAVE full trial's worth of discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
+
+	T etable.Table
 }
 
 // Initialize
@@ -175,6 +179,11 @@ func (mel *Mel) MelFilterDft(ch, step int, dftPowerOut *etensor.Float32) {
 		mel.MelFBankOut.SetFloat1D(mi, float64(val))
 		mel.MelFBankTrialOut.Set([]int{mi, step, ch}, val)
 	}
+
+	mel.MelFBankTrialOutTable.SetFromSchema(etable.Schema{
+		{"MelFBank", etensor.FLOAT32, []int{mel.MelFBankTrialOut.Dim(0), mel.MelFBankTrialOut.Dim(1), mel.MelFBankTrialOut.Dim(2)}, []string{"Row", "Y", "X"}},
+	}, mel.MelFBankTrialOut.Dim(2))
+	mel.MelFBankTrialOutTable.Col(0).CopyFrom(&mel.MelFBankTrialOut)
 }
 
 // FreqToMel converts frequency to mel scale

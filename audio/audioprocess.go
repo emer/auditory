@@ -40,14 +40,14 @@ func (in *Input) InitFromSound(snd *Sound, nChannels int, channel int) {
 }
 
 type AuditoryProc struct {
-	Mel       Mel
-	Data      *etable.Table    `desc:"data table for saving filter results for viewing and applying to networks etc"`
+	Mel       Mel              `view:"no-inline"`
+	Data      *etable.Table    `view:"no-inline" desc:"data table for saving filter results for viewing and applying to networks etc"`
 	Input     Input            `desc:"specifications of the raw auditory input"`
 	Gabor1    Gabor            `viewif:"MelFBank.On" desc:"full set of frequency / time gabor filters -- first size"`
 	KWTA      kwta.KWTA        `viewif:"UseInhib" desc:"kwta parameters, using FFFB form"`
 	A1sInhibs []kwta.FFFBInhib `view:"no-inline" desc:"inhibition values for V1s KWTA"`
 
-	FirstStep     bool            `inactive:"+" desc:" #NO_SAVE is this the first step of processing -- turns of prv smoothing of dft power"`
+	FirstStep     bool            `inactive:"+" desc:" #NO_SAVE is this the first step of processing -- turns off prv smoothing of dft power"`
 	InputPos      int             `inactive:"+" desc:" #NO_SAVE current position in the sound_full input -- in terms of sample number"`
 	TrialStartPos int             `inactive:"+" desc:" #NO_SAVE starting position of the current trial -- in terms of sample number"`
 	TrialEndPos   int             `inactive:"+" desc:" #NO_SAVE ending position of the current trial -- in terms of sample number"`
@@ -159,45 +159,37 @@ func (ap *AuditoryProc) InputStepsLeft() int {
 	return samplesLeft / ap.Input.StepSamples
 }
 
-// ProcessTrial processes a full trial worth of sound -- iterates over steps to fill a trial's worth of sound data
-func (ap *AuditoryProc) ProcessTrial() bool {
+// ProcessTrialSamples processes a full trial worth of sound -- iterates over steps to fill a trial's worth of sound data
+func (ap *AuditoryProc) ProcessTrialSamples() bool {
 	if ap.Mel.NeedsInit(ap.Input.WinSamples) {
 		ap.Initialize()
 	}
-	ap.Data.AddRows(1)
-
 	if ap.InputStepsLeft() < 1 {
-		fmt.Printf("ProcessTrial: no steps worth of input sound available -- load a new sound")
+		fmt.Printf("ProcessSamples: no steps worth of input sound available -- load a new sound")
 		return false
 	}
 
 	startPos := ap.InputPos
+	border := 2 * ap.Input.BorderSteps // full amount to wrap
+
 	if ap.InputPos == 0 { // just starting out -- fill whole buffer..
-		border := 2 * ap.Input.BorderSteps // full amount to wrap
 		ap.TrialStartPos = ap.InputPos
 		ap.TrialEndPos = ap.TrialStartPos + ap.Input.TrialSamples + 2*border*ap.Input.StepSamples
-
 		for ch := int(0); ch < ap.Input.Channels; ch++ {
 			ap.InputPos = startPos // always start at same place per channel
 			for s := 0; s < int(ap.Input.TotalSteps); s++ {
 				ap.ProcessStep(ch, s)
 			}
-			ap.FilterTrial(ch)
-			ap.OutputToTable(ch)
 		}
 	} else {
-		border := 2 * ap.Input.BorderSteps // full amount to wrap
 		ap.TrialStartPos = ap.InputPos - ap.Input.StepSamples*ap.Input.BorderSteps
 		ap.TrialEndPos = ap.TrialStartPos + ap.Input.TrialSamples
-
-		for ch := 0; ch < int(ap.Input.Channels); ch++ {
+		for ch := int(0); ch < ap.Input.Channels; ch++ {
 			ap.InputPos = startPos // always start at same place per channel
 			ap.WrapBorder(ch)
 			for s := border; s < ap.Input.TotalSteps; s++ {
 				ap.ProcessStep(ch, s)
 			}
-			ap.FilterTrial(ch)
-			ap.OutputToTable(ch)
 		}
 	}
 	return true
@@ -259,9 +251,11 @@ func (ap *AuditoryProc) ProcessStep(ch int, step int) bool {
 }
 
 // FilterTrial processes filters that operate over an entire trial at a time
-func (ap *AuditoryProc) FilterTrial(ch int) {
-	if ap.Gabor1.On {
-		ap.GaborFilter(ch, ap.Gabor1, ap.Gabor1Raw, ap.Gabor1Out)
+func (ap *AuditoryProc) FilterTrial() {
+	for ch := int(0); ch < ap.Input.Channels; ch++ {
+		if ap.Gabor1.On {
+			ap.GaborFilter(ch, ap.Gabor1, ap.Gabor1Raw, ap.Gabor1Out)
+		}
 	}
 }
 
@@ -328,12 +322,14 @@ func (ap *AuditoryProc) GaborFilter(ch int, spec Gabor, outRaw etensor.Float32, 
 }
 
 // OutputToTable
-func (ap *AuditoryProc) OutputToTable(ch int) bool {
+func (ap *AuditoryProc) OutputToTable() bool {
 	if ap.Data == nil {
 		return false
 	}
-	if ap.Mel.MelFBank.On {
-		ap.MelOutputToTable(ap.Data, ch, false) // not fmt_only
+	for ch := int(0); ch < ap.Input.Channels; ch++ {
+		if ap.Mel.MelFBank.On {
+			ap.MelOutputToTable(ap.Data, ch, false) // not fmt_only
+		}
 	}
 	return true
 }
