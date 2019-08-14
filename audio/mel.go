@@ -5,7 +5,6 @@ import (
 	"math"
 
 	"github.com/chewxy/math32"
-	"github.com/emer/etable/etable"
 	"github.com/emer/etable/etensor"
 	"gonum.org/v1/gonum/fourier"
 )
@@ -65,10 +64,10 @@ type Mel struct {
 	MelFilterMaxBins int             `inactive:"+" desc:" #NO_SAVE maximum number of bins for mel filter -- number of bins in highest filter"`
 	MelNFiltersEff   int             `inactive:"+" desc:" #NO_SAVE effective number of mel filters: mel.n_filters + 2"`
 
-	MelFBank              MelFBank
-	MelFBankOut           etensor.Float32 `view:"no-inline" desc:" #NO_SAVE [mel.n_filters] mel scale transformation of dft_power, using triangular filters, resulting in the mel filterbank output -- the natural log of this is typically applied"`
-	MelFBankTrialOut      etensor.Float32 `view:"no-inline" desc:" #NO_SAVE [mel.n_filters][input.total_steps][input.channels] full trial's worth of mel feature-bank output -- only if using gabors"`
-	MelFBankTrialOutTable etable.Table    `view:"no-inline" desc:" #NO_SAVE [mel.n_filters] MelFBankOutTrial - view only"`
+	MelFBank         MelFBank
+	MelFBankOut      etensor.Float32 `view:"no-inline" desc:" #NO_SAVE [mel.n_filters] mel scale transformation of dft_power, using triangular filters, resulting in the mel filterbank output -- the natural log of this is typically applied"`
+	MelFBankTrialOut etensor.Float32 `view:"no-inline" desc:" #NO_SAVE [mel.n_filters][input.total_steps][input.channels] full trial's worth of mel feature-bank output -- only if using gabors"`
+	//MelFBankTrialOutTable etable.Table    `view:"no-inline" desc:" #NO_SAVE [mel.n_filters] MelFBankOutTrial - view only"`
 
 	Dft                 AudDftSpec      `desc:"specifications for how to compute the discrete fourier transform (DFT, using FFT)"`
 	DftSize             int             `inactive:"+" desc:" #NO_SAVE full size of fft output -- should be input.win_samples"`
@@ -81,8 +80,6 @@ type Mel struct {
 	Mfcc                MelCepstrumSpec `viewif:"MelFBank.On=true desc:"specifications of the mel cepstrum discrete cosine transform of the mel fbank filter features"`
 	MfccDctOut          etensor.Float32 `view:"no-inline" desc:" #NO_SAVE discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
 	MfccDctTrialOut     etensor.Float32 `view:"no-inline" desc:" #NO_SAVE full trial's worth of discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
-
-	T etable.Table
 }
 
 // Initialize
@@ -179,11 +176,11 @@ func (mel *Mel) MelFilterDft(ch, step int, dftPowerOut *etensor.Float32) {
 		mel.MelFBankOut.SetFloat1D(mi, float64(val))
 		mel.MelFBankTrialOut.Set([]int{mi, step, ch}, val)
 	}
-
-	mel.MelFBankTrialOutTable.SetFromSchema(etable.Schema{
-		{"MelFBank", etensor.FLOAT32, []int{mel.MelFBankTrialOut.Dim(0), mel.MelFBankTrialOut.Dim(1), mel.MelFBankTrialOut.Dim(2)}, []string{"Row", "Y", "X"}},
-	}, mel.MelFBankTrialOut.Dim(2))
-	mel.MelFBankTrialOutTable.Col(0).CopyFrom(&mel.MelFBankTrialOut)
+	//
+	//mel.MelFBankTrialOutTable.SetFromSchema(etable.Schema{
+	//	{"MelFBank", etensor.FLOAT32, []int{mel.MelFBankTrialOut.Dim(0), mel.MelFBankTrialOut.Dim(1), mel.MelFBankTrialOut.Dim(2)}, []string{"Row", "Y", "X"}},
+	//}, mel.MelFBankTrialOut.Dim(2))
+	//mel.MelFBankTrialOutTable.Col(0).CopyFrom(&mel.MelFBankTrialOut)
 }
 
 // FreqToMel converts frequency to mel scale

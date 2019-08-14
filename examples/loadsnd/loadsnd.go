@@ -6,8 +6,6 @@ package main
 
 import (
 	"github.com/emer/auditory/audio"
-	"github.com/emer/etable/etable"
-	"github.com/emer/etable/etensor"
 	_ "github.com/emer/etable/etview" // include to get gui views
 	"github.com/goki/gi/gi"
 	"github.com/goki/gi/gimain"
@@ -29,16 +27,10 @@ type Aud struct {
 	Sound    audio.Sound
 	Input    audio.Input
 	Channels int
-	T        etable.Table
 }
 
 func (aud *Aud) Defaults() {
 	aud.Input.Defaults()
-	aud.T.SetFromSchema(etable.Schema{
-		{"Foo", etensor.FLOAT32, nil, nil},
-		{"Dog", etensor.FLOAT32, []int{3, 2, 2}, nil}},
-		2)
-
 }
 
 // LoadSound opens given filename as current sound

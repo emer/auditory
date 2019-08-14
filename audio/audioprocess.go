@@ -41,7 +41,6 @@ func (in *Input) InitFromSound(snd *Sound, nChannels int, channel int) {
 
 type AuditoryProc struct {
 	Mel       Mel              `view:"no-inline"`
-	Data      *etable.Table    `view:"no-inline" desc:"data table for saving filter results for viewing and applying to networks etc"`
 	Input     Input            `desc:"specifications of the raw auditory input"`
 	Gabor1    Gabor            `viewif:"MelFBank.On" desc:"full set of frequency / time gabor filters -- first size"`
 	KWTA      kwta.KWTA        `viewif:"UseInhib" desc:"kwta parameters, using FFFB form"`
@@ -131,26 +130,7 @@ func (ap *AuditoryProc) Initialize() {
 	ap.KWTA.On = true
 
 	ap.InitOutputMatrices()
-	ap.Data = &etable.Table{}
-	ap.InitDataTable()
 	ap.InitSound()
-}
-
-// InitDataTable readies ap.Data, an etable.etable
-func (ap *AuditoryProc) InitDataTable() bool {
-	if ap.Data == nil {
-		fmt.Printf("InitDataTable: ap.Data is nil")
-		return false
-	}
-	if ap.Input.Channels > 1 {
-		for ch := 0; ch < int(ap.Input.Channels); ch++ {
-			ap.MelOutputToTable(ap.Data, ch, true)
-		}
-	} else {
-		ap.MelOutputToTable(ap.Data, ap.Input.Channel, true)
-
-	}
-	return true
 }
 
 // InputStepsLeft returns the number of steps left to process in the current input sound
@@ -322,19 +302,19 @@ func (ap *AuditoryProc) GaborFilter(ch int, spec Gabor, outRaw etensor.Float32, 
 }
 
 // OutputToTable
-func (ap *AuditoryProc) OutputToTable() bool {
-	if ap.Data == nil {
+func (ap *AuditoryProc) OutputToTable(table etable.Table) bool {
+	if table.Schema() == nil {
 		return false
 	}
 	for ch := int(0); ch < ap.Input.Channels; ch++ {
 		if ap.Mel.MelFBank.On {
-			ap.MelOutputToTable(ap.Data, ch, false) // not fmt_only
+			ap.MelOutputToTable(&table, ch, false) // not fmt_only
 		}
 	}
 	return true
 }
 
-// MelOutputToTable mel filter bank to output table - this function puts all of the data into ap.Data.
+// MelOutputToTable mel filter bank to output table (an etable)
 func (ap *AuditoryProc) MelOutputToTable(dt *etable.Table, ch int, fmtOnly bool) bool { // ch is channel
 	var colSfx string
 	rows := 1
