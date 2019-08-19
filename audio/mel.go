@@ -134,6 +134,26 @@ func (mel *Mel) InitFilters(dftUse int, sampleRate int) bool {
 	return true
 }
 
+// InitMatrices sets the shape of all output matrices
+func (mel *Mel) InitMatrices(input Input) {
+	mel.DftPowerOut.SetShape([]int{mel.DftUse}, nil, nil)
+	mel.DftPowerTrialOut.SetShape([]int{mel.DftUse, input.TotalSteps, input.Channels}, nil, nil)
+
+	if mel.Dft.LogPow {
+		mel.DftLogPowerOut.SetShape([]int{mel.DftUse}, nil, nil)
+		mel.DftLogPowerTrialOut.SetShape([]int{mel.DftUse, input.TotalSteps, input.Channels}, nil, nil)
+	}
+
+	if mel.MelFBank.On {
+		mel.MelFBankOut.SetShape([]int{mel.MelFBank.NFilters}, nil, nil)
+		mel.MelFBankTrialOut.SetShape([]int{mel.MelFBank.NFilters, input.TotalSteps, input.Channels}, nil, nil)
+		if mel.Mfcc.On {
+			mel.MfccDctOut.SetShape([]int{mel.MelFBank.NFilters}, nil, nil)
+			mel.MfccDctTrialOut.SetShape([]int{mel.MelFBank.NFilters, input.TotalSteps, input.Channels}, nil, nil)
+		}
+	}
+}
+
 // NeedsInit checks to see if we need to reinitialize AuditoryProc
 func (mel *Mel) NeedsInit(winSamples int) bool {
 	if mel.DftSize != winSamples || mel.MelNFiltersEff != mel.MelFBank.NFilters+2 {
