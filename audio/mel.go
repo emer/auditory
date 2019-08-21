@@ -25,24 +25,6 @@ func (rs *RenormSpec) Initialize() {
 	rs.RenormScale = 1.0 / (rs.RenormMax - rs.RenormMin)
 }
 
-// AudDftSpec discrete fourier transform (dft) specifications
-type AudDftSpec struct {
-	LogPow         bool    `"def:"true" desc:"compute the log of the power and save that to a separate table -- generaly more useful for visualization of power than raw power values"`
-	LogOff         float32 `viewif:"LogPow" def:"0" desc:"add this amount when taking the log of the dft power -- e.g., 1.0 makes everything positive -- affects the relative contrast of the outputs"`
-	LogMin         float32 `viewif:"LogPow" def:"-100" desc:"minimum value a log can produce -- puts a lower limit on log output"`
-	PreviousSmooth float32 `def:"0" desc:"how much of the previous step's power value to include in this one -- smooths out the power spectrum which can be artificially bumpy due to discrete window samples"`
-	CurrentSmooth  float32 `inactive:"+" desc:"how much of current power to include"`
-}
-
-//Initialize initializes the AudDftSpec
-func (ad *AudDftSpec) Initialize() {
-	ad.PreviousSmooth = 0
-	ad.CurrentSmooth = 1.0 - ad.PreviousSmooth
-	ad.LogPow = true
-	ad.LogOff = 0
-	ad.LogMin = -100
-}
-
 // MelFBank contains mel frequency feature bank sampling parameters
 type MelFBank struct {
 	On          bool       `desc:"perform mel-frequency filtering of the fft input"`
@@ -67,33 +49,24 @@ type Mel struct {
 	MelFBank         MelFBank
 	MelFBankOut      etensor.Float32 `view:"no-inline" desc:" #NO_SAVE [mel.n_filters] mel scale transformation of dft_power, using triangular filters, resulting in the mel filterbank output -- the natural log of this is typically applied"`
 	MelFBankTrialOut etensor.Float32 `view:"no-inline" desc:" #NO_SAVE [mel.n_filters][input.total_steps][input.channels] full trial's worth of mel feature-bank output -- only if using gabors"`
-	//MelFBankTrialOutTable etable.Table    `view:"no-inline" desc:" #NO_SAVE [mel.n_filters] MelFBankOutTrial - view only"`
 
-	Dft                 AudDftSpec      `desc:"specifications for how to compute the discrete fourier transform (DFT, using FFT)"`
-	DftSize             int             `inactive:"+" desc:" #NO_SAVE full size of fft output -- should be input.win_samples"`
-	DftUse              int             `inactive:"+" desc:" #NO_SAVE number of dft outputs to actually use -- should be dft_size / 2 + 1"`
-	DftOut              []complex128    `inactive:"+" desc:" #NO_SAVE [dft_size] discrete fourier transform (fft) output complex representation"`
-	DftPowerOut         etensor.Float32 `view:"no-inline" desc:" #NO_SAVE [dft_use] power of the dft, up to the nyquist limit frequency (1/2 input.win_samples)"`
-	DftLogPowerOut      etensor.Float32 `view:"no-inline" desc:" #NO_SAVE [dft_use] log power of the dft, up to the nyquist liit frequency (1/2 input.win_samples)"`
-	DftPowerTrialOut    etensor.Float32 `view:"no-inline" desc:" #NO_SAVE [dft_use][input.total_steps][input.channels] full trial's worth of power of the dft, up to the nyquist limit frequency (1/2 input.win_samples)"`
-	DftLogPowerTrialOut etensor.Float32 `view:"no-inline" desc:" #NO_SAVE [dft_use][input.total_steps][input.channels] full trial's worth of log power of the dft, up to the nyquist limit frequency (1/2 input.win_samples)"`
-	Mfcc                MelCepstrumSpec `viewif:"MelFBank.On=true desc:"specifications of the mel cepstrum discrete cosine transform of the mel fbank filter features"`
-	MfccDctOut          etensor.Float32 `view:"no-inline" desc:" #NO_SAVE discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
-	MfccDctTrialOut     etensor.Float32 `view:"no-inline" desc:" #NO_SAVE full trial's worth of discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
+	Dft             AudDftSpec      `desc:"specifications for how to compute the discrete fourier transform (DFT, using FFT)"`
+	DftSize         int             `inactive:"+" desc:" #NO_SAVE full size of fft output -- should be input.win_samples"`
+	DftUse          int             `inactive:"+" desc:" #NO_SAVE number of dft outputs to actually use -- should be dft_size / 2 + 1"`
+	Mfcc            MelCepstrumSpec `viewif:"MelFBank.On=true desc:"specifications of the mel cepstrum discrete cosine transform of the mel fbank filter features"`
+	MfccDctOut      etensor.Float32 `view:"no-inline" desc:" #NO_SAVE discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
+	MfccDctTrialOut etensor.Float32 `view:"no-inline" desc:" #NO_SAVE full trial's worth of discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
 }
 
 // Initialize
-func (mel *Mel) Initialize(winSamples int, sampleRate int) {
-	mel.Dft.Initialize()
-	mel.DftSize = winSamples
-	mel.DftOut = make([]complex128, mel.DftSize)
-	mel.DftUse = mel.DftSize/2 + 1
+func (mel *Mel) Initialize(dftUse int, winSamples int, sampleRate int) {
+	mel.DftUse = dftUse
 	mel.MelFBank.Initialize()
 	mel.InitFilters(mel.DftUse, sampleRate)
 }
 
 // InitFilters
-func (mel *Mel) InitFilters(dftUse int, sampleRate int) bool {
+func (mel *Mel) InitFilters(dftUse int, sampleRate int) {
 	mel.DftUse = dftUse
 	mel.MelNFiltersEff = mel.MelFBank.NFilters + 2
 	mel.MelPtsMel.SetShape([]int{mel.MelNFiltersEff}, nil, nil)
@@ -131,19 +104,10 @@ func (mel *Mel) InitFilters(dftUse int, sampleRate int) bool {
 			mel.MelFilters.SetFloat([]int{f, fi}, float64(fval))
 		}
 	}
-	return true
 }
 
 // InitMatrices sets the shape of all output matrices
 func (mel *Mel) InitMatrices(input Input) {
-	mel.DftPowerOut.SetShape([]int{mel.DftUse}, nil, nil)
-	mel.DftPowerTrialOut.SetShape([]int{mel.DftUse, input.TotalSteps, input.Channels}, nil, nil)
-
-	if mel.Dft.LogPow {
-		mel.DftLogPowerOut.SetShape([]int{mel.DftUse}, nil, nil)
-		mel.DftLogPowerTrialOut.SetShape([]int{mel.DftUse, input.TotalSteps, input.Channels}, nil, nil)
-	}
-
 	if mel.MelFBank.On {
 		mel.MelFBankOut.SetShape([]int{mel.MelFBank.NFilters}, nil, nil)
 		mel.MelFBankTrialOut.SetShape([]int{mel.MelFBank.NFilters, input.TotalSteps, input.Channels}, nil, nil)
@@ -196,11 +160,6 @@ func (mel *Mel) MelFilterDft(ch, step int, dftPowerOut *etensor.Float32) {
 		mel.MelFBankOut.SetFloat1D(mi, float64(val))
 		mel.MelFBankTrialOut.Set([]int{mi, step, ch}, val)
 	}
-	//
-	//mel.MelFBankTrialOutTable.SetFromSchema(etable.Schema{
-	//	{"MelFBank", etensor.FLOAT32, []int{mel.MelFBankTrialOut.Dim(0), mel.MelFBankTrialOut.Dim(1), mel.MelFBankTrialOut.Dim(2)}, []string{"Row", "Y", "X"}},
-	//}, mel.MelFBankTrialOut.Dim(2))
-	//mel.MelFBankTrialOutTable.Col(0).CopyFrom(&mel.MelFBankTrialOut)
 }
 
 // FreqToMel converts frequency to mel scale
@@ -244,17 +203,14 @@ func (mc *MelCepstrumSpec) Initialize() {
 }
 
 // FilterWindow filters the current window_in input data according to current settings -- called by ProcessStep, but can be called separately
-func (mel *Mel) FilterWindow(ch int, step int, windowIn etensor.Float32, firstStep bool) bool {
-	mel.FftReal(mel.DftOut, windowIn)
-	mel.DftInput(windowIn.Floats(), windowIn)
+func (mel *Mel) FilterWindow(ch int, step int, windowIn etensor.Float32, dft Dft, firstStep bool) {
 	if mel.MelFBank.On {
-		mel.PowerOfDft(ch, step, firstStep)
-		mel.MelFilterDft(ch, step, &mel.DftPowerOut)
+		mel.MelFilterDft(ch, step, &dft.DftPowerOut)
+		//mel.MelFilterDft(ch, step, &mel.DftPowerOut)
 		if mel.Mfcc.On {
 			mel.CepstrumDctMel(ch, step)
 		}
 	}
-	return true
 }
 
 // FftReal
@@ -266,50 +222,8 @@ func (mel *Mel) FftReal(out []complex128, in etensor.Float32) {
 	}
 }
 
-// DftInput applies dft (fft) to input
-func (mel *Mel) DftInput(windowInVals []float64, windowIn etensor.Float32) {
-	mel.FftReal(mel.DftOut, windowIn)
-	fft := fourier.NewCmplxFFT(len(mel.DftOut))
-	mel.DftOut = fft.Coefficients(nil, mel.DftOut)
-}
-
-// PowerOfDft
-func (mel *Mel) PowerOfDft(ch, step int, firstStep bool) {
-	// Mag() is absolute value   SqMag is square of it - r*r + i*i
-	for k := 0; k < int(mel.DftUse); k++ {
-		rl := real(mel.DftOut[k])
-		im := imag(mel.DftOut[k])
-		powr := float64(rl*rl + im*im) // why is complex converted to float here
-		if firstStep == false {
-			powr = float64(mel.Dft.PreviousSmooth)*mel.DftPowerOut.FloatVal1D(k) + float64(mel.Dft.CurrentSmooth)*powr
-		}
-		mel.DftPowerOut.SetFloat1D(k, powr)
-		mel.DftPowerTrialOut.SetFloat([]int{k, step, ch}, powr)
-
-		var logp float64
-		if mel.Dft.LogPow {
-			powr += float64(mel.Dft.LogOff)
-			if powr == 0 {
-				logp = float64(mel.Dft.LogMin)
-			} else {
-				logp = math.Log(powr)
-			}
-			mel.DftLogPowerOut.SetFloat1D(k, logp)
-			mel.DftLogPowerTrialOut.SetFloat([]int{k, step, ch}, logp)
-		}
-	}
-}
-
 // CopyStepFromStep
-func (mel *Mel) CopyStepFromStep(toStep, fmStep, ch int) bool {
-	for i := 0; i < int(mel.DftUse); i++ {
-		val := mel.DftPowerTrialOut.Value([]int{i, fmStep, ch})
-		mel.DftPowerTrialOut.Set([]int{i, toStep, ch}, val)
-		if mel.Dft.LogPow {
-			val := mel.DftLogPowerTrialOut.Value([]int{i, fmStep, ch})
-			mel.DftLogPowerTrialOut.Set([]int{i, toStep, ch}, val)
-		}
-	}
+func (mel *Mel) CopyStepFromStep(toStep, fmStep, ch int) {
 	if mel.MelFBank.On {
 		for i := 0; i < int(mel.MelFBank.NFilters); i++ {
 			val := mel.MelFBankTrialOut.Value([]int{i, fmStep, ch})
@@ -322,7 +236,6 @@ func (mel *Mel) CopyStepFromStep(toStep, fmStep, ch int) bool {
 			}
 		}
 	}
-	return true
 }
 
 // CepstrumDctMel
