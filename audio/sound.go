@@ -36,8 +36,8 @@ type Sound struct {
 	T       etable.Table
 }
 
-// LoadSound loads the sound file and decodes it
-func (snd *Sound) LoadSound(filename string) error {
+// Load loads the sound file and decodes it
+func (snd *Sound) Load(filename string) error {
 	inFile, err := os.Open(filename)
 	if err != nil {
 		fmt.Printf("couldn't open %s %v", filename, err)
@@ -148,7 +148,7 @@ func (snd *Sound) SoundToMatrix(soundData *etensor.Float32, channel int) bool {
 	return true
 }
 
-// ConvertWavBufData
+// GetFloatAtIdx
 func (snd *Sound) GetFloatAtIdx(buf *audio.IntBuffer, idx int) float32 {
 	if buf.SourceBitDepth == 32 {
 		return float32(buf.Data[idx]) / float32(0x7FFFFFFF)

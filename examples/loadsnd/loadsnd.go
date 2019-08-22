@@ -35,7 +35,7 @@ func (aud *Aud) Defaults() {
 
 // LoadSound opens given filename as current sound
 func (aud *Aud) LoadSound(filepath string) error {
-	err := aud.Sound.LoadSound(filepath)
+	err := aud.Sound.Load(filepath)
 	if err != nil {
 		log.Println(err)
 		return err
