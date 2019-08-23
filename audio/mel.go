@@ -35,7 +35,7 @@ type MelFBank struct {
 	LogMin      float32    `viewif:"On" def:"-10" desc:"minimum value a log can produce -- puts a lower limit on log output"`
 	LoMel       float32    `viewif:"On" inactive:"+" desc:" low end of mel scale in mel units"`
 	HiMel       float32    `viewif:"On" inactive:"+" desc:" high end of mel scale in mel units"`
-	FBankRenorm RenormSpec `viewif:"MelFBank.On=true desc:"renormalization parmeters for the mel_fbank values -- performed prior to further processing"`
+	FBankRenorm RenormSpec `viewif:"MelFBank.On=true desc: renormalization parmeters for the mel_fbank values -- performed prior to further processing"`
 }
 
 type Mel struct {
@@ -53,7 +53,7 @@ type Mel struct {
 	Dft             AudDftSpec      `desc:"specifications for how to compute the discrete fourier transform (DFT, using FFT)"`
 	DftSize         int             `inactive:"+" desc:" #NO_SAVE full size of fft output -- should be input.win_samples"`
 	DftUse          int             `inactive:"+" desc:" #NO_SAVE number of dft outputs to actually use -- should be dft_size / 2 + 1"`
-	Mfcc            MelCepstrumSpec `viewif:"MelFBank.On=true desc:"specifications of the mel cepstrum discrete cosine transform of the mel fbank filter features"`
+	Mfcc            MelCepstrumSpec `viewif:"MelFBank.On=true desc: specifications of the mel cepstrum discrete cosine transform of the mel fbank filter features"`
 	MfccDctOut      etensor.Float32 `view:"no-inline" desc:" #NO_SAVE discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
 	MfccDctTrialOut etensor.Float32 `view:"no-inline" desc:" #NO_SAVE full trial's worth of discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
 }
@@ -206,7 +206,6 @@ func (mc *MelCepstrumSpec) Initialize() {
 func (mel *Mel) FilterWindow(ch int, step int, windowIn etensor.Float32, dft Dft, firstStep bool) {
 	if mel.MelFBank.On {
 		mel.MelFilterDft(ch, step, &dft.DftPowerOut)
-		//mel.MelFilterDft(ch, step, &mel.DftPowerOut)
 		if mel.Mfcc.On {
 			mel.CepstrumDctMel(ch, step)
 		}

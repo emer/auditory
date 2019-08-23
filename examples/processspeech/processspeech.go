@@ -28,19 +28,17 @@ func main() {
 // Aud encapsulates a specific auditory processing pipeline in
 // use in a given case -- can add / modify this as needed
 type Aud struct {
-	Sound         audio.Sound
-	Input         audio.Input
-	Channels      int
-	Mel           audio.Mel `view:"no-inline"`
-	Dft           audio.Dft
-	SoundFull     etensor.Float32 `inactive:"+" desc:" #NO_SAVE the full sound input obtained from the sound input"`
-	WindowIn      etensor.Float32 `inactive:"+" desc:" #NO_SAVE [input.win_samples] the raw sound input, one channel at a time"`
-	FirstStep     bool            `inactive:"+" desc:" #NO_SAVE if first frame to process -- turns off prv smoothing of dft power"`
-	InputPos      int             `inactive:"+" desc:" #NO_SAVE current position in the SoundFull input -- in terms of sample number"`
-	TrialStartPos int             `inactive:"+" desc:" #NO_SAVE starting position of the current trial -- in terms of sample number"`
-	TrialEndPos   int             `inactive:"+" desc:" #NO_SAVE ending position of the current trial -- in terms of sample number"`
-	DftData       *etable.Table   `view:"no-inline" desc:"data table for saving filter results for viewing and applying to networks etc"`
-	MelData       *etable.Table   `view:"no-inline" desc:"data table for saving filter results for viewing and applying to networks etc"`
+	Sound     audio.Sound
+	Input     audio.Input
+	Channels  int
+	Mel       audio.Mel `view:"no-inline"`
+	Dft       audio.Dft
+	SoundFull etensor.Float32 `inactive:"+" desc:" #NO_SAVE the full sound input obtained from the sound input"`
+	WindowIn  etensor.Float32 `inactive:"+" desc:" #NO_SAVE [input.win_samples] the raw sound input, one channel at a time"`
+	FirstStep bool            `inactive:"+" desc:" #NO_SAVE if first frame to process -- turns off prv smoothing of dft power"`
+	InputPos  int             `inactive:"+" desc:" #NO_SAVE current position in the SoundFull input -- in terms of sample number"`
+	DftData   *etable.Table   `view:"no-inline" desc:"data table for saving filter results for viewing and applying to networks etc"`
+	MelData   *etable.Table   `view:"no-inline" desc:"data table for saving filter results for viewing and applying to networks etc"`
 }
 
 func (aud *Aud) Defaults() {
@@ -55,8 +53,6 @@ func (aud *Aud) Defaults() {
 
 	aud.InputPos = 0
 	aud.FirstStep = true
-	aud.TrialStartPos = 0
-	aud.TrialEndPos = int(aud.TrialStartPos) + aud.Input.TrialSamples
 }
 
 // LoadSound initializes the AuditoryProc with the sound loaded from file by "Sound"
@@ -68,48 +64,16 @@ func (aud *Aud) LoadSound(snd *audio.Sound) {
 	}
 }
 
-// ProcessTrialSamples processes a full trial worth of sound -- iterates over steps to fill a trial's worth of sound data
-func (aud *Aud) ProcessTrialSamples() bool {
-	startPos := aud.InputPos
-	border := 2 * aud.Input.BorderSteps // full amount to wrap
-
-	if aud.InputPos == 0 { // just starting out -- fill whole buffer..
-		aud.TrialStartPos = aud.InputPos
-		aud.TrialEndPos = aud.TrialStartPos + aud.Input.TrialSamples + 2*border*aud.Input.StepSamples
-		for ch := int(0); ch < aud.Input.Channels; ch++ {
-			aud.InputPos = startPos // always start at same place per channel
-			for s := 0; s < int(aud.Input.TotalSteps); s++ {
-				aud.ProcessStep(ch, s)
-			}
-		}
-	} else {
-		aud.TrialStartPos = aud.InputPos - aud.Input.StepSamples*aud.Input.BorderSteps
-		aud.TrialEndPos = aud.TrialStartPos + aud.Input.TrialSamples
-		for ch := int(0); ch < aud.Input.Channels; ch++ {
-			aud.InputPos = startPos // always start at same place per channel
-			aud.WrapBorder(ch)
-			for s := border; s < aud.Input.TotalSteps; s++ {
-				aud.ProcessStep(ch, s)
-			}
+// ProcessSamples processes the entire input by processing a small overlapping set of samples on each pass
+func (aud *Aud) ProcessSamples() {
+	for ch := int(0); ch < aud.Input.Channels; ch++ {
+		for s := 0; s < int(aud.Input.TotalSteps); s++ {
+			aud.ProcessStep(ch, s)
 		}
 	}
-	return true
 }
 
-// WrapBorder
-func (aud *Aud) WrapBorder(ch int) bool {
-	if aud.Input.BorderSteps == 0 {
-		return true
-	}
-	borderEff := 2 * aud.Input.BorderSteps
-	srcStStep := aud.Input.TotalSteps - borderEff
-	for s := 0; s < int(borderEff); s++ {
-		aud.Mel.CopyStepFromStep(s, int(srcStStep)+s, ch)
-	}
-	return true
-}
-
-// ProcessStep process a step worth of sound input from current input_pos, and increment input_pos by input.step_samples
+// ProcessStep processes a step worth of sound input from current input_pos, and increment input_pos by input.step_samples
 // Process the data by doing a fourier transform and computing the power spectrum, then apply mel filters to get the frequency
 // bands that mimic the non-linear human perception of sound
 func (aud *Aud) ProcessStep(ch int, step int) bool {
@@ -143,25 +107,6 @@ func (aud *Aud) SoundToWindow(inPos int, ch int) bool {
 	}
 	return true
 }
-
-// InitOutputTable readies aud.Data, an etable.etable
-//func (aud *Aud) InitOutputTable() bool {
-//	if aud.Data == nil {
-//		fmt.Printf("InitOutputTable: aud.Data is nil")
-//		return false
-//	}
-//	if aud.Input.Channels > 1 {
-//		for ch := 0; ch < int(aud.Input.Channels); ch++ {
-//			//func (be *BabbleEnv) MelOutputToTable(gabor audio.Gabor, raw etensor.Float32, out etensor.Float32, dt *etable.Table, ch int, fmtOnly bool) bool { // ch is channel
-//			//aud.MelOutputToTable(aud.Data, ch, true)
-//			aud.DftPowToTable(aud.Data, ch, true)
-//		}
-//	} else {
-//		//aud.MelOutputToTable(aud.Data, aud.Input.Channel, true)
-//		aud.DftPowToTable(aud.Data, aud.Input.Channel, true)
-//	}
-//	return true
-//}
 
 // DftPowToTable
 func (aud *Aud) DftPowToTable(dt *etable.Table, ch int, fmtOnly bool) bool { // ch is channel
@@ -300,7 +245,7 @@ func mainrun() {
 	TheSP.Defaults()
 	TheSP.Input.InitFromSound(&TheSP.Sound, TheSP.Channels, 0)
 	TheSP.LoadSound(&TheSP.Sound)
-	TheSP.ProcessTrialSamples()
+	TheSP.ProcessSamples()
 	TheSP.DftData = &etable.Table{}
 	TheSP.DftData.AddRows(1)
 	TheSP.MelData = &etable.Table{}
