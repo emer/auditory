@@ -1,10 +1,12 @@
-package audio
+package mel
 
 import (
 	"fmt"
 	"math"
 
 	"github.com/chewxy/math32"
+	"github.com/emer/auditory/dft"
+	"github.com/emer/auditory/input"
 	"github.com/emer/etable/etensor"
 	"gonum.org/v1/gonum/fourier"
 )
@@ -50,7 +52,7 @@ type Mel struct {
 	MelFBankOut      etensor.Float32 `view:"no-inline" desc:" #NO_SAVE [mel.n_filters] mel scale transformation of dft_power, using triangular filters, resulting in the mel filterbank output -- the natural log of this is typically applied"`
 	MelFBankTrialOut etensor.Float32 `view:"no-inline" desc:" #NO_SAVE [mel.n_filters][input.total_steps][input.channels] full trial's worth of mel feature-bank output -- only if using gabors"`
 
-	Dft             AudDftSpec      `desc:"specifications for how to compute the discrete fourier transform (DFT, using FFT)"`
+	Dft             dft.Dft         `desc:"specifications for how to compute the discrete fourier transform (DFT, using FFT)"`
 	DftSize         int             `inactive:"+" desc:" #NO_SAVE full size of fft output -- should be input.win_samples"`
 	DftUse          int             `inactive:"+" desc:" #NO_SAVE number of dft outputs to actually use -- should be dft_size / 2 + 1"`
 	Mfcc            MelCepstrumSpec `viewif:"MelFBank.On=true desc: specifications of the mel cepstrum discrete cosine transform of the mel fbank filter features"`
@@ -107,7 +109,7 @@ func (mel *Mel) InitFilters(dftUse int, sampleRate int) {
 }
 
 // InitMatrices sets the shape of all output matrices
-func (mel *Mel) InitMatrices(input Input) {
+func (mel *Mel) InitMatrices(input input.Input) {
 	if mel.MelFBank.On {
 		mel.MelFBankOut.SetShape([]int{mel.MelFBank.NFilters}, nil, nil)
 		mel.MelFBankTrialOut.SetShape([]int{mel.MelFBank.NFilters, input.TotalSteps, input.Channels}, nil, nil)
@@ -127,7 +129,7 @@ func (mel *Mel) NeedsInit(winSamples int) bool {
 }
 
 // MelFilterDft
-func (mel *Mel) MelFilterDft(ch, step int, dftPowerOut *etensor.Float32) {
+func (mel *Mel) FilterDft(ch, step int, dftPowerOut *etensor.Float32) {
 	mi := 0
 	for f := 0; f < int(mel.MelFBank.NFilters); f, mi = f+1, mi+1 { // f is filter
 		minBin := mel.MelPtsBin.Value1D(f)
@@ -203,9 +205,9 @@ func (mc *MelCepstrumSpec) Initialize() {
 }
 
 // FilterWindow filters the current window_in input data according to current settings -- called by ProcessStep, but can be called separately
-func (mel *Mel) FilterWindow(ch int, step int, windowIn etensor.Float32, dft Dft, firstStep bool) {
+func (mel *Mel) FilterWindow(ch int, step int, windowIn etensor.Float32, dft dft.Dft, firstStep bool) {
 	if mel.MelFBank.On {
-		mel.MelFilterDft(ch, step, &dft.DftPowerOut)
+		mel.FilterDft(ch, step, &dft.DftPowerOut)
 		if mel.Mfcc.On {
 			mel.CepstrumDctMel(ch, step)
 		}

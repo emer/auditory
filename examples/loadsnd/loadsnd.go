@@ -5,12 +5,14 @@
 package main
 
 import (
-	"github.com/emer/auditory/audio"
+	"log"
+
+	"github.com/emer/auditory/input"
+	"github.com/emer/auditory/sound"
 	_ "github.com/emer/etable/etview" // include to get gui views
 	"github.com/goki/gi/gi"
 	"github.com/goki/gi/gimain"
 	"github.com/goki/gi/giv"
-	"log"
 )
 
 // this is the stub main for gogi that calls our actual
@@ -24,8 +26,8 @@ func main() {
 // Aud encapsulates a specific auditory processing pipeline in
 // use in a given case -- can add / modify this as needed
 type Aud struct {
-	Sound    audio.Sound
-	Input    audio.Input
+	Sound    sound.Sound
+	Input    input.Input
 	Channels int
 }
 

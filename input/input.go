@@ -1,10 +1,11 @@
-package audio
+package input
 
 import (
 	"fmt"
 	"math"
 
 	"github.com/chewxy/math32"
+	"github.com/emer/auditory/sound"
 )
 
 // Input defines the sound input parameters for auditory processing
@@ -55,7 +56,7 @@ func SamplesToMSec(samples int, rate int) float32 {
 }
 
 // InitFromSound loads a sound and sets the Input channel vars and sample rate
-func (in *Input) InitFromSound(snd *Sound, nChannels int, channel int) {
+func (in *Input) InitFromSound(snd *sound.Sound, nChannels int, channel int) {
 	if snd == nil {
 		fmt.Printf("InitFromSound: sound nil")
 		return

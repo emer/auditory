@@ -7,7 +7,10 @@ package main
 import (
 	"fmt"
 	"github.com/chewxy/math32"
-	"github.com/emer/auditory/audio"
+	"github.com/emer/auditory/dft"
+	"github.com/emer/auditory/input"
+	"github.com/emer/auditory/mel"
+	"github.com/emer/auditory/sound"
 	"github.com/emer/etable/etable"
 	"github.com/emer/etable/etensor"
 	_ "github.com/emer/etable/etview" // include to get gui views
@@ -28,11 +31,11 @@ func main() {
 // Aud encapsulates a specific auditory processing pipeline in
 // use in a given case -- can add / modify this as needed
 type Aud struct {
-	Sound     audio.Sound
-	Input     audio.Input
+	Sound     sound.Sound
+	Input     input.Input
 	Channels  int
-	Mel       audio.Mel `view:"no-inline"`
-	Dft       audio.Dft
+	Mel       mel.Mel `view:"no-inline"`
+	Dft       dft.Dft
 	SoundFull etensor.Float32 `inactive:"+" desc:" #NO_SAVE the full sound input obtained from the sound input"`
 	WindowIn  etensor.Float32 `inactive:"+" desc:" #NO_SAVE [input.win_samples] the raw sound input, one channel at a time"`
 	FirstStep bool            `inactive:"+" desc:" #NO_SAVE if first frame to process -- turns off prv smoothing of dft power"`
@@ -56,7 +59,7 @@ func (aud *Aud) Defaults() {
 }
 
 // LoadSound initializes the AuditoryProc with the sound loaded from file by "Sound"
-func (aud *Aud) LoadSound(snd *audio.Sound) {
+func (aud *Aud) LoadSound(snd *sound.Sound) {
 	if aud.Input.Channels > 1 {
 		snd.SoundToMatrix(&aud.SoundFull, -1)
 	} else {
@@ -137,7 +140,7 @@ func (aud *Aud) DftPowToTable(dt *etable.Table, ch int, fmtOnly bool) bool { // 
 		}
 		for s := 0; s < int(aud.Input.TotalSteps); s++ {
 			for i := 0; i < int(aud.Dft.DftUse); i++ {
-				if aud.Dft.DftSpec.LogPow {
+				if aud.Dft.LogPow {
 					val := aud.Dft.DftLogPowerTrialOut.FloatVal([]int{i, s, ch})
 					dout.SetFloat([]int{s, i}, val)
 				} else {

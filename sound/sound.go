@@ -1,15 +1,15 @@
 // Copyright (c) 2019, The Emergent Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
-package audio
+package sound
 
 import (
 	"errors"
 	"fmt"
-	"github.com/emer/etable/etable"
 	"os"
 	"time"
 
+	"github.com/emer/etable/etable"
 	"github.com/emer/etable/etensor"
 	"github.com/go-audio/audio"
 	"github.com/go-audio/wav"
