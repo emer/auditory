@@ -11,13 +11,11 @@ import (
 	"github.com/emer/auditory/input"
 	"github.com/emer/auditory/mel"
 	"github.com/emer/auditory/sound"
-	"github.com/emer/etable/etable"
 	"github.com/emer/etable/etensor"
 	_ "github.com/emer/etable/etview" // include to get gui views
 	"github.com/goki/gi/gi"
 	"github.com/goki/gi/gimain"
 	"github.com/goki/gi/giv"
-	"strconv"
 )
 
 // this is the stub main for gogi that calls our actual
@@ -31,28 +29,29 @@ func main() {
 // Aud encapsulates a specific auditory processing pipeline in
 // use in a given case -- can add / modify this as needed
 type Aud struct {
-	Sound     sound.Sound
-	Input     input.Input
-	Channels  int
-	Mel       mel.Mel `view:"no-inline"`
-	Dft       dft.Dft
-	SoundFull etensor.Float32 `inactive:"+" desc:" #NO_SAVE the full sound input obtained from the sound input"`
-	WindowIn  etensor.Float32 `inactive:"+" desc:" #NO_SAVE [input.win_samples] the raw sound input, one channel at a time"`
-	FirstStep bool            `inactive:"+" desc:" #NO_SAVE if first frame to process -- turns off prv smoothing of dft power"`
-	InputPos  int             `inactive:"+" desc:" #NO_SAVE current position in the SoundFull input -- in terms of sample number"`
-	DftData   *etable.Table   `view:"no-inline" desc:"data table for saving filter results for viewing and applying to networks etc"`
-	MelData   *etable.Table   `view:"no-inline" desc:"data table for saving filter results for viewing and applying to networks etc"`
+	Sound                sound.Sound
+	Input                input.Input
+	Channels             int
+	Mel                  mel.Mel `view:"no-inline"`
+	Dft                  dft.Dft
+	SoundFull            etensor.Float32 `inactive:"+" desc:" #NO_SAVE the full sound input obtained from the sound input"`
+	WindowIn             etensor.Float32 `inactive:"+" desc:" #NO_SAVE [input.win_samples] the raw sound input, one channel at a time"`
+	FirstStep            bool            `inactive:"+" desc:" #NO_SAVE if first frame to process -- turns off prv smoothing of dft power"`
+	InputPos             int             `inactive:"+" desc:" #NO_SAVE current position in the SoundFull input -- in terms of sample number"`
+	DftPowerTrialData    etensor.Float32 `view:"no-inline" desc:" #NO_SAVE [dft_use][input.total_steps][input.channels] full trial's worth of power of the dft, up to the nyquist limit frequency (1/2 input.win_samples)"`
+	DftLogPowerTrialData etensor.Float32 `view:"no-inline" desc:" #NO_SAVE [dft_use][input.total_steps][input.channels] full trial's worth of log power of the dft, up to the nyquist limit frequency (1/2 input.win_samples)"`
+	MelFBankTrialData    etensor.Float32 `view:"no-inline" desc:" #NO_SAVE [mel.n_filters][input.total_steps][input.channels] full trial's worth of mel feature-bank output -- only if using gabors"`
 }
 
 func (aud *Aud) Defaults() {
 	aud.Input.Defaults()
 	aud.Dft.Initialize(aud.Input.WinSamples, aud.Input.SampleRate)
-	aud.Mel.Initialize(aud.Dft.DftUse, aud.Input.WinSamples, aud.Input.SampleRate)
+	aud.Mel.Initialize(aud.Dft.DftSizeHalf, aud.Input.WinSamples, aud.Input.SampleRate)
 	aud.Mel.Mfcc.Initialize()
 
 	aud.WindowIn.SetShape([]int{aud.Input.WinSamples}, nil, nil)
-	aud.Dft.InitMatrices(aud.Input)
-	aud.Mel.InitMatrices(aud.Input)
+	aud.Dft.InitMatrices(aud.Input, &aud.DftPowerTrialData, &aud.DftLogPowerTrialData)
+	aud.Mel.InitMatrices(aud.Input, &aud.MelFBankTrialData)
 
 	aud.InputPos = 0
 	aud.FirstStep = true
@@ -81,8 +80,8 @@ func (aud *Aud) ProcessSamples() {
 // bands that mimic the non-linear human perception of sound
 func (aud *Aud) ProcessStep(ch int, step int) bool {
 	aud.SoundToWindow(aud.InputPos, ch)
-	aud.Dft.FilterWindow(int(ch), int(step), aud.WindowIn, aud.FirstStep)
-	aud.Mel.FilterWindow(int(ch), int(step), aud.WindowIn, aud.Dft, aud.FirstStep)
+	aud.Dft.Filter(int(ch), int(step), aud.WindowIn, aud.FirstStep, &aud.DftPowerTrialData, &aud.DftLogPowerTrialData)
+	aud.Mel.Filter(int(ch), int(step), aud.WindowIn, &aud.Dft.DftPower, aud.FirstStep, &aud.MelFBankTrialData)
 	aud.InputPos = aud.InputPos + aud.Input.StepSamples
 	aud.FirstStep = false
 	return true
@@ -107,86 +106,6 @@ func (aud *Aud) SoundToWindow(inPos int, ch int) bool {
 	if zeroN > 0 {
 		sz := zeroN * 4 // 4 bytes - size of float32
 		copy(aud.WindowIn.Values[samplesCopy:], make([]float32, sz))
-	}
-	return true
-}
-
-// DftPowToTable
-func (aud *Aud) DftPowToTable(dt *etable.Table, ch int, fmtOnly bool) bool { // ch is channel
-	var colSfx string
-	rows := 1
-
-	if aud.Input.Channels > 1 {
-		colSfx = "_ch" + strconv.Itoa(ch)
-	}
-
-	var err error
-	cn := "DftPower" + colSfx // column name
-	col := dt.ColByName(cn)
-	if col == nil {
-		err = dt.AddCol(etensor.NewFloat32([]int{rows, int(aud.Input.TotalSteps), int(aud.Dft.DftUse)}, nil, nil), cn)
-		if err != nil {
-			fmt.Printf("DftPowToTable: column %v not found or failed to be created", cn)
-			return false
-		}
-	}
-
-	if fmtOnly == false {
-		colAsF32 := dt.ColByName(cn).(*etensor.Float32)
-		dout, err := colAsF32.SubSpaceTry(2, []int{dt.Rows - 1})
-		if err != nil {
-			fmt.Printf("DftPowToTable: subspacing error")
-			return false
-		}
-		for s := 0; s < int(aud.Input.TotalSteps); s++ {
-			for i := 0; i < int(aud.Dft.DftUse); i++ {
-				if aud.Dft.LogPow {
-					val := aud.Dft.DftLogPowerTrialOut.FloatVal([]int{i, s, ch})
-					dout.SetFloat([]int{s, i}, val)
-				} else {
-					val := aud.Dft.DftPowerTrialOut.FloatVal([]int{i, s, ch})
-					dout.SetFloat([]int{s, i}, val)
-				}
-			}
-		}
-	}
-	return true
-}
-
-// MelFilterBankToTable
-func (aud *Aud) MelFilterBankToTable(dt *etable.Table, ch int, fmtOnly bool) bool { // ch is channel
-	var colSfx string
-	rows := 1
-
-	if aud.Input.Channels > 1 {
-		colSfx = "_ch" + strconv.Itoa(ch)
-	}
-
-	var err error
-	if aud.Mel.MelFBank.On {
-		cn := "MelFBank" + colSfx // column name
-		col := dt.ColByName(cn)
-		if col == nil {
-			err = dt.AddCol(etensor.NewFloat32([]int{rows, int(aud.Input.TotalSteps), int(aud.Mel.MelFBank.NFilters)}, nil, nil), cn)
-			if err != nil {
-				fmt.Printf("MelFilterBankToTable: column %v not found or failed to be created", cn)
-				return false
-			}
-		}
-		if fmtOnly == false {
-			colAsF32 := dt.ColByName(cn).(*etensor.Float32)
-			dout, err := colAsF32.SubSpaceTry(2, []int{dt.Rows - 1})
-			if err != nil {
-				fmt.Printf("MelFilterBankToTable: subspacing error")
-				return false
-			}
-			for s := 0; s < int(aud.Input.TotalSteps); s++ {
-				for i := 0; i < int(aud.Mel.MelFBank.NFilters); i++ {
-					val := aud.Mel.MelFBankTrialOut.FloatVal([]int{i, s, ch})
-					dout.SetFloat([]int{s, i}, val)
-				}
-			}
-		}
 	}
 	return true
 }
@@ -249,16 +168,7 @@ func mainrun() {
 	TheSP.Input.InitFromSound(&TheSP.Sound, TheSP.Channels, 0)
 	TheSP.LoadSound(&TheSP.Sound)
 	TheSP.ProcessSamples()
-	TheSP.DftData = &etable.Table{}
-	TheSP.DftData.AddRows(1)
-	TheSP.MelData = &etable.Table{}
-	TheSP.MelData.AddRows(1)
 
-	// Put the results into one or more tables for viewing
-	for ch := int(0); ch < TheSP.Input.Channels; ch++ {
-		TheSP.DftPowToTable(TheSP.DftData, ch, false)
-		TheSP.MelFilterBankToTable(TheSP.MelData, ch, false)
-	}
 	win := TheSP.ConfigGui()
 	win.StartEventLoop()
 }

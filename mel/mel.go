@@ -5,39 +5,25 @@ import (
 	"math"
 
 	"github.com/chewxy/math32"
-	"github.com/emer/auditory/dft"
 	"github.com/emer/auditory/input"
 	"github.com/emer/etable/etensor"
 	"gonum.org/v1/gonum/fourier"
 )
 
-// RenormSpec holds the auditory renormalization parameters
-type RenormSpec struct {
-	On          bool    `desc:"perform renormalization of this level of the auditory signal"`
+// MelFBank contains mel frequency feature bank sampling parameters
+type MelFBank struct {
+	On          bool    `desc:"perform mel-frequency filtering of the fft input"`
+	NFilters    int     `viewif:"On" def:"32,26" desc:"number of Mel frequency filters to compute"`
+	LoHz        float32 `viewif:"On" def:"120,300" desc:"low frequency end of mel frequency spectrum"`
+	HiHz        float32 `viewif:"On" def:"10000,8000" desc:"high frequency end of mel frequency spectrum -- must be <= sample_rate / 2 (i.e., less than the Nyquist frequencY"`
+	LogOff      float32 `viewif:"On" def:"0" desc:"on add this amount when taking the log of the Mel filter sums to produce the filter-bank output -- e.g., 1.0 makes everything positive -- affects the relative contrast of the outputs"`
+	LogMin      float32 `viewif:"On" def:"-10" desc:"minimum value a log can produce -- puts a lower limit on log output"`
+	LoMel       float32 `viewif:"On" inactive:"+" desc:" low end of mel scale in mel units"`
+	HiMel       float32 `viewif:"On" inactive:"+" desc:" high end of mel scale in mel units"`
+	Renorm      bool    `desc:"whether to perform renormalization of the mel values"`
 	RenormMin   float32 `viewif:"On" desc:"minimum value to use for renormalization -- you must experiment with range of inputs to determine appropriate values"`
 	RenormMax   float32 `viewif:"On" desc:"maximum value to use for renormalization -- you must experiment with range of inputs to determine appropriate values"`
 	RenormScale float32 `inactive:"+" desc:"1.0 / (ren_max - ren_min)"`
-}
-
-// Initialize initializes the RenormSpec
-func (rs *RenormSpec) Initialize() {
-	rs.On = true
-	rs.RenormMin = -5.0
-	rs.RenormMax = 9.0
-	rs.RenormScale = 1.0 / (rs.RenormMax - rs.RenormMin)
-}
-
-// MelFBank contains mel frequency feature bank sampling parameters
-type MelFBank struct {
-	On          bool       `desc:"perform mel-frequency filtering of the fft input"`
-	NFilters    int        `viewif:"On" def:"32,26" desc:"number of Mel frequency filters to compute"`
-	LoHz        float32    `viewif:"On" def:"120,300" desc:"low frequency end of mel frequency spectrum"`
-	HiHz        float32    `viewif:"On" def:"10000,8000" desc:"high frequency end of mel frequency spectrum -- must be <= sample_rate / 2 (i.e., less than the Nyquist frequencY"`
-	LogOff      float32    `viewif:"On" def:"0" desc:"on add this amount when taking the log of the Mel filter sums to produce the filter-bank output -- e.g., 1.0 makes everything positive -- affects the relative contrast of the outputs"`
-	LogMin      float32    `viewif:"On" def:"-10" desc:"minimum value a log can produce -- puts a lower limit on log output"`
-	LoMel       float32    `viewif:"On" inactive:"+" desc:" low end of mel scale in mel units"`
-	HiMel       float32    `viewif:"On" inactive:"+" desc:" high end of mel scale in mel units"`
-	FBankRenorm RenormSpec `viewif:"MelFBank.On=true desc: renormalization parmeters for the mel_fbank values -- performed prior to further processing"`
 }
 
 type Mel struct {
@@ -48,28 +34,22 @@ type Mel struct {
 	MelFilterMaxBins int             `inactive:"+" desc:" #NO_SAVE maximum number of bins for mel filter -- number of bins in highest filter"`
 	MelNFiltersEff   int             `inactive:"+" desc:" #NO_SAVE effective number of mel filters: mel.n_filters + 2"`
 
-	MelFBank         MelFBank
-	MelFBankOut      etensor.Float32 `view:"no-inline" desc:" #NO_SAVE [mel.n_filters] mel scale transformation of dft_power, using triangular filters, resulting in the mel filterbank output -- the natural log of this is typically applied"`
-	MelFBankTrialOut etensor.Float32 `view:"no-inline" desc:" #NO_SAVE [mel.n_filters][input.total_steps][input.channels] full trial's worth of mel feature-bank output -- only if using gabors"`
+	MelFBank     MelFBank
+	MelFBankData etensor.Float32 `view:"no-inline" desc:" #NO_SAVE [mel.n_filters] mel scale transformation of dft_power, using triangular filters, resulting in the mel filterbank output -- the natural log of this is typically applied"`
 
-	Dft             dft.Dft         `desc:"specifications for how to compute the discrete fourier transform (DFT, using FFT)"`
-	DftSize         int             `inactive:"+" desc:" #NO_SAVE full size of fft output -- should be input.win_samples"`
-	DftUse          int             `inactive:"+" desc:" #NO_SAVE number of dft outputs to actually use -- should be dft_size / 2 + 1"`
 	Mfcc            MelCepstrumSpec `viewif:"MelFBank.On=true desc: specifications of the mel cepstrum discrete cosine transform of the mel fbank filter features"`
 	MfccDctOut      etensor.Float32 `view:"no-inline" desc:" #NO_SAVE discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
 	MfccDctTrialOut etensor.Float32 `view:"no-inline" desc:" #NO_SAVE full trial's worth of discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
 }
 
 // Initialize
-func (mel *Mel) Initialize(dftUse int, winSamples int, sampleRate int) {
-	mel.DftUse = dftUse
+func (mel *Mel) Initialize(dftSize int, winSamples int, sampleRate int) {
 	mel.MelFBank.Initialize()
-	mel.InitFilters(mel.DftUse, sampleRate)
+	mel.InitFilters(dftSize, sampleRate)
 }
 
 // InitFilters
-func (mel *Mel) InitFilters(dftUse int, sampleRate int) {
-	mel.DftUse = dftUse
+func (mel *Mel) InitFilters(dftSize int, sampleRate int) {
 	mel.MelNFiltersEff = mel.MelFBank.NFilters + 2
 	mel.MelPtsMel.SetShape([]int{mel.MelNFiltersEff}, nil, nil)
 	mel.MelPtsHz.SetShape([]int{mel.MelNFiltersEff}, nil, nil)
@@ -79,7 +59,7 @@ func (mel *Mel) InitFilters(dftUse int, sampleRate int) {
 	for idx := 0; idx < mel.MelNFiltersEff; idx++ {
 		ml := mel.MelFBank.LoMel + float32(idx)*melIncr
 		hz := MelToFreq(ml)
-		bin := FreqToBin(hz, float32(mel.DftUse), float32(sampleRate))
+		bin := FreqToBin(hz, float32(dftSize), float32(sampleRate))
 		mel.MelPtsMel.SetFloat1D(idx, float64(ml))
 		mel.MelPtsHz.SetFloat1D(idx, float64(hz))
 		mel.MelPtsBin.SetFloat1D(idx, float64(bin))
@@ -109,10 +89,10 @@ func (mel *Mel) InitFilters(dftUse int, sampleRate int) {
 }
 
 // InitMatrices sets the shape of all output matrices
-func (mel *Mel) InitMatrices(input input.Input) {
+func (mel *Mel) InitMatrices(input input.Input, trialData *etensor.Float32) {
 	if mel.MelFBank.On {
-		mel.MelFBankOut.SetShape([]int{mel.MelFBank.NFilters}, nil, nil)
-		mel.MelFBankTrialOut.SetShape([]int{mel.MelFBank.NFilters, input.TotalSteps, input.Channels}, nil, nil)
+		mel.MelFBankData.SetShape([]int{mel.MelFBank.NFilters}, nil, nil)
+		trialData.SetShape([]int{mel.MelFBank.NFilters, input.TotalSteps, input.Channels}, nil, nil)
 		if mel.Mfcc.On {
 			mel.MfccDctOut.SetShape([]int{mel.MelFBank.NFilters}, nil, nil)
 			mel.MfccDctTrialOut.SetShape([]int{mel.MelFBank.NFilters, input.TotalSteps, input.Channels}, nil, nil)
@@ -120,16 +100,8 @@ func (mel *Mel) InitMatrices(input input.Input) {
 	}
 }
 
-// NeedsInit checks to see if we need to reinitialize AuditoryProc
-func (mel *Mel) NeedsInit(winSamples int) bool {
-	if mel.DftSize != winSamples || mel.MelNFiltersEff != mel.MelFBank.NFilters+2 {
-		return true
-	}
-	return false
-}
-
-// MelFilterDft
-func (mel *Mel) FilterDft(ch, step int, dftPowerOut *etensor.Float32) {
+// FilterDft
+func (mel *Mel) FilterDft(ch, step int, dftPowerOut *etensor.Float32, trialData *etensor.Float32) {
 	mi := 0
 	for f := 0; f < int(mel.MelFBank.NFilters); f, mi = f+1, mi+1 { // f is filter
 		minBin := mel.MelPtsBin.Value1D(f)
@@ -149,18 +121,18 @@ func (mel *Mel) FilterDft(ch, step int, dftPowerOut *etensor.Float32) {
 		} else {
 			val = math32.Log(sum)
 		}
-		if mel.MelFBank.FBankRenorm.On {
-			val -= mel.MelFBank.FBankRenorm.RenormMin
+		if mel.MelFBank.Renorm {
+			val -= mel.MelFBank.RenormMin
 		}
 		if val < 0 {
 			val = 0
 		}
-		val *= mel.MelFBank.FBankRenorm.RenormScale
+		val *= mel.MelFBank.RenormScale
 		if val > 1.0 {
 			val = 1.0
 		}
-		mel.MelFBankOut.SetFloat1D(mi, float64(val))
-		mel.MelFBankTrialOut.Set([]int{mi, step, ch}, val)
+		mel.MelFBankData.SetFloat1D(mi, float64(val))
+		trialData.Set([]int{mi, step, ch}, val)
 	}
 }
 
@@ -189,7 +161,10 @@ func (mfb *MelFBank) Initialize() {
 	mfb.LogMin = -10.0
 	mfb.LoMel = FreqToMel(mfb.LoHz)
 	mfb.HiMel = FreqToMel(mfb.HiHz)
-	mfb.FBankRenorm.Initialize()
+	mfb.Renorm = true
+	mfb.RenormMin = -5.0
+	mfb.RenormMax = 9.0
+	mfb.RenormScale = 1.0 / (mfb.RenormMax - mfb.RenormMin)
 }
 
 // MelCepstrumSpec holds the mel frequency sampling parameters
@@ -204,10 +179,10 @@ func (mc *MelCepstrumSpec) Initialize() {
 	mc.NCoeff = 13
 }
 
-// FilterWindow filters the current window_in input data according to current settings -- called by ProcessStep, but can be called separately
-func (mel *Mel) FilterWindow(ch int, step int, windowIn etensor.Float32, dft dft.Dft, firstStep bool) {
+// Filter filters the current window_in input data according to current settings -- called by ProcessStep, but can be called separately
+func (mel *Mel) Filter(ch int, step int, windowIn etensor.Float32, dftPower *etensor.Float32, firstStep bool, trialData *etensor.Float32) {
 	if mel.MelFBank.On {
-		mel.FilterDft(ch, step, &dft.DftPowerOut)
+		mel.FilterDft(ch, step, dftPower, trialData)
 		if mel.Mfcc.On {
 			mel.CepstrumDctMel(ch, step)
 		}
@@ -224,11 +199,11 @@ func (mel *Mel) FftReal(out []complex128, in etensor.Float32) {
 }
 
 // CopyStepFromStep
-func (mel *Mel) CopyStepFromStep(toStep, fmStep, ch int) {
+func (mel *Mel) CopyStepFromStep(toStep, fmStep, ch int, trialData *etensor.Float32) {
 	if mel.MelFBank.On {
 		for i := 0; i < int(mel.MelFBank.NFilters); i++ {
-			val := mel.MelFBankTrialOut.Value([]int{i, fmStep, ch})
-			mel.MelFBankTrialOut.Set([]int{i, toStep, ch}, val)
+			val := trialData.Value([]int{i, fmStep, ch})
+			trialData.Set([]int{i, toStep, ch}, val)
 		}
 		if mel.Mfcc.On {
 			for i := 0; i < int(mel.MelFBank.NFilters); i++ {
@@ -241,7 +216,7 @@ func (mel *Mel) CopyStepFromStep(toStep, fmStep, ch int) {
 
 // CepstrumDctMel
 func (mel *Mel) CepstrumDctMel(ch, step int) {
-	sz := copy(mel.MfccDctOut.Values, mel.MelFBankOut.Values)
+	sz := copy(mel.MfccDctOut.Values, mel.MelFBankData.Values)
 	if sz != len(mel.MfccDctOut.Values) {
 		fmt.Printf("CepstrumDctMel: memory copy size wrong")
 	}
