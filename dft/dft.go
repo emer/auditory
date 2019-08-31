@@ -31,15 +31,17 @@ func (dft *Dft) Initialize(winSamples int, sampleRate int) {
 	dft.DftSizeFull = winSamples
 	dft.DftOut = make([]complex128, dft.DftSizeFull)
 	dft.DftSizeHalf = dft.DftSizeFull/2 + 1
+	dft.DftPower.SetShape([]int{dft.DftSizeHalf}, nil, nil)
+	dft.DftLogPower.SetShape([]int{dft.DftSizeHalf}, nil, nil)
 }
 
-// InitMatrices sets the shape of all output matrices
+// InitMatrices sets the tensor shapes
 func (dft *Dft) InitMatrices(input input.Input, powerForTrial *etensor.Float32, logPowerForTrial *etensor.Float32) {
-	dft.DftPower.SetShape([]int{dft.DftSizeHalf}, nil, nil)
+	//dft.DftPower.SetShape([]int{dft.DftSizeHalf}, nil, nil)
 	powerForTrial.SetShape([]int{dft.DftSizeHalf, input.TotalSteps, input.Channels}, nil, nil)
 
 	if dft.CompLogPow {
-		dft.DftLogPower.SetShape([]int{dft.DftSizeHalf}, nil, nil)
+		//dft.DftLogPower.SetShape([]int{dft.DftSizeHalf}, nil, nil)
 		logPowerForTrial.SetShape([]int{dft.DftSizeHalf, input.TotalSteps, input.Channels}, nil, nil)
 	}
 }

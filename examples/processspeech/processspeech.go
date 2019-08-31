@@ -41,18 +41,23 @@ type Aud struct {
 	DftPowerTrialData    etensor.Float32 `view:"no-inline" desc:" #NO_SAVE [dft_use][input.total_steps][input.channels] full trial's worth of power of the dft, up to the nyquist limit frequency (1/2 input.win_samples)"`
 	DftLogPowerTrialData etensor.Float32 `view:"no-inline" desc:" #NO_SAVE [dft_use][input.total_steps][input.channels] full trial's worth of log power of the dft, up to the nyquist limit frequency (1/2 input.win_samples)"`
 	MelFBankTrialData    etensor.Float32 `view:"no-inline" desc:" #NO_SAVE [mel.n_filters][input.total_steps][input.channels] full trial's worth of mel feature-bank output -- only if using gabors"`
+	MfccDctTrialData     etensor.Float32 `view:"no-inline" desc:" #NO_SAVE full trial's worth of discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
 }
 
 func (aud *Aud) Defaults() {
 	aud.Input.Defaults()
 	aud.Dft.Initialize(aud.Input.WinSamples, aud.Input.SampleRate)
-	aud.Mel.Initialize(aud.Dft.DftSizeHalf, aud.Input.WinSamples, aud.Input.SampleRate)
-	aud.Mel.Mfcc.Initialize()
+	aud.Mel.Initialize(aud.Dft.DftSizeHalf, aud.Input.WinSamples, aud.Input.SampleRate, true)
 
 	aud.WindowIn.SetShape([]int{aud.Input.WinSamples}, nil, nil)
-	aud.Dft.InitMatrices(aud.Input, &aud.DftPowerTrialData, &aud.DftLogPowerTrialData)
-	aud.Mel.InitMatrices(aud.Input, &aud.MelFBankTrialData)
-
+	aud.DftPowerTrialData.SetShape([]int{aud.Dft.DftSizeHalf, aud.Input.TotalSteps, aud.Input.Channels}, nil, nil)
+	if aud.Dft.CompLogPow {
+		aud.DftLogPowerTrialData.SetShape([]int{aud.Dft.DftSizeHalf, aud.Input.TotalSteps, aud.Input.Channels}, nil, nil)
+	}
+	aud.MelFBankTrialData.SetShape([]int{aud.Mel.MelFBank.NFilters, aud.Input.TotalSteps, aud.Input.Channels}, nil, nil)
+	if aud.Mel.CompMfcc {
+		aud.MfccDctTrialData.SetShape([]int{aud.Mel.MelFBank.NFilters, aud.Input.TotalSteps, aud.Input.Channels}, nil, nil)
+	}
 	aud.InputPos = 0
 	aud.FirstStep = true
 }
@@ -81,7 +86,7 @@ func (aud *Aud) ProcessSamples() {
 func (aud *Aud) ProcessStep(ch int, step int) bool {
 	aud.SoundToWindow(aud.InputPos, ch)
 	aud.Dft.Filter(int(ch), int(step), aud.WindowIn, aud.FirstStep, &aud.DftPowerTrialData, &aud.DftLogPowerTrialData)
-	aud.Mel.Filter(int(ch), int(step), aud.WindowIn, &aud.Dft.DftPower, aud.FirstStep, &aud.MelFBankTrialData)
+	aud.Mel.Filter(int(ch), int(step), aud.WindowIn, &aud.Dft.DftPower, aud.FirstStep, &aud.MelFBankTrialData, &aud.MfccDctTrialData)
 	aud.InputPos = aud.InputPos + aud.Input.StepSamples
 	aud.FirstStep = false
 	return true
