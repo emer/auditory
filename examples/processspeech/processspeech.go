@@ -54,9 +54,9 @@ func (aud *Aud) Defaults() {
 	if aud.Dft.CompLogPow {
 		aud.DftLogPowerTrialData.SetShape([]int{aud.Dft.DftSizeHalf, aud.Input.TotalSteps, aud.Input.Channels}, nil, nil)
 	}
-	aud.MelFBankTrialData.SetShape([]int{aud.Mel.MelFBank.NFilters, aud.Input.TotalSteps, aud.Input.Channels}, nil, nil)
+	aud.MelFBankTrialData.SetShape([]int{aud.Input.TotalSteps, aud.Mel.MelFBank.NFilters, aud.Input.Channels}, nil, nil)
 	if aud.Mel.CompMfcc {
-		aud.MfccDctTrialData.SetShape([]int{aud.Mel.MelFBank.NFilters, aud.Input.TotalSteps, aud.Input.Channels}, nil, nil)
+		aud.MfccDctTrialData.SetShape([]int{aud.Input.TotalSteps, aud.Mel.MelFBank.NFilters, aud.Input.Channels}, nil, nil)
 	}
 	aud.InputPos = 0
 	aud.FirstStep = true

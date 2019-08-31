@@ -5,7 +5,6 @@ import (
 	"math"
 
 	"github.com/chewxy/math32"
-	"github.com/emer/auditory/input"
 	"github.com/emer/etable/etensor"
 	"gonum.org/v1/gonum/fourier"
 )
@@ -93,15 +92,6 @@ func (mel *Mel) InitFilters(dftSize int, sampleRate int) {
 	}
 }
 
-// InitMatrices sets the shape of all output matrices
-func (mel *Mel) InitMatrices(input input.Input, trialData *etensor.Float32) {
-	mel.MelFBankData.SetShape([]int{mel.MelFBank.NFilters}, nil, nil)
-	trialData.SetShape([]int{mel.MelFBank.NFilters, input.TotalSteps, input.Channels}, nil, nil)
-	if mel.CompMfcc {
-		mel.MfccDctOut.SetShape([]int{mel.MelFBank.NFilters}, nil, nil)
-	}
-}
-
 // FilterDft
 func (mel *Mel) FilterDft(ch, step int, dftPowerOut *etensor.Float32, trialData *etensor.Float32) {
 	mi := 0
@@ -134,7 +124,7 @@ func (mel *Mel) FilterDft(ch, step int, dftPowerOut *etensor.Float32, trialData 
 			val = 1.0
 		}
 		mel.MelFBankData.SetFloat1D(mi, float64(val))
-		trialData.Set([]int{mi, step, ch}, val)
+		trialData.Set([]int{step, mi, ch}, val)
 	}
 }
 
@@ -188,12 +178,12 @@ func (mel *Mel) FftReal(out []complex128, in etensor.Float32) {
 // CopyStepFromStep
 func (mel *Mel) CopyStepFromStep(toStep, fmStep, ch int, trialData *etensor.Float32, mfccTrialData *etensor.Float32) {
 	for i := 0; i < int(mel.MelFBank.NFilters); i++ {
-		val := trialData.Value([]int{i, fmStep, ch})
-		trialData.Set([]int{i, toStep, ch}, val)
+		val := trialData.Value([]int{fmStep, i, ch})
+		trialData.Set([]int{toStep, i, ch}, val)
 		if mel.CompMfcc {
 			for i := 0; i < int(mel.MelFBank.NFilters); i++ {
-				val := mfccTrialData.Value([]int{i, fmStep, ch})
-				mfccTrialData.Set([]int{i, toStep, ch}, val)
+				val := mfccTrialData.Value([]int{fmStep, i, ch})
+				mfccTrialData.Set([]int{toStep, i, ch}, val)
 			}
 		}
 	}
@@ -212,6 +202,6 @@ func (mel *Mel) CepstrumDctMel(ch, step int, mfccTrialData *etensor.Float32) {
 	el0 := mfccDctOut[0]
 	mfccDctOut[0] = math.Log(1.0 + el0*el0) // replace with log energy instead..
 	for i := 0; i < mel.MelFBank.NFilters; i++ {
-		mfccTrialData.SetFloat([]int{i, step, ch}, mfccDctOut[i])
+		mfccTrialData.SetFloat([]int{step, i, ch}, mfccDctOut[i])
 	}
 }
