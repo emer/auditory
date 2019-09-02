@@ -14,8 +14,8 @@ type Dft struct {
 	LogOffSet      float32         `viewif:"LogPow" def:"0" desc:"add this amount when taking the log of the dft power -- e.g., 1.0 makes everything positive -- affects the relative contrast of the outputs"`
 	PreviousSmooth float32         `def:"0" desc:"how much of the previous step's power value to include in this one -- smooths out the power spectrum which can be artificially bumpy due to discrete window samples"`
 	CurrentSmooth  float32         `inactive:"+" desc:"how much of current power to include"`
-	DftSizeFull    int             `inactive:"+" desc:" #NO_SAVE full size of fft output -- should be input.win_samples"`
-	DftSizeHalf    int             `inactive:"+" desc:" #NO_SAVE number of dft outputs to actually use -- should be dft_size / 2 + 1"`
+	SizeFull       int             `inactive:"+" desc:" #NO_SAVE full size of fft output -- should be input.win_samples"`
+	SizeHalf       int             `inactive:"+" desc:" #NO_SAVE number of dft outputs to actually use -- should be dft_size / 2 + 1"`
 	DftOut         []complex128    `inactive:"+" desc:" #NO_SAVE [dft_size] discrete fourier transform (fft) output complex representation"`
 	DftPower       etensor.Float32 `view:"no-inline" desc:" #NO_SAVE [dft_use] power of the dft, up to the nyquist limit frequency (1/2 input.win_samples)"`
 	DftLogPower    etensor.Float32 `view:"no-inline" desc:" #NO_SAVE [dft_use] log power of the dft, up to the nyquist liit frequency (1/2 input.win_samples)"`
@@ -27,11 +27,11 @@ func (dft *Dft) Initialize(winSamples int, sampleRate int) {
 	dft.CompLogPow = true
 	dft.LogOffSet = 0
 	dft.LogMin = -100
-	dft.DftSizeFull = winSamples
-	dft.DftOut = make([]complex128, dft.DftSizeFull)
-	dft.DftSizeHalf = dft.DftSizeFull/2 + 1
-	dft.DftPower.SetShape([]int{dft.DftSizeHalf}, nil, nil)
-	dft.DftLogPower.SetShape([]int{dft.DftSizeHalf}, nil, nil)
+	dft.SizeFull = winSamples
+	dft.DftOut = make([]complex128, dft.SizeFull)
+	dft.SizeHalf = dft.SizeFull/2 + 1
+	dft.DftPower.SetShape([]int{dft.SizeHalf}, nil, nil)
+	dft.DftLogPower.SetShape([]int{dft.SizeHalf}, nil, nil)
 }
 
 // Filter filters the current window_in input data according to current settings -- called by ProcessStep, but can be called separately
@@ -60,7 +60,7 @@ func (dft *Dft) Input(windowInVals []float64, windowIn etensor.Float32) {
 // PowerOfDft
 func (dft *Dft) Power(ch, step int, firstStep bool, powerForTrial *etensor.Float32, logPowerForTrial *etensor.Float32) {
 	// Mag() is absolute value   SqMag is square of it - r*r + i*i
-	for k := 0; k < int(dft.DftSizeHalf); k++ {
+	for k := 0; k < int(dft.SizeHalf); k++ {
 		rl := real(dft.DftOut[k])
 		im := imag(dft.DftOut[k])
 		powr := float64(rl*rl + im*im) // why is complex converted to float here
@@ -86,7 +86,7 @@ func (dft *Dft) Power(ch, step int, firstStep bool, powerForTrial *etensor.Float
 
 // CopyStepFromStep
 func (dft *Dft) CopyStepFromStep(toStep, fmStep, ch int, powerForTrial *etensor.Float32, logPowerForTrial *etensor.Float32) {
-	for i := 0; i < int(dft.DftSizeHalf); i++ {
+	for i := 0; i < int(dft.SizeHalf); i++ {
 		val := powerForTrial.Value([]int{i, fmStep, ch})
 		powerForTrial.Set([]int{i, toStep, ch}, val)
 		if dft.CompLogPow {

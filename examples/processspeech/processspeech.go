@@ -44,15 +44,15 @@ type Aud struct {
 	MfccDctTrialData     etensor.Float32 `view:"no-inline" desc:" #NO_SAVE full trial's worth of discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
 }
 
-func (aud *Aud) Defaults() {
+func (aud *Aud) Config() {
 	aud.Input.Defaults()
 	aud.Dft.Initialize(aud.Input.WinSamples, aud.Input.SampleRate)
-	aud.Mel.Initialize(aud.Dft.DftSizeHalf, aud.Input.WinSamples, aud.Input.SampleRate, true)
+	aud.Mel.Initialize(aud.Dft.SizeHalf, aud.Input.WinSamples, aud.Input.SampleRate, true)
 
 	aud.WindowIn.SetShape([]int{aud.Input.WinSamples}, nil, nil)
-	aud.DftPowerTrialData.SetShape([]int{aud.Dft.DftSizeHalf, aud.Input.TotalSteps, aud.Input.Channels}, nil, nil)
+	aud.DftPowerTrialData.SetShape([]int{aud.Dft.SizeHalf, aud.Input.TotalSteps, aud.Input.Channels}, nil, nil)
 	if aud.Dft.CompLogPow {
-		aud.DftLogPowerTrialData.SetShape([]int{aud.Dft.DftSizeHalf, aud.Input.TotalSteps, aud.Input.Channels}, nil, nil)
+		aud.DftLogPowerTrialData.SetShape([]int{aud.Dft.SizeHalf, aud.Input.TotalSteps, aud.Input.Channels}, nil, nil)
 	}
 	aud.MelFBankTrialData.SetShape([]int{aud.Input.TotalSteps, aud.Mel.MelFBank.NFilters, aud.Input.Channels}, nil, nil)
 	if aud.Mel.CompMfcc {
@@ -169,7 +169,7 @@ var TheSP Aud
 func mainrun() {
 	TheSP.Sound.Load("large_child_la_100ms.wav")
 	TheSP.Channels = int(TheSP.Sound.Channels())
-	TheSP.Defaults()
+	TheSP.Config()
 	TheSP.Input.InitFromSound(&TheSP.Sound, TheSP.Channels, 0)
 	TheSP.LoadSound(&TheSP.Sound)
 	TheSP.ProcessSamples()
