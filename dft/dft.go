@@ -68,7 +68,7 @@ func (dft *Dft) Power(ch, step int, firstStep bool, powerForTrial *etensor.Float
 			powr = float64(dft.PreviousSmooth)*dft.DftPower.FloatVal1D(k) + float64(dft.CurrentSmooth)*powr
 		}
 		dft.DftPower.SetFloat1D(k, powr)
-		powerForTrial.SetFloat([]int{k, step, ch}, powr)
+		powerForTrial.SetFloat([]int{step, k, ch}, powr)
 
 		var logp float64
 		if dft.CompLogPow {
@@ -79,7 +79,7 @@ func (dft *Dft) Power(ch, step int, firstStep bool, powerForTrial *etensor.Float
 				logp = math.Log(powr)
 			}
 			dft.DftLogPower.SetFloat1D(k, logp)
-			logPowerForTrial.SetFloat([]int{k, step, ch}, logp)
+			logPowerForTrial.SetFloat([]int{step, k, ch}, logp)
 		}
 	}
 }
