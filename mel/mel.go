@@ -101,7 +101,7 @@ func (mel *Mel) FilterDft(ch, step int, dftPowerOut *etensor.Float32, trialData 
 
 		sum := float32(0)
 		fi := 0
-		for bin := minBin; bin < maxBin; bin, fi = bin+1, fi+1 {
+		for bin := minBin; bin <= maxBin; bin, fi = bin+1, fi+1 {
 			fVal := mel.MelFilters.Value([]int{mi, fi})
 			pVal := dftPowerOut.FloatVal1D(int(bin))
 			sum += fVal * float32(pVal)
@@ -116,8 +116,8 @@ func (mel *Mel) FilterDft(ch, step int, dftPowerOut *etensor.Float32, trialData 
 		if mel.MelFBank.Renorm {
 			val -= mel.MelFBank.RenormMin
 		}
-		if val < 0 {
-			val = 0
+		if val < 0.0 {
+			val = 0.0
 		}
 		val *= mel.MelFBank.RenormScale
 		if val > 1.0 {
