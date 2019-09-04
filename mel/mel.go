@@ -76,24 +76,24 @@ func (mel *Mel) InitFilters(dftSize int, sampleRate int) {
 		mnbin := int(mel.MelPtsBin.Value1D(f))
 		pkbin := int(mel.MelPtsBin.Value1D(f + 1))
 		mxbin := int(mel.MelPtsBin.Value1D(f + 2))
-		pkmin := pkbin - mnbin
-		pkmax := mxbin - pkbin
+		pkmin := float32(pkbin) - float32(mnbin)
+		pkmax := float32(mxbin) - float32(pkbin)
 
 		fi := 0
 		bin := 0
 		for bin = mnbin; bin <= pkbin; bin, fi = bin+1, fi+1 {
-			fval := float32((bin - mnbin) / pkmin)
+			fval := (float32(bin) - float32(mnbin)) / pkmin
 			mel.MelFilters.SetFloat([]int{f, fi}, float64(fval))
 		}
 		for ; bin <= mxbin; bin, fi = bin+1, fi+1 {
-			fval := float32((mxbin - bin) / pkmax)
+			fval := (float32(mxbin) - float32(bin)) / pkmax
 			mel.MelFilters.SetFloat([]int{f, fi}, float64(fval))
 		}
 	}
 }
 
 // FilterDft
-func (mel *Mel) FilterDft(ch, step int, dftPowerOut *etensor.Float32, trialData *etensor.Float32) {
+func (mel *Mel) FilterDft(ch, step int, dftPowerOut etensor.Float32, trialData *etensor.Float32) {
 	mi := 0
 	for f := 0; f < int(mel.MelFBank.NFilters); f, mi = f+1, mi+1 { // f is filter
 		minBin := mel.MelPtsBin.Value1D(f)
@@ -103,8 +103,8 @@ func (mel *Mel) FilterDft(ch, step int, dftPowerOut *etensor.Float32, trialData 
 		fi := 0
 		for bin := minBin; bin <= maxBin; bin, fi = bin+1, fi+1 {
 			fVal := mel.MelFilters.Value([]int{mi, fi})
-			pVal := dftPowerOut.FloatVal1D(int(bin))
-			sum += fVal * float32(pVal)
+			pVal := float32(dftPowerOut.FloatVal1D(int(bin)))
+			sum += fVal * pVal
 		}
 		sum += mel.MelFBank.LogOff
 		var val float32
@@ -115,13 +115,13 @@ func (mel *Mel) FilterDft(ch, step int, dftPowerOut *etensor.Float32, trialData 
 		}
 		if mel.MelFBank.Renorm {
 			val -= mel.MelFBank.RenormMin
-		}
-		if val < 0.0 {
-			val = 0.0
-		}
-		val *= mel.MelFBank.RenormScale
-		if val > 1.0 {
-			val = 1.0
+			if val < 0.0 {
+				val = 0.0
+			}
+			val *= mel.MelFBank.RenormScale
+			if val > 1.0 {
+				val = 1.0
+			}
 		}
 		mel.MelFBankData.SetFloat1D(mi, float64(val))
 		trialData.Set([]int{step, mi, ch}, val)
@@ -160,7 +160,7 @@ func (mfb *MelFBank) Initialize() {
 
 // Filter filters the current window_in input data according to current settings -- called by ProcessStep, but can be called separately
 func (mel *Mel) Filter(ch int, step int, windowIn etensor.Float32, dftPower *etensor.Float32, firstStep bool, trialData *etensor.Float32, mfccTrialData *etensor.Float32) {
-	mel.FilterDft(ch, step, dftPower, trialData)
+	mel.FilterDft(ch, step, *dftPower, trialData)
 	if mel.CompMfcc {
 		mel.CepstrumDctMel(ch, step, mfccTrialData)
 	}

@@ -40,7 +40,7 @@ type Aud struct {
 	InputPos             int             `inactive:"+" desc:" #NO_SAVE current position in the SoundFull input -- in terms of sample number"`
 	DftPowerTrialData    etensor.Float32 `view:"no-inline" desc:" #NO_SAVE [dft_use][input.total_steps][input.channels] full trial's worth of power of the dft, up to the nyquist limit frequency (1/2 input.win_samples)"`
 	DftLogPowerTrialData etensor.Float32 `view:"no-inline" desc:" #NO_SAVE [dft_use][input.total_steps][input.channels] full trial's worth of log power of the dft, up to the nyquist limit frequency (1/2 input.win_samples)"`
-	MelFBankTrialData    etensor.Float32 `view:"no-inline" desc:" #NO_SAVE [mel.n_filters][input.total_steps][input.channels] full trial's worth of mel feature-bank output -- only if using gabors"`
+	MelFBankTrialData    etensor.Float32 `view:"no-inline" desc:" #NO_SAVE [mel.n_filters][input.total_steps][input.channels] full trial's worth of mel feature-bank output"`
 	MfccDctTrialData     etensor.Float32 `view:"no-inline" desc:" #NO_SAVE full trial's worth of discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
 }
 
@@ -50,9 +50,9 @@ func (aud *Aud) Config() {
 	aud.Mel.Initialize(aud.Dft.SizeHalf, aud.Input.WinSamples, aud.Input.SampleRate, true)
 
 	aud.WindowIn.SetShape([]int{aud.Input.WinSamples}, nil, nil)
-	aud.DftPowerTrialData.SetShape([]int{aud.Dft.SizeHalf, aud.Input.TotalSteps, aud.Input.Channels}, nil, nil)
+	aud.DftPowerTrialData.SetShape([]int{aud.Input.TotalSteps, aud.Dft.SizeHalf, aud.Input.Channels}, nil, nil)
 	if aud.Dft.CompLogPow {
-		aud.DftLogPowerTrialData.SetShape([]int{aud.Dft.SizeHalf, aud.Input.TotalSteps, aud.Input.Channels}, nil, nil)
+		aud.DftLogPowerTrialData.SetShape([]int{aud.Input.TotalSteps, aud.Dft.SizeHalf, aud.Input.Channels}, nil, nil)
 	}
 	aud.MelFBankTrialData.SetShape([]int{aud.Input.TotalSteps, aud.Mel.MelFBank.NFilters, aud.Input.Channels}, nil, nil)
 	if aud.Mel.CompMfcc {
@@ -167,7 +167,8 @@ func (aud *Aud) ConfigGui() *gi.Window {
 var TheSP Aud
 
 func mainrun() {
-	TheSP.Sound.Load("large_child_la_100ms.wav")
+	TheSP.Sound.Load("female_la_100ms.wav")
+	//TheSP.Sound.Load("large_child_la_100ms.wav")
 	TheSP.Channels = int(TheSP.Sound.Channels())
 	TheSP.Config()
 	TheSP.Input.InitFromSound(&TheSP.Sound, TheSP.Channels, 0)

@@ -104,7 +104,7 @@ var TheAud Aud
 
 func mainrun() {
 	TheAud.Defaults()
-	TheAud.LoadSound("large_child_la_100ms.wav")
+	TheAud.LoadSound("female_la_100ms.wav")
 	TheAud.Channels = int(TheAud.Sound.Channels())
 	TheAud.InitInput()
 

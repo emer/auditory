@@ -205,11 +205,11 @@ func Conv(ch int, spec Gabor, input input.Input, raw *etensor.Float32, filters i
 				pos := fSum >= 0.0
 				act := spec.Gain * math32.Abs(fSum)
 				if pos {
-					raw.SetFloat([]int{ch, fi, 0, fIdx, tIdx}, float64(act))
-					raw.SetFloat([]int{ch, fi, 1, fIdx, tIdx}, 0)
+					raw.SetFloat([]int{ch, fi, 0, tIdx, fIdx}, float64(act))
+					raw.SetFloat([]int{ch, fi, 1, tIdx, fIdx}, 0)
 				} else {
-					raw.SetFloat([]int{ch, fi, 0, fIdx, tIdx}, 0)
-					raw.SetFloat([]int{ch, fi, 1, fIdx, tIdx}, float64(act))
+					raw.SetFloat([]int{ch, fi, 0, tIdx, fIdx}, 0)
+					raw.SetFloat([]int{ch, fi, 1, tIdx, fIdx}, float64(act))
 				}
 			}
 		}
