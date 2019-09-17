@@ -1,7 +1,11 @@
-package audio
+package input
 
 import (
+	"fmt"
 	"math"
+
+	"github.com/chewxy/math32"
+	"github.com/emer/auditory/sound"
 )
 
 // Input defines the sound input parameters for auditory processing
@@ -20,8 +24,8 @@ type Input struct {
 	TotalSteps   int     `inactive:"+" desc:"2*border_steps + trial_steps -- total in full window"`
 }
 
-//Initialize initializes the Input
-func (ais *Input) Initialize() {
+//Defaults initializes the Input
+func (ais *Input) Defaults() {
 	ais.WinMsec = 25.0
 	ais.StepMsec = 5.0
 	ais.TrialMsec = 100.0
@@ -49,4 +53,24 @@ func MSecToSamples(msec float32, rate int) int {
 // SamplesToMSec converts samples to milliseconds, in terms of sample_rate
 func SamplesToMSec(samples int, rate int) float32 {
 	return 1000.0 * float32(samples) / float32(rate)
+}
+
+// InitFromSound loads a sound and sets the Input channel vars and sample rate
+func (in *Input) InitFromSound(snd *sound.Sound, nChannels int, channel int) {
+	if snd == nil {
+		fmt.Printf("InitFromSound: sound nil")
+		return
+	}
+	in.SampleRate = int(snd.SampleRate())
+	in.ComputeSamples()
+	if nChannels < 1 {
+		in.Channels = int(snd.Channels())
+	} else {
+		in.Channels = int(math32.Min(float32(nChannels), float32(in.Channels)))
+	}
+	if in.Channels > 1 {
+		in.Channel = channel
+	} else {
+		in.Channel = 0
+	}
 }

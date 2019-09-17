@@ -1,7 +1,7 @@
 // Copyright (c) 2019, The Emergent Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
-package audio
+package sound
 
 import (
 	"errors"
@@ -9,6 +9,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/emer/etable/etable"
 	"github.com/emer/etable/etensor"
 	"github.com/go-audio/audio"
 	"github.com/go-audio/wav"
@@ -32,10 +33,11 @@ const (
 
 type Sound struct {
 	Decoder *wav.Decoder
+	T       etable.Table
 }
 
-// LoadSound loads the sound file and decodes it
-func (snd *Sound) LoadSound(filename string) error {
+// Load loads the sound file and decodes it
+func (snd *Sound) Load(filename string) error {
 	inFile, err := os.Open(filename)
 	if err != nil {
 		fmt.Printf("couldn't open %s %v", filename, err)
@@ -146,7 +148,7 @@ func (snd *Sound) SoundToMatrix(soundData *etensor.Float32, channel int) bool {
 	return true
 }
 
-// ConvertWavBufData
+// GetFloatAtIdx
 func (snd *Sound) GetFloatAtIdx(buf *audio.IntBuffer, idx int) float32 {
 	if buf.SourceBitDepth == 32 {
 		return float32(buf.Data[idx]) / float32(0x7FFFFFFF)
