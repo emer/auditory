@@ -198,7 +198,9 @@ func (mel *Mel) CepstrumDctMel(ch, step int, mfccTrialData *etensor.Float32) {
 
 	dct := fourier.NewDCT(len(mel.MfccDctOut.Values))
 	var mfccDctOut []float64
-	mfccDctOut = dct.Transform(mfccDctOut, mel.MfccDctOut.Floats())
+	src := []float64{}
+	mel.MfccDctOut.Floats(&src)
+	mfccDctOut = dct.Transform(mfccDctOut, src)
 	el0 := mfccDctOut[0]
 	mfccDctOut[0] = math.Log(1.0 + el0*el0) // replace with log energy instead..
 	for i := 0; i < mel.MelFBank.NFilters; i++ {
