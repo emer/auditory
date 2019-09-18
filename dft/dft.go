@@ -37,7 +37,7 @@ func (dft *Dft) Initialize(winSamples int, sampleRate int) {
 // Filter filters the current window_in input data according to current settings -- called by ProcessStep, but can be called separately
 func (dft *Dft) Filter(ch int, step int, windowIn etensor.Float32, firstStep bool, powerForTrial *etensor.Float32, logPowerForTrial *etensor.Float32) {
 	dft.FftReal(dft.DftOut, windowIn)
-	dft.Input(windowIn.Floats(), windowIn)
+	dft.Input(windowIn)
 	dft.Power(ch, step, firstStep, powerForTrial, logPowerForTrial)
 }
 
@@ -51,7 +51,7 @@ func (dft *Dft) FftReal(out []complex128, in etensor.Float32) {
 }
 
 // DftInput applies dft (fft) to input
-func (dft *Dft) Input(windowInVals []float64, windowIn etensor.Float32) {
+func (dft *Dft) Input(windowIn etensor.Float32) {
 	dft.FftReal(dft.DftOut, windowIn)
 	fft := fourier.NewCmplxFFT(len(dft.DftOut))
 	dft.DftOut = fft.Coefficients(nil, dft.DftOut)
