@@ -835,7 +835,6 @@ func (vt *VocalTract) Reset() {
 	for i := 0; i < FricationInjCoefCount; i++ {
 		vt.FricationTap[i] = 0.0
 	}
-
 	vt.CurPtr = 1
 	vt.PrevPtr = 0
 	vt.DampingFactor = 0.0
@@ -1048,16 +1047,16 @@ func (vt *VocalTract) InitializeNasalCavity() {
 	var radA2, radB2 float32
 
 	// calculate coefficients for internal fixed sections of nasal cavity
-	for i, j := NasalTractSect2, NasalTractSect2; i < NasalTractSect6; i, j = i+1, j+1 {
+	for i, j := NasalTractSect2, NasalTractCoef2; i < NasalTractSect6; i, j = i+1, j+1 {
 		radA2 = vt.Voice.NoseRadiusVal(i)
 		radA2 *= radA2
-		radB2 = vt.Voice.NoseRadiusVal(i + 1)
+		radB2 = vt.Voice.NoseRadiusVal(i)
 		radB2 *= radB2
 		vt.NasalCoefs[j] = (radA2 - radB2) / (radA2 + radB2)
 	}
 
 	// calculate the fixed coefficient for the nose aperture
-	radA2 = vt.Voice.NoseRadiusVal(NasalTractSect6)
+	radA2 = vt.Voice.NoseRadiusVal(NasalTractSect6 - 1) // zero based
 	radA2 *= radA2
 	radB2 = vt.Voice.ApertureRadius * vt.Voice.ApertureRadius
 	vt.NasalCoefs[NasalTractCoef6] = (radA2 - radB2) / (radA2 + radB2)

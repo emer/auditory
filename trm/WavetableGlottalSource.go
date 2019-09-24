@@ -61,7 +61,7 @@ type WavetableGlottalSource struct {
 	BasicIncrement  float32
 	CurrentPosition float32
 	Wavetable       [TableLength]float32
-	FirFilter       *FirFilter
+	FirFilter       FirFilter
 }
 
 // Init calculates the initial glottal pulse and stores it in the wavetable, for use in the oscillator.
