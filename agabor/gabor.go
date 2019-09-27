@@ -29,7 +29,7 @@ type Gabor struct {
 	CircleEdge      bool            `viewif:"On" def:"true" desc:"cut off the filter (to zero) outside a circle of diameter filter_size -- makes the filter more radially symmetric"`
 	NFilters        int             `viewif:"On" desc:" #READ_ONLY total number of filters = 3 + n_horiz"`
 	Shape           image.Point     `viewif:Gabor1.On=true" inactive:"+" desc:"overall geometry of gabor1 output (group-level geometry -- feature / unit level geometry is n_features, 2)"`
-	Filters         etensor.Float32 `inactive:"+" desc:" #NO_SAVE full gabor filters"`
+	Filters         etensor.Float32 `viewif:Gabor1.On=true" desc:" #NO_SAVE full gabor filters"`
 }
 
 //Initialize initializes the Gabor
@@ -63,7 +63,7 @@ func (ga *Gabor) SetShape(trialSteps int, nFilters int) { // nFilters is Mel.Mel
 
 // InitFilters
 func (ga *Gabor) InitFilters() {
-	ga.Filters.SetShape([]int{ga.SizeTime, ga.SizeFreq, ga.NFilters}, nil, nil)
+	ga.Filters.SetShape([]int{ga.NFilters, ga.SizeFreq, ga.SizeTime}, nil, nil)
 	ga.RenderFilters(&ga.Filters)
 }
 
@@ -104,7 +104,8 @@ func (ga *Gabor) RenderFilters(filters *etensor.Float32) {
 					sinVal := math32.Sin(twoPiNorm*ny + ga.PhaseOffset)
 					val = gauss * sinVal
 				}
-				filters.Set([]int{x, y, fli}, val)
+				//filters.Set([]int{x, y, fli}, val)
+				filters.Set([]int{fli, x, y}, val)
 			}
 		}
 	}
@@ -129,7 +130,8 @@ func (ga *Gabor) RenderFilters(filters *etensor.Float32) {
 					sinVal := math32.Sin(twoPiNorm*ny + ga.PhaseOffset)
 					val = gauss * sinVal
 				}
-				filters.Set([]int{x, y, fli}, val)
+				//filters.Set([]int{x, y, fli}, val)
+				filters.Set([]int{fli, y, x}, val)
 			}
 		}
 	}
@@ -140,7 +142,8 @@ func (ga *Gabor) RenderFilters(filters *etensor.Float32) {
 		negSum := float32(0)
 		for y := 0; y < ga.SizeFreq; y++ {
 			for x := 0; x < ga.SizeTime; x++ {
-				val := float32(filters.Value([]int{x, y, fli}))
+				//val := float32(filters.Value([]int{x, y, fli}))
+				val := float32(filters.Value([]int{fli, y, x}))
 				if val > 0 {
 					posSum += val
 				} else if val < 0 {
@@ -152,13 +155,15 @@ func (ga *Gabor) RenderFilters(filters *etensor.Float32) {
 		negNorm := -1.0 / negSum
 		for y := 0; y < ga.SizeFreq; y++ {
 			for x := 0; x < ga.SizeTime; x++ {
-				val := filters.Value([]int{x, y, fli})
+				//val := filters.Value([]int{x, y, fli})
+				val := filters.Value([]int{fli, y, x})
 				if val > 0.0 {
 					val *= posNorm
 				} else if val < 0.0 {
 					val *= negNorm
 				}
-				filters.Set([]int{x, y, fli}, val)
+				//filters.Set([]int{x, y, fli}, val)
+				filters.Set([]int{fli, y, x}, val)
 			}
 		}
 	}
