@@ -204,7 +204,7 @@ func Conv(ch int, spec Gabor, input input.Input, raw *etensor.Float32, filters i
 				fSum := float32(0.0)
 				for ff := int(0); ff < spec.SizeFreq; ff++ {
 					for ft := int(0); ft < spec.SizeTime; ft++ {
-						fVal := spec.Filters.Value([]int{ft, ff, fi})
+						fVal := spec.Filters.Value([]int{fi, ff, ft})
 						iVal := melData.Value([]int{inSt + ft, flt + ff, ch})
 						fSum += fVal * iVal
 					}
@@ -213,10 +213,10 @@ func Conv(ch int, spec Gabor, input input.Input, raw *etensor.Float32, filters i
 				act := spec.Gain * math32.Abs(fSum)
 				if pos {
 					raw.SetFloat([]int{ch, fIdx, tIdx, 0, fi}, float64(act))
-					raw.SetFloat([]int{ch, fIdx, tIdx, 0, fi}, 0)
+					raw.SetFloat([]int{ch, fIdx, tIdx, 1, fi}, 0)
 				} else {
 					raw.SetFloat([]int{ch, fIdx, tIdx, 0, fi}, 0)
-					raw.SetFloat([]int{ch, fIdx, tIdx, 0, fi}, float64(act))
+					raw.SetFloat([]int{ch, fIdx, tIdx, 1, fi}, float64(act))
 				}
 			}
 		}
