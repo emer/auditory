@@ -14,8 +14,8 @@ import (
 // has elongated frequency-band specific tuning, not a parallel horizontal tuning -- and has multiple of these
 type Gabor struct {
 	On              bool            `desc:"use this gabor filtering of the time-frequency space filtered input (time in terms of steps of the DFT transform, and discrete frequency factors based on the FFT window and input sample rate)"`
-	SizeTime        int             `viewif:"On" def:"6,8,12,16,24" desc:" #DEF_6;8;12;16;24 size of the filter in the time (horizontal) domain, in terms of steps of the underlying DFT filtering steps"`
-	SizeFreq        int             `viewif:"On" def:"6,8,12,16,24" desc:" #DEF_6;8;12;16;24 size of the filter in the frequency domain, in terms of discrete frequency factors based on the FFT window and input sample rate"`
+	SizeTime        int             `viewif:"On" def:"6,8,12,16,24" desc:" size of the filter in the time (horizontal) domain, in terms of steps of the underlying DFT filtering steps"`
+	SizeFreq        int             `viewif:"On" def:"6,8,12,16,24" desc:" size of the filter in the frequency domain, in terms of discrete frequency factors based on the FFT window and input sample rate"`
 	SpaceTime       int             `viewif:"On" desc:" spacing in the time (horizontal) domain, in terms of steps"`
 	SpaceFreq       int             `viewif:"On" desc:" spacing in the frequency (vertical) domain"`
 	WaveLen         float32         `viewif:"On" def:"1.5,2" desc:"wavelength of the sine waves in normalized units"`
@@ -27,9 +27,9 @@ type Gabor struct {
 	NHoriz          int             `viewif:"On" def:"4" desc:"number of horizontally-elongated,  pure time-domain, frequency-band specific filters to include, evenly spaced over the available frequency space for this filter set -- in addition to these, there are two diagonals (45, 135) and a vertically-elongated (wide frequency band) filter"`
 	PhaseOffset     float32         `viewif:"On" def:"0,1.5708" desc:"offset for the sine phase -- default is an asymmetric sine wave -- can make it into a symmetric cosine gabor by using PI/2 = 1.5708"`
 	CircleEdge      bool            `viewif:"On" def:"true" desc:"cut off the filter (to zero) outside a circle of diameter filter_size -- makes the filter more radially symmetric"`
-	NFilters        int             `viewif:"On" desc:" #READ_ONLY total number of filters = 3 + n_horiz"`
+	NFilters        int             `viewif:"On" desc:" total number of filters = 3 + NHoriz"`
 	Shape           image.Point     `viewif:Gabor1.On=true" inactive:"+" desc:"overall geometry of gabor1 output (group-level geometry -- feature / unit level geometry is n_features, 2)"`
-	Filters         etensor.Float32 `viewif:Gabor1.On=true" desc:" #NO_SAVE full gabor filters"`
+	Filters         etensor.Float32 `viewif:Gabor1.On=true" desc:"full gabor filters"`
 }
 
 //Initialize initializes the Gabor
@@ -104,7 +104,6 @@ func (ga *Gabor) RenderFilters(filters *etensor.Float32) {
 					sinVal := math32.Sin(twoPiNorm*ny + ga.PhaseOffset)
 					val = gauss * sinVal
 				}
-				//filters.Set([]int{x, y, fli}, val)
 				filters.Set([]int{fli, x, y}, val)
 			}
 		}
@@ -130,7 +129,6 @@ func (ga *Gabor) RenderFilters(filters *etensor.Float32) {
 					sinVal := math32.Sin(twoPiNorm*ny + ga.PhaseOffset)
 					val = gauss * sinVal
 				}
-				//filters.Set([]int{x, y, fli}, val)
 				filters.Set([]int{fli, y, x}, val)
 			}
 		}
@@ -142,7 +140,6 @@ func (ga *Gabor) RenderFilters(filters *etensor.Float32) {
 		negSum := float32(0)
 		for y := 0; y < ga.SizeFreq; y++ {
 			for x := 0; x < ga.SizeTime; x++ {
-				//val := float32(filters.Value([]int{x, y, fli}))
 				val := float32(filters.Value([]int{fli, y, x}))
 				if val > 0 {
 					posSum += val
@@ -155,14 +152,12 @@ func (ga *Gabor) RenderFilters(filters *etensor.Float32) {
 		negNorm := -1.0 / negSum
 		for y := 0; y < ga.SizeFreq; y++ {
 			for x := 0; x < ga.SizeTime; x++ {
-				//val := filters.Value([]int{x, y, fli})
 				val := filters.Value([]int{fli, y, x})
 				if val > 0.0 {
 					val *= posNorm
 				} else if val < 0.0 {
 					val *= negNorm
 				}
-				//filters.Set([]int{x, y, fli}, val)
 				filters.Set([]int{fli, y, x}, val)
 			}
 		}

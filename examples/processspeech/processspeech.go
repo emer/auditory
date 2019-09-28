@@ -34,14 +34,14 @@ type Aud struct {
 	Channels             int
 	Mel                  mel.Mel `view:"no-inline"`
 	Dft                  dft.Dft
-	SoundFull            etensor.Float32 `inactive:"+" desc:" #NO_SAVE the full sound input obtained from the sound input"`
-	WindowIn             etensor.Float32 `inactive:"+" desc:" #NO_SAVE [input.win_samples] the raw sound input, one channel at a time"`
-	FirstStep            bool            `inactive:"+" desc:" #NO_SAVE if first frame to process -- turns off prv smoothing of dft power"`
-	InputPos             int             `inactive:"+" desc:" #NO_SAVE current position in the SoundFull input -- in terms of sample number"`
-	DftPowerTrialData    etensor.Float32 `view:"no-inline" desc:" #NO_SAVE [dft_use][input.total_steps][input.channels] full trial's worth of power of the dft, up to the nyquist limit frequency (1/2 input.win_samples)"`
-	DftLogPowerTrialData etensor.Float32 `view:"no-inline" desc:" #NO_SAVE [dft_use][input.total_steps][input.channels] full trial's worth of log power of the dft, up to the nyquist limit frequency (1/2 input.win_samples)"`
-	MelFBankTrialData    etensor.Float32 `view:"no-inline" desc:" #NO_SAVE [mel.n_filters][input.total_steps][input.channels] full trial's worth of mel feature-bank output"`
-	MfccDctTrialData     etensor.Float32 `view:"no-inline" desc:" #NO_SAVE full trial's worth of discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
+	SoundFull            etensor.Float32 `inactive:"+" desc:" the full sound input obtained from the sound input"`
+	WindowIn             etensor.Float32 `inactive:"+" desc:" [input.win_samples] the raw sound input, one channel at a time"`
+	FirstStep            bool            `inactive:"+" desc:" if first frame to process -- turns off prv smoothing of dft power"`
+	InputPos             int             `inactive:"+" desc:" current position in the SoundFull input -- in terms of sample number"`
+	DftPowerTrialData    etensor.Float32 `view:"no-inline" desc:" [dft_use][input.total_steps][input.channels] full trial's worth of power of the dft, up to the nyquist limit frequency (1/2 input.win_samples)"`
+	DftLogPowerTrialData etensor.Float32 `view:"no-inline" desc:" [dft_use][input.total_steps][input.channels] full trial's worth of log power of the dft, up to the nyquist limit frequency (1/2 input.win_samples)"`
+	MelFBankTrialData    etensor.Float32 `view:"no-inline" desc:" [mel.n_filters][input.total_steps][input.channels] full trial's worth of mel feature-bank output"`
+	MfccDctTrialData     etensor.Float32 `view:"no-inline" desc:" full trial's worth of discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
 }
 
 func (aud *Aud) Config() {
@@ -54,9 +54,9 @@ func (aud *Aud) Config() {
 	if aud.Dft.CompLogPow {
 		aud.DftLogPowerTrialData.SetShape([]int{aud.Input.TotalSteps, aud.Dft.SizeHalf, aud.Input.Channels}, nil, nil)
 	}
-	aud.MelFBankTrialData.SetShape([]int{aud.Input.TotalSteps, aud.Mel.MelFBank.NFilters, aud.Input.Channels}, nil, nil)
+	aud.MelFBankTrialData.SetShape([]int{aud.Input.TotalSteps, aud.Mel.FBank.NFilters, aud.Input.Channels}, nil, nil)
 	if aud.Mel.CompMfcc {
-		aud.MfccDctTrialData.SetShape([]int{aud.Input.TotalSteps, aud.Mel.MelFBank.NFilters, aud.Input.Channels}, nil, nil)
+		aud.MfccDctTrialData.SetShape([]int{aud.Input.TotalSteps, aud.Mel.FBank.NFilters, aud.Input.Channels}, nil, nil)
 	}
 	aud.InputPos = 0
 	aud.FirstStep = true
@@ -86,7 +86,7 @@ func (aud *Aud) ProcessSamples() {
 func (aud *Aud) ProcessStep(ch int, step int) bool {
 	aud.SoundToWindow(aud.InputPos, ch)
 	aud.Dft.Filter(int(ch), int(step), aud.WindowIn, aud.FirstStep, &aud.DftPowerTrialData, &aud.DftLogPowerTrialData)
-	aud.Mel.Filter(int(ch), int(step), aud.WindowIn, &aud.Dft.DftPower, aud.FirstStep, &aud.MelFBankTrialData, &aud.MfccDctTrialData)
+	aud.Mel.Filter(int(ch), int(step), aud.WindowIn, &aud.Dft.Power, aud.FirstStep, &aud.MelFBankTrialData, &aud.MfccDctTrialData)
 	aud.InputPos = aud.InputPos + aud.Input.StepSamples
 	aud.FirstStep = false
 	return true
@@ -174,6 +174,7 @@ func mainrun() {
 	TheSP.Input.InitFromSound(&TheSP.Sound, TheSP.Channels, 0)
 	TheSP.LoadSound(&TheSP.Sound)
 	TheSP.ProcessSamples()
+	//TheSP.ApplyGabor()
 
 	win := TheSP.ConfigGui()
 	win.StartEventLoop()
