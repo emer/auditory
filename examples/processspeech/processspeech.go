@@ -7,6 +7,7 @@ package main
 import (
 	"fmt"
 	"github.com/chewxy/math32"
+	"github.com/emer/auditory/agabor"
 	"github.com/emer/auditory/dft"
 	"github.com/emer/auditory/input"
 	"github.com/emer/auditory/mel"
@@ -42,6 +43,8 @@ type Aud struct {
 	DftLogPowerTrialData etensor.Float32 `view:"no-inline" desc:" [dft_use][input.total_steps][input.channels] full trial's worth of log power of the dft, up to the nyquist limit frequency (1/2 input.win_samples)"`
 	MelFBankTrialData    etensor.Float32 `view:"no-inline" desc:" [mel.n_filters][input.total_steps][input.channels] full trial's worth of mel feature-bank output"`
 	MfccDctTrialData     etensor.Float32 `view:"no-inline" desc:" full trial's worth of discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
+	Gabor                agabor.Gabor    `viewif:"FBank.On" desc:"full set of frequency / time gabor filters -- first size"`
+	GaborTsr             etensor.Float32 `view:"no-inline" desc:" raw output of Gabor -- full trial's worth of gabor steps"`
 }
 
 func (aud *Aud) Config() {
@@ -60,6 +63,14 @@ func (aud *Aud) Config() {
 	}
 	aud.InputPos = 0
 	aud.FirstStep = true
+
+	aud.Gabor.Initialize(aud.Input.TrialSteps, aud.Mel.FBank.NFilters)
+	aud.Gabor.On = true
+
+	if aud.Gabor.On {
+		aud.GaborTsr.SetShape([]int{aud.Input.Channels, aud.Gabor.Shape.Y, aud.Gabor.Shape.X, 2, aud.Gabor.NFilters}, nil, nil)
+	}
+
 }
 
 // LoadSound initializes the AuditoryProc with the sound loaded from file by "Sound"
@@ -90,6 +101,15 @@ func (aud *Aud) ProcessStep(ch int, step int) bool {
 	aud.InputPos = aud.InputPos + aud.Input.StepSamples
 	aud.FirstStep = false
 	return true
+}
+
+// ApplyGabor convolves the gabor filters with the mel output
+func (aud *Aud) ApplyGabor() {
+	if aud.Gabor.On {
+		for ch := int(0); ch < aud.Input.Channels; ch++ {
+			agabor.Conv(ch, aud.Gabor, aud.Input, &aud.GaborTsr, aud.Mel.FBank.NFilters, aud.MelFBankTrialData)
+		}
+	}
 }
 
 // SoundToWindow gets sound from SoundFull at given position and channel, into WindowIn -- pads with zeros for any amount not available in the SoundFull input
@@ -174,7 +194,7 @@ func mainrun() {
 	TheSP.Input.InitFromSound(&TheSP.Sound, TheSP.Channels, 0)
 	TheSP.LoadSound(&TheSP.Sound)
 	TheSP.ProcessSamples()
-	//TheSP.ApplyGabor()
+	TheSP.ApplyGabor()
 
 	win := TheSP.ConfigGui()
 	win.StartEventLoop()

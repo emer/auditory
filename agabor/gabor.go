@@ -129,7 +129,7 @@ func (ga *Gabor) RenderFilters(filters *etensor.Float32) {
 					sinVal := math32.Sin(twoPiNorm*ny + ga.PhaseOffset)
 					val = gauss * sinVal
 				}
-				filters.Set([]int{fli, y, x}, val)
+				filters.Set([]int{fli, x, y}, val)
 			}
 		}
 	}
