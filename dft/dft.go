@@ -83,15 +83,3 @@ func (dft *Dft) CompPower(ch, step int, firstStep bool, powerForTrial *etensor.F
 		}
 	}
 }
-
-// CopyStepFromStep
-func (dft *Dft) CopyStepFromStep(toStep, fmStep, ch int, powerForTrial *etensor.Float32, logPowerForTrial *etensor.Float32) {
-	for i := 0; i < int(dft.SizeHalf); i++ {
-		val := powerForTrial.Value([]int{i, fmStep, ch})
-		powerForTrial.Set([]int{i, toStep, ch}, val)
-		if dft.CompLogPow {
-			val := logPowerForTrial.Value([]int{i, fmStep, ch})
-			logPowerForTrial.Set([]int{i, toStep, ch}, val)
-		}
-	}
-}

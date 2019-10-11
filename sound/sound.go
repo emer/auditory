@@ -9,7 +9,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/emer/etable/etable"
 	"github.com/emer/etable/etensor"
 	"github.com/go-audio/audio"
 	"github.com/go-audio/wav"
@@ -33,7 +32,6 @@ const (
 
 type Sound struct {
 	Decoder *wav.Decoder
-	T       etable.Table
 }
 
 // Load loads the sound file and decodes it

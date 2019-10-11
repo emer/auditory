@@ -167,15 +167,15 @@ func (ga *Gabor) RenderFilters(filters *etensor.Float32) {
 // Conv processes input using filters that operate over an entire trial of samples
 func Conv(ch int, spec Gabor, input input.Input, raw *etensor.Float32, filters int, melData etensor.Float32) {
 	tHalfSz := spec.SizeTime / 2
-	tOff := tHalfSz - input.BorderSteps
+	//tOff := tHalfSz - input.BorderSteps
+	tOff := tHalfSz
 	tMin := tOff
 	if tMin < 0 {
 		tMin = 0
 	}
-	tMax := input.TrialSteps - tMin
+	tMax := input.TrialSteps - tMin + 1
 
 	fMin := int(0)
-	//fMax := ap.Mel.MelFBank.NFilters - spec.SizeFreq
 	fMax := filters - spec.SizeFreq
 
 	maxTimeIdx := raw.Dim(2) // dim 0 is channel

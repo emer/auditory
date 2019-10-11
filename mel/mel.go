@@ -153,7 +153,7 @@ func (mfb *FilterBank) Initialize() {
 }
 
 // Filter filters the current window_in input data according to current settings -- called by ProcessStep, but can be called separately
-func (mel *Mel) Filter(ch int, step int, windowIn etensor.Float32, dftPower *etensor.Float32, firstStep bool, trialData *etensor.Float32, mfccTrialData *etensor.Float32) {
+func (mel *Mel) Filter(ch int, step int, windowIn etensor.Float32, dftPower *etensor.Float32, trialData *etensor.Float32, mfccTrialData *etensor.Float32) {
 	mel.FilterDft(ch, step, *dftPower, trialData)
 	if mel.CompMfcc {
 		mel.CepstrumDctMel(ch, step, mfccTrialData)
