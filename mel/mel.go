@@ -87,7 +87,7 @@ func (mel *Mel) InitFilters(dftSize int, sampleRate int) {
 }
 
 // FilterDft
-func (mel *Mel) FilterDft(ch, step int, dftPowerOut etensor.Float32, trialData *etensor.Float32) {
+func (mel *Mel) FilterDft(ch, step int, dftPowerOut etensor.Float32, segmentData *etensor.Float32) {
 	mi := 0
 	for f := 0; f < int(mel.FBank.NFilters); f, mi = f+1, mi+1 { // f is filter
 		minBin := mel.PtsBin.Value1D(f)
@@ -118,7 +118,7 @@ func (mel *Mel) FilterDft(ch, step int, dftPowerOut etensor.Float32, trialData *
 			}
 		}
 		mel.FBankData.SetFloat1D(mi, float64(val))
-		trialData.Set([]int{step, mi, ch}, val)
+		segmentData.Set([]int{step, mi, ch}, val)
 	}
 }
 
@@ -153,10 +153,10 @@ func (mfb *FilterBank) Initialize() {
 }
 
 // Filter filters the current window_in input data according to current settings -- called by ProcessStep, but can be called separately
-func (mel *Mel) Filter(ch int, step int, windowIn etensor.Float32, dftPower *etensor.Float32, trialData *etensor.Float32, mfccTrialData *etensor.Float32) {
-	mel.FilterDft(ch, step, *dftPower, trialData)
+func (mel *Mel) Filter(ch int, step int, windowIn etensor.Float32, dftPower *etensor.Float32, segmentData *etensor.Float32, mfccSegmentData *etensor.Float32) {
+	mel.FilterDft(ch, step, *dftPower, segmentData)
 	if mel.CompMfcc {
-		mel.CepstrumDctMel(ch, step, mfccTrialData)
+		mel.CepstrumDctMel(ch, step, mfccSegmentData)
 	}
 }
 
@@ -170,21 +170,21 @@ func (mel *Mel) FftReal(out []complex128, in etensor.Float32) {
 }
 
 // CopyStepFromStep
-func (mel *Mel) CopyStepFromStep(toStep, fmStep, ch int, trialData *etensor.Float32, mfccTrialData *etensor.Float32) {
+func (mel *Mel) CopyStepFromStep(toStep, fmStep, ch int, segmentData *etensor.Float32, mfccSegmentData *etensor.Float32) {
 	for i := 0; i < int(mel.FBank.NFilters); i++ {
-		val := trialData.Value([]int{fmStep, i, ch})
-		trialData.Set([]int{toStep, i, ch}, val)
+		val := segmentData.Value([]int{fmStep, i, ch})
+		segmentData.Set([]int{toStep, i, ch}, val)
 		if mel.CompMfcc {
 			for i := 0; i < int(mel.FBank.NFilters); i++ {
-				val := mfccTrialData.Value([]int{fmStep, i, ch})
-				mfccTrialData.Set([]int{toStep, i, ch}, val)
+				val := mfccSegmentData.Value([]int{fmStep, i, ch})
+				mfccSegmentData.Set([]int{toStep, i, ch}, val)
 			}
 		}
 	}
 }
 
 // CepstrumDctMel
-func (mel *Mel) CepstrumDctMel(ch, step int, mfccTrialData *etensor.Float32) {
+func (mel *Mel) CepstrumDctMel(ch, step int, mfccSegmentData *etensor.Float32) {
 	sz := copy(mel.MfccDctOut.Values, mel.FBankData.Values)
 	if sz != len(mel.MfccDctOut.Values) {
 		fmt.Printf("CepstrumDctMel: memory copy size wrong")
@@ -198,6 +198,6 @@ func (mel *Mel) CepstrumDctMel(ch, step int, mfccTrialData *etensor.Float32) {
 	el0 := mfccDctOut[0]
 	mfccDctOut[0] = math.Log(1.0 + el0*el0) // replace with log energy instead..
 	for i := 0; i < mel.FBank.NFilters; i++ {
-		mfccTrialData.SetFloat([]int{step, i, ch}, mfccDctOut[i])
+		mfccSegmentData.SetFloat([]int{step, i, ch}, mfccDctOut[i])
 	}
 }

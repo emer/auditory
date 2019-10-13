@@ -28,8 +28,8 @@ type Gabor struct {
 	PhaseOffset     float32         `viewif:"On" def:"0,1.5708" desc:"offset for the sine phase -- default is an asymmetric sine wave -- can make it into a symmetric cosine gabor by using PI/2 = 1.5708"`
 	CircleEdge      bool            `viewif:"On" def:"true" desc:"cut off the filter (to zero) outside a circle of diameter filter_size -- makes the filter more radially symmetric"`
 	NFilters        int             `viewif:"On" desc:" total number of filters = 3 + NHoriz"`
-	Shape           image.Point     `viewif:Gabor1.On=true" inactive:"+" desc:"overall geometry of gabor1 output (group-level geometry -- feature / unit level geometry is n_features, 2)"`
-	Filters         etensor.Float32 `viewif:Gabor1.On=true" desc:"full gabor filters"`
+	Shape           image.Point     `viewif:"On=true" desc:"overall geometry of gabor1 output (group-level geometry -- feature / unit level geometry is n_features, 2)"`
+	Filters         etensor.Float32 `viewif:"On=true" desc:"full gabor filters"`
 }
 
 //Initialize initializes the Gabor
@@ -56,8 +56,8 @@ func (ga *Gabor) Initialize(steps int, melFilters int) {
 }
 
 // SetShape sets the shape of a gabor based on parameters of gabor, mel filters and input
-func (ga *Gabor) SetShape(trialSteps int, nFilters int) { // nFilters is Mel.MelFBank.NFilters
-	ga.Shape.X = ((trialSteps - 1) / ga.SpaceTime) + 1
+func (ga *Gabor) SetShape(segmentSteps int, nFilters int) { // nFilters is Mel.MelFBank.NFilters
+	ga.Shape.X = ((segmentSteps - 1) / ga.SpaceTime) + 1
 	ga.Shape.Y = ((nFilters - ga.SizeFreq - 1) / ga.SpaceFreq) + 1
 }
 
@@ -164,7 +164,7 @@ func (ga *Gabor) RenderFilters(filters *etensor.Float32) {
 	}
 }
 
-// Conv processes input using filters that operate over an entire trial of samples
+// Conv processes input using filters that operate over an entire segment of samples
 func Conv(ch int, spec Gabor, input input.Input, raw *etensor.Float32, filters int, melData etensor.Float32) {
 	tHalfSz := spec.SizeTime / 2
 	//tOff := tHalfSz - input.BorderSteps
@@ -173,7 +173,7 @@ func Conv(ch int, spec Gabor, input input.Input, raw *etensor.Float32, filters i
 	if tMin < 0 {
 		tMin = 0
 	}
-	tMax := input.TrialSteps - tMin + 1
+	tMax := input.SegmentSteps - tMin + 1
 
 	fMin := int(0)
 	fMax := filters - spec.SizeFreq
