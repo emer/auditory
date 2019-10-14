@@ -173,7 +173,7 @@ func Conv(ch int, spec Gabor, input input.Input, raw *etensor.Float32, filters i
 	if tMin < 0 {
 		tMin = 0
 	}
-	tMax := input.SegmentSteps - tMin + 1
+	tMax := input.SegmentStepsPlus - tMin + 1
 
 	fMin := int(0)
 	fMax := filters - spec.SizeFreq
