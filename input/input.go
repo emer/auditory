@@ -22,6 +22,7 @@ type Input struct {
 	SegmentSteps     int     `inactive:"+" desc:"number of steps in a segment"`
 	SegmentStepsPlus int     `inactive:"+" desc:"SegmentSteps plus steps overlapping next segment or for padding if no next segment"`
 	Steps            []int   `inactive:"+" desc:"pre-calculated start position for each step"`
+	PadValue         float32 `view:"-" desc:" use this value for padding signal`
 }
 
 //Defaults initializes the Input
@@ -32,11 +33,12 @@ func (ais *Input) Defaults() {
 	ais.SampleRate = 44100
 	ais.Channels = 1
 	ais.Channel = 0
+	ais.PadValue = 0.0
 }
 
 // ComputeSamples computes the sample counts based on time and sample rate
 // signal padded with zeros to ensure complete segments
-func (ais *Input) Config(signalRaw []float32, padValue float32) (signalPadded []float32) {
+func (ais *Input) Config(signalRaw []float32) (signalPadded []float32) {
 	ais.WinSamples = MSecToSamples(ais.WinMs, ais.SampleRate)
 	ais.StepSamples = MSecToSamples(ais.StepMs, ais.SampleRate)
 	ais.SegmentSamples = MSecToSamples(ais.SegmentMs, ais.SampleRate)
@@ -47,7 +49,7 @@ func (ais *Input) Config(signalRaw []float32, padValue float32) (signalPadded []
 	padLen = padLen + ais.WinSamples
 	pad := make([]float32, padLen)
 	for i := range pad {
-		pad[i] = padValue
+		pad[i] = ais.PadValue
 	}
 	signalPadded = append(signalRaw, pad...)
 	ais.Steps = make([]int, ais.SegmentStepsPlus)

@@ -52,8 +52,7 @@ type Aud struct {
 
 func (aud *Aud) Config() {
 	aud.Input.Defaults()
-	padValue := .0
-	aud.Signal.Values = aud.Input.Config(aud.Signal.Values, float32(padValue))
+	aud.Signal.Values = aud.Input.Config(aud.Signal.Values)
 	aud.Dft.Initialize(aud.Input.WinSamples, aud.Input.SampleRate)
 	aud.Mel.Initialize(aud.Dft.SizeHalf, aud.Input.WinSamples, aud.Input.SampleRate, true)
 

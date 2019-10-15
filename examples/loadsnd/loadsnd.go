@@ -48,7 +48,7 @@ func (aud *Aud) LoadSound(filepath string) error {
 // InitInput
 func (aud *Aud) InitInput() {
 	aud.Input.InitFromSound(&aud.Sound, aud.Channels, 0)
-	log.Printf("total steps: %v\n", aud.Input.TotalSteps)
+	log.Printf("total steps: %v\n", aud.Input.SegmentStepsPlus)
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////
