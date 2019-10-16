@@ -6,6 +6,10 @@ package main
 
 import (
 	"fmt"
+	"log"
+	"os"
+	"strings"
+
 	"github.com/emer/auditory/agabor"
 	"github.com/emer/auditory/dft"
 	"github.com/emer/auditory/input"
@@ -48,10 +52,26 @@ type Aud struct {
 	FirstStep    bool        `view:"-" desc:" if first frame to process -- turns off prv smoothing of dft power"`
 	ToolBar      *gi.ToolBar `view:"-" desc:"the master toolbar"`
 	MoreSegments bool        `view:"-" desc:" are there more samples to process"`
+	SndPath      string      `view:"-" desc:" use to resolve different working directories for IDE and command line execution"`
+}
+
+func (aud *Aud) SetPath() {
+	// this code makes sure that the file is opened regardless of running from goland or terminal
+	// as the working directory will be different in the 2 environments
+	dir, err := os.Getwd()
+	if err != nil {
+		log.Fatal(err)
+	}
+	aud.SndPath = ""
+	if strings.HasSuffix(dir, "auditory") {
+		aud.SndPath = dir + "/examples/processspeech/sounds/"
+	} else {
+		aud.SndPath = dir + "/sounds/"
+	}
 }
 
 func (aud *Aud) Config() {
-	aud.Input.Defaults()
+	//aud.Input.Defaults()
 	aud.Signal.Values = aud.Input.Config(aud.Signal.Values)
 	aud.Dft.Initialize(aud.Input.WinSamples, aud.Input.SampleRate)
 	aud.Mel.Initialize(aud.Dft.SizeHalf, aud.Input.WinSamples, aud.Input.SampleRate, true)
@@ -211,7 +231,10 @@ func (aud *Aud) ConfigGui() *gi.Window {
 var TheSP Aud
 
 func mainrun() {
-	TheSP.Sound.Load("bug.wav")
+	TheSP.SetPath()
+	TheSP.Input.Defaults()
+	fp := TheSP.SndPath + "bug.wav"
+	TheSP.Sound.Load(fp)
 	TheSP.LoadSound(&TheSP.Sound)
 	TheSP.Config()
 	TheSP.Input.InitFromSound(&TheSP.Sound, TheSP.Input.Channels, 0)
