@@ -132,8 +132,6 @@ func (aud *Aud) ProcessSegment() {
 	if remaining < aud.Input.SegmentSamples {
 		aud.MoreSegments = false
 	}
-	aud.ApplyGabor()
-	aud.ToolBar.UpdateActions()
 }
 
 // ProcessStep processes a step worth of sound input from current input_pos, and increment input_pos by input.step_samples
@@ -208,6 +206,7 @@ func (aud *Aud) ConfigGui() *gi.Window {
 		act.SetActiveStateUpdt(aud.MoreSegments)
 	}}, win.This(), func(recv, send ki.Ki, sig int64, data interface{}) {
 		aud.ProcessSegment()
+		aud.ApplyGabor()
 		vp.FullRender2DTree()
 	})
 
@@ -239,6 +238,8 @@ func mainrun() {
 	TheSP.Config()
 	TheSP.Input.InitFromSound(&TheSP.Sound, TheSP.Input.Channels, 0)
 	TheSP.ProcessSegment() // process the first segment of sound
+	TheSP.ApplyGabor()
+	TheSP.ToolBar.UpdateActions()
 
 	win := TheSP.ConfigGui()
 	win.StartEventLoop()
