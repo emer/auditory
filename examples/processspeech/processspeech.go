@@ -21,6 +21,7 @@ import (
 	"github.com/goki/gi/gimain"
 	"github.com/goki/gi/giv"
 	"github.com/goki/ki/ki"
+	"gonum.org/v1/gonum/fourier"
 )
 
 // this is the stub main for gogi that calls our actual
@@ -36,19 +37,21 @@ func main() {
 type Aud struct {
 	Sound           sound.Params
 	Input           input.Params
-	Signal          etensor.Float32 `inactive:"+" desc:" the full sound input obtained from the sound input - plus any added padding"`
-	WindowIn        etensor.Float32 `inactive:"+" desc:" the raw sound input, one channel at a time"`
-	Dft             dft.Params      `view:"no-inline"`
-	Power           etensor.Float32 `view:"-" desc:" power of the dft, up to the nyquist limit frequency (1/2 input.WinSamples)"`
-	LogPower        etensor.Float32 `view:"-" desc:" log power of the dft, up to the nyquist liit frequency (1/2 input.WinSamples)"`
-	PowerSegment    etensor.Float32 `view:"no-inline" desc:" full segment's worth of power of the dft, up to the nyquist limit frequency (1/2 input.WinSamples)"`
-	LogPowerSegment etensor.Float32 `view:"no-inline" desc:" full segment's worth of log power of the dft, up to the nyquist limit frequency (1/2 input.WinSamples)"`
-	Mel             mel.Params      `view:"no-inline"`
-	MelFBankSegment etensor.Float32 `view:"no-inline" desc:" full segment's worth of mel feature-bank output"`
-	MfccDctSegment  etensor.Float32 `view:"no-inline" desc:" full segment's worth of discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
-	Gabor           agabor.Params   `viewif:"FBank.On" desc:" full set of frequency / time gabor filters -- first size"`
-	GaborTsr        etensor.Float32 `view:"no-inline" desc:" raw output of Gabor -- full segment's worth of gabor steps"`
-	Segment         int             `inactive:"+" desc:" the current segment (i.e. one segments worth of samples) - zero is first segment"`
+	Signal          etensor.Float32   `inactive:"+" desc:" the full sound input obtained from the sound input - plus any added padding"`
+	Samples         etensor.Float32   `inactive:"+" desc:" a window's worth of raw sound input, one channel at a time"`
+	Dft             dft.Params        `view:"no-inline"`
+	Power           etensor.Float32   `view:"-" desc:" power of the dft, up to the nyquist limit frequency (1/2 input.WinSamples)"`
+	LogPower        etensor.Float32   `view:"-" desc:" log power of the dft, up to the nyquist liit frequency (1/2 input.WinSamples)"`
+	PowerSegment    etensor.Float32   `view:"no-inline" desc:" full segment's worth of power of the dft, up to the nyquist limit frequency (1/2 input.WinSamples)"`
+	LogPowerSegment etensor.Float32   `view:"no-inline" desc:" full segment's worth of log power of the dft, up to the nyquist limit frequency (1/2 input.WinSamples)"`
+	Mel             mel.Params        `view:"no-inline"`
+	MelFBankSegment etensor.Float32   `view:"no-inline" desc:" full segment's worth of mel feature-bank output"`
+	MfccDctSegment  etensor.Float32   `view:"no-inline" desc:" full segment's worth of discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
+	Gabor           agabor.Params     `viewif:"FBank.On" desc:" full set of frequency / time gabor filters -- first size"`
+	GaborTsr        etensor.Float32   `view:"no-inline" desc:" raw output of Gabor -- full segment's worth of gabor steps"`
+	Segment         int               `inactive:"+" desc:" the current segment (i.e. one segments worth of samples) - zero is first segment"`
+	FftCoefs        []complex128      `inactive:"+" desc:" discrete fourier transform (fft) output complex representation"`
+	Fft             *fourier.CmplxFFT `view:"-" desc:" struct for fast fourier transform"`
 
 	// internal state - view:"-"
 	FirstStep    bool        `view:"-" desc:" if first frame to process -- turns off prv smoothing of dft power"`
@@ -77,13 +80,16 @@ func (aud *Aud) Config() {
 	aud.Dft.Initialize(aud.Input.WinSamples, aud.Input.SampleRate)
 	aud.Mel.Initialize(aud.Input.WinSamples/2+1, aud.Input.WinSamples, aud.Input.SampleRate, true)
 
-	aud.WindowIn.SetShape([]int{aud.Input.WinSamples}, nil, nil)
+	aud.Samples.SetShape([]int{aud.Input.WinSamples}, nil, nil)
 	aud.Power.SetShape([]int{aud.Input.WinSamples/2 + 1}, nil, nil)
 	aud.LogPower.SetShape([]int{aud.Input.WinSamples/2 + 1}, nil, nil)
 	aud.PowerSegment.SetShape([]int{aud.Input.SegmentStepsPlus, aud.Input.WinSamples/2 + 1, aud.Input.Channels}, nil, nil)
 	if aud.Dft.CompLogPow {
 		aud.LogPowerSegment.SetShape([]int{aud.Input.SegmentStepsPlus, aud.Input.WinSamples/2 + 1, aud.Input.Channels}, nil, nil)
 	}
+
+	aud.FftCoefs = make([]complex128, aud.Input.WinSamples)
+	aud.Fft = fourier.NewCmplxFFT(len(aud.FftCoefs))
 
 	aud.MelFBankSegment.SetShape([]int{aud.Input.SegmentStepsPlus, aud.Mel.FBank.NFilters, aud.Input.Channels}, nil, nil)
 	if aud.Mel.CompMfcc {
@@ -109,6 +115,7 @@ func (aud *Aud) Initialize() {
 	aud.LogPowerSegment.SetZeros()
 	aud.MelFBankSegment.SetZeros()
 	aud.MfccDctSegment.SetZeros()
+	aud.Fft.Reset(aud.Input.WinSamples)
 }
 
 // LoadSound initializes the AuditoryProc with the sound loaded from file by "Sound"
@@ -145,8 +152,8 @@ func (aud *Aud) ProcessSegment() {
 // bands that mimic the non-linear human perception of sound
 func (aud *Aud) ProcessStep(ch int, step int) bool {
 	available := aud.SoundToWindow(aud.Segment, aud.Input.Steps[step], ch)
-	aud.Dft.Filter(int(ch), int(step), &aud.WindowIn, aud.FirstStep, aud.Input.WinSamples, &aud.Power, &aud.LogPower, &aud.PowerSegment, &aud.LogPowerSegment)
-	aud.Mel.Filter(int(ch), int(step), &aud.WindowIn, &aud.Power, &aud.MelFBankSegment, &aud.MfccDctSegment)
+	aud.Dft.Filter(int(ch), int(step), &aud.Samples, aud.FirstStep, aud.Input.WinSamples, aud.FftCoefs, aud.Fft, &aud.Power, &aud.LogPower, &aud.PowerSegment, &aud.LogPowerSegment)
+	aud.Mel.Filter(int(ch), int(step), &aud.Samples, &aud.Power, &aud.MelFBankSegment, &aud.MfccDctSegment)
 	aud.FirstStep = false
 	return available
 }
@@ -168,7 +175,7 @@ func (aud *Aud) SoundToWindow(segment, stepOffset int, ch int) bool {
 		if end > len(aud.Signal.Values) {
 			return false
 		}
-		aud.WindowIn.Values = aud.Signal.Values[start:end]
+		aud.Samples.Values = aud.Signal.Values[start:end]
 	} else {
 		// ToDo: implement
 		fmt.Printf("SoundToWindow: else case not implemented - please report this issue")

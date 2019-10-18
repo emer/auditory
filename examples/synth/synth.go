@@ -36,8 +36,8 @@ func (syn *Synth) ConfigGui() *gi.Window {
 	width := 1600
 	height := 1200
 
-	gi.SetAppName("loadsnd")
-	gi.SetAppAbout(`This demonstrates loading a sound but will be extended to show more capabilities of the auditory package`)
+	gi.SetAppName("Synth")
+	gi.SetAppAbout(`This demonstrates synthesizing a sound (phone or word)`)
 
 	win := gi.NewWindow2D("one", "Auditory ...", width, height, true)
 
@@ -81,9 +81,12 @@ var TheSyn Synth
 
 func mainrun() {
 	TheSyn.Defaults()
+	TheSyn.vc.Voice.Init()
+	TheSyn.vc.Init()
+	TheSyn.vc.Initialize()
 	TheSyn.vc.LoadEnglishPhones()
 	TheSyn.vc.InitSynth()
-	//TheSyn.vc.Synthesize(true)
+	TheSyn.vc.SynthPhones("ee", true, true)
 
 	win := TheSyn.ConfigGui()
 	win.StartEventLoop()
