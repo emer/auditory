@@ -1,3 +1,7 @@
+// Copyright (c) 2019, The Emergent Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
 package input
 
 import (
@@ -9,7 +13,7 @@ import (
 )
 
 // Input defines the sound input parameters for auditory processing
-type Input struct {
+type Params struct {
 	WinMs            float32 `def:"25" desc:"input window -- number of milliseconds worth of sound to filter at a time"`
 	StepMs           float32 `def:"5,10,12.5" desc:"input step -- number of milliseconds worth of sound that the input is stepped along to obtain the next window sample"`
 	SegmentMs        float32 `def:"100" desc:"length of full segment's worth of input -- total number of milliseconds to accumulate into a complete segment -- must be a multiple of StepMs -- input will be SegmentMs / StepMs = SegmentSteps wide in the X axis, and number of filters in the Y axis"`
@@ -26,7 +30,7 @@ type Input struct {
 }
 
 //Defaults initializes the Input
-func (ais *Input) Defaults() {
+func (ais *Params) Defaults() {
 	ais.WinMs = 25.0
 	ais.StepMs = 5.0
 	ais.SegmentMs = 100.0
@@ -38,7 +42,7 @@ func (ais *Input) Defaults() {
 
 // ComputeSamples computes the sample counts based on time and sample rate
 // signal padded with zeros to ensure complete segments
-func (ais *Input) Config(signalRaw []float32) (signalPadded []float32) {
+func (ais *Params) Config(signalRaw []float32) (signalPadded []float32) {
 	ais.WinSamples = MSecToSamples(ais.WinMs, ais.SampleRate)
 	ais.StepSamples = MSecToSamples(ais.StepMs, ais.SampleRate)
 	ais.SegmentSamples = MSecToSamples(ais.SegmentMs, ais.SampleRate)
@@ -70,7 +74,7 @@ func SamplesToMSec(samples int, rate int) float32 {
 }
 
 // InitFromSound loads a sound and sets the Input channel vars and sample rate
-func (in *Input) InitFromSound(snd *sound.Sound, nChannels int, channel int) {
+func (in *Params) InitFromSound(snd *sound.Params, nChannels int, channel int) {
 	if snd == nil {
 		fmt.Printf("InitFromSound: sound nil")
 		return

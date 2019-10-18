@@ -1,3 +1,7 @@
+// Copyright (c) 2019, The Emergent Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
 package agabor
 
 import (
@@ -12,7 +16,7 @@ import (
 // Gabor params for auditory gabor filters: 2d Gaussian envelope times a sinusoidal plane wave --
 // by default produces 2 phase asymmetric edge detector filters -- horizontal tuning is different from V1 version --
 // has elongated frequency-band specific tuning, not a parallel horizontal tuning -- and has multiple of these
-type Gabor struct {
+type Params struct {
 	On              bool            `desc:"use this gabor filtering of the time-frequency space filtered input (time in terms of steps of the DFT transform, and discrete frequency factors based on the FFT window and input sample rate)"`
 	SizeTime        int             `viewif:"On" def:"6,8,12,16,24" desc:" size of the filter in the time (horizontal) domain, in terms of steps of the underlying DFT filtering steps"`
 	SizeFreq        int             `viewif:"On" def:"6,8,12,16,24" desc:" size of the filter in the frequency domain, in terms of discrete frequency factors based on the FFT window and input sample rate"`
@@ -33,7 +37,7 @@ type Gabor struct {
 }
 
 //Initialize initializes the Gabor
-func (ga *Gabor) Initialize(steps int, melFilters int) {
+func (ga *Params) Initialize(steps int, melFilters int) {
 	ga.On = true
 	ga.Gain = 2.0
 	ga.NHoriz = 4
@@ -56,19 +60,19 @@ func (ga *Gabor) Initialize(steps int, melFilters int) {
 }
 
 // SetShape sets the shape of a gabor based on parameters of gabor, mel filters and input
-func (ga *Gabor) SetShape(segmentSteps int, nFilters int) { // nFilters is Mel.MelFBank.NFilters
+func (ga *Params) SetShape(segmentSteps int, nFilters int) { // nFilters is Mel.MelFBank.NFilters
 	ga.Shape.X = ((segmentSteps - 1) / ga.SpaceTime) + 1
 	ga.Shape.Y = ((nFilters - ga.SizeFreq - 1) / ga.SpaceFreq) + 1
 }
 
 // InitFilters
-func (ga *Gabor) InitFilters() {
+func (ga *Params) InitFilters() {
 	ga.Filters.SetShape([]int{ga.NFilters, ga.SizeFreq, ga.SizeTime}, nil, nil)
 	ga.RenderFilters(&ga.Filters)
 }
 
 // RenderFilters generates filters into the given matrix, which is formatted as: [ga.SizeTime_steps][ga.SizeFreq][n_filters]
-func (ga *Gabor) RenderFilters(filters *etensor.Float32) {
+func (ga *Params) RenderFilters(filters *etensor.Float32) {
 	ctrTime := (float32(ga.SizeTime) - 1) / 2.0
 	ctrFreq := (float32(ga.SizeFreq) - 1) / 2.0
 	angInc := math32.Pi / 4.0
@@ -165,7 +169,7 @@ func (ga *Gabor) RenderFilters(filters *etensor.Float32) {
 }
 
 // Conv processes input using filters that operate over an entire segment of samples
-func Conv(ch int, spec Gabor, input input.Input, raw *etensor.Float32, filters int, melData etensor.Float32) {
+func Conv(ch int, spec Params, input input.Params, raw *etensor.Float32, filters int, melData *etensor.Float32) {
 	tHalfSz := spec.SizeTime / 2
 	//tOff := tHalfSz - input.BorderSteps
 	tOff := tHalfSz

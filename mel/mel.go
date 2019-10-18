@@ -1,3 +1,7 @@
+// Copyright (c) 2019, The Emergent Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
 package mel
 
 import (
@@ -24,7 +28,7 @@ type FilterBank struct {
 	RenormScale float32 `inactive:"+" desc:"1.0 / (ren_max - ren_min)"`
 }
 
-type Mel struct {
+type Params struct {
 	PtsBin      etensor.Int32   `view:"no-inline" desc:" [MelNFiltersEff] mel scale points in fft bins"`
 	Filters     etensor.Float32 `view:"no-inline" desc:" [MelNFiltersEff][NFilters] the actual filters for actual number of mel filters"`
 	MaxBins     int             `inactive:"+" desc:" maximum number of bins for mel filter -- number of bins in highest filter"`
@@ -39,7 +43,7 @@ type Mel struct {
 }
 
 // Initialize
-func (mel *Mel) Initialize(dftSize int, winSamples int, sampleRate int, compMfcc bool) {
+func (mel *Params) Initialize(dftSize int, winSamples int, sampleRate int, compMfcc bool) {
 	mel.CompMfcc = compMfcc
 	mel.MfccNCoefs = 13
 	mel.FBank.Initialize()
@@ -51,7 +55,7 @@ func (mel *Mel) Initialize(dftSize int, winSamples int, sampleRate int, compMfcc
 }
 
 // InitFilters
-func (mel *Mel) InitFilters(dftSize int, sampleRate int) {
+func (mel *Params) InitFilters(dftSize int, sampleRate int) {
 	mel.NFiltersEff = mel.FBank.NFilters + 2
 	mel.PtsBin.SetShape([]int{mel.NFiltersEff}, nil, nil)
 	melIncr := (mel.FBank.HiMel - mel.FBank.LoMel) / float32(mel.FBank.NFilters+1)
@@ -87,7 +91,7 @@ func (mel *Mel) InitFilters(dftSize int, sampleRate int) {
 }
 
 // FilterDft
-func (mel *Mel) FilterDft(ch, step int, dftPowerOut etensor.Float32, segmentData *etensor.Float32) {
+func (mel *Params) FilterDft(ch, step int, dftPowerOut etensor.Float32, segmentData *etensor.Float32) {
 	mi := 0
 	for f := 0; f < int(mel.FBank.NFilters); f, mi = f+1, mi+1 { // f is filter
 		minBin := mel.PtsBin.Value1D(f)
@@ -153,7 +157,7 @@ func (mfb *FilterBank) Initialize() {
 }
 
 // Filter filters the current window_in input data according to current settings -- called by ProcessStep, but can be called separately
-func (mel *Mel) Filter(ch int, step int, windowIn etensor.Float32, dftPower *etensor.Float32, segmentData *etensor.Float32, mfccSegmentData *etensor.Float32) {
+func (mel *Params) Filter(ch int, step int, windowIn *etensor.Float32, dftPower *etensor.Float32, segmentData *etensor.Float32, mfccSegmentData *etensor.Float32) {
 	mel.FilterDft(ch, step, *dftPower, segmentData)
 	if mel.CompMfcc {
 		mel.CepstrumDctMel(ch, step, mfccSegmentData)
@@ -161,7 +165,7 @@ func (mel *Mel) Filter(ch int, step int, windowIn etensor.Float32, dftPower *ete
 }
 
 // FftReal
-func (mel *Mel) FftReal(out []complex128, in etensor.Float32) {
+func (mel *Params) FftReal(out []complex128, in *etensor.Float32) {
 	var c complex128
 	for i := 0; i < len(out); i++ {
 		c = complex(in.FloatVal1D(i), 0)
@@ -170,7 +174,7 @@ func (mel *Mel) FftReal(out []complex128, in etensor.Float32) {
 }
 
 // CopyStepFromStep
-func (mel *Mel) CopyStepFromStep(toStep, fmStep, ch int, segmentData *etensor.Float32, mfccSegmentData *etensor.Float32) {
+func (mel *Params) CopyStepFromStep(toStep, fmStep, ch int, segmentData *etensor.Float32, mfccSegmentData *etensor.Float32) {
 	for i := 0; i < int(mel.FBank.NFilters); i++ {
 		val := segmentData.Value([]int{fmStep, i, ch})
 		segmentData.Set([]int{toStep, i, ch}, val)
@@ -184,7 +188,7 @@ func (mel *Mel) CopyStepFromStep(toStep, fmStep, ch int, segmentData *etensor.Fl
 }
 
 // CepstrumDctMel
-func (mel *Mel) CepstrumDctMel(ch, step int, mfccSegmentData *etensor.Float32) {
+func (mel *Params) CepstrumDctMel(ch, step int, mfccSegmentData *etensor.Float32) {
 	sz := copy(mel.MfccDctOut.Values, mel.FBankData.Values)
 	if sz != len(mel.MfccDctOut.Values) {
 		fmt.Printf("CepstrumDctMel: memory copy size wrong")

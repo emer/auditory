@@ -34,19 +34,21 @@ func main() {
 // Aud encapsulates a specific auditory processing pipeline in
 // use in a given case -- can add / modify this as needed
 type Aud struct {
-	Sound                  sound.Sound
-	Input                  input.Input
-	Signal                 etensor.Float32 `inactive:"+" desc:" the full sound input obtained from the sound input - plus any added padding"`
-	WindowIn               etensor.Float32 `inactive:"+" desc:" the raw sound input, one channel at a time"`
-	Dft                    dft.Dft         `view:"no-inline"`
-	DftPowerSegmentData    etensor.Float32 `view:"no-inline" desc:" full segment's worth of power of the dft, up to the nyquist limit frequency (1/2 input.win_samples)"`
-	DftLogPowerSegmentData etensor.Float32 `view:"no-inline" desc:" full segment's worth of log power of the dft, up to the nyquist limit frequency (1/2 input.win_samples)"`
-	Mel                    mel.Mel         `view:"no-inline"`
-	MelFBankSegmentData    etensor.Float32 `view:"no-inline" desc:" full segment's worth of mel feature-bank output"`
-	MfccDctSegmentData     etensor.Float32 `view:"no-inline" desc:" full segment's worth of discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
-	Gabor                  agabor.Gabor    `viewif:"FBank.On" desc:" full set of frequency / time gabor filters -- first size"`
-	GaborTsr               etensor.Float32 `view:"no-inline" desc:" raw output of Gabor -- full segment's worth of gabor steps"`
-	Segment                int             `inactive:"+" desc:" the current segment (i.e. one segments worth of samples) - zero is first segment"`
+	Sound           sound.Params
+	Input           input.Params
+	Signal          etensor.Float32 `inactive:"+" desc:" the full sound input obtained from the sound input - plus any added padding"`
+	WindowIn        etensor.Float32 `inactive:"+" desc:" the raw sound input, one channel at a time"`
+	Dft             dft.Params      `view:"no-inline"`
+	Power           etensor.Float32 `view:"-" desc:" power of the dft, up to the nyquist limit frequency (1/2 input.WinSamples)"`
+	LogPower        etensor.Float32 `view:"-" desc:" log power of the dft, up to the nyquist liit frequency (1/2 input.WinSamples)"`
+	PowerSegment    etensor.Float32 `view:"no-inline" desc:" full segment's worth of power of the dft, up to the nyquist limit frequency (1/2 input.WinSamples)"`
+	LogPowerSegment etensor.Float32 `view:"no-inline" desc:" full segment's worth of log power of the dft, up to the nyquist limit frequency (1/2 input.WinSamples)"`
+	Mel             mel.Params      `view:"no-inline"`
+	MelFBankSegment etensor.Float32 `view:"no-inline" desc:" full segment's worth of mel feature-bank output"`
+	MfccDctSegment  etensor.Float32 `view:"no-inline" desc:" full segment's worth of discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
+	Gabor           agabor.Params   `viewif:"FBank.On" desc:" full set of frequency / time gabor filters -- first size"`
+	GaborTsr        etensor.Float32 `view:"no-inline" desc:" raw output of Gabor -- full segment's worth of gabor steps"`
+	Segment         int             `inactive:"+" desc:" the current segment (i.e. one segments worth of samples) - zero is first segment"`
 
 	// internal state - view:"-"
 	FirstStep    bool        `view:"-" desc:" if first frame to process -- turns off prv smoothing of dft power"`
@@ -71,19 +73,21 @@ func (aud *Aud) SetPath() {
 }
 
 func (aud *Aud) Config() {
-	//aud.Input.Defaults()
 	aud.Signal.Values = aud.Input.Config(aud.Signal.Values)
 	aud.Dft.Initialize(aud.Input.WinSamples, aud.Input.SampleRate)
-	aud.Mel.Initialize(aud.Dft.SizeHalf, aud.Input.WinSamples, aud.Input.SampleRate, true)
+	aud.Mel.Initialize(aud.Input.WinSamples/2+1, aud.Input.WinSamples, aud.Input.SampleRate, true)
 
 	aud.WindowIn.SetShape([]int{aud.Input.WinSamples}, nil, nil)
-	aud.DftPowerSegmentData.SetShape([]int{aud.Input.SegmentStepsPlus, aud.Dft.SizeHalf, aud.Input.Channels}, nil, nil)
+	aud.Power.SetShape([]int{aud.Input.WinSamples/2 + 1}, nil, nil)
+	aud.LogPower.SetShape([]int{aud.Input.WinSamples/2 + 1}, nil, nil)
+	aud.PowerSegment.SetShape([]int{aud.Input.SegmentStepsPlus, aud.Input.WinSamples/2 + 1, aud.Input.Channels}, nil, nil)
 	if aud.Dft.CompLogPow {
-		aud.DftLogPowerSegmentData.SetShape([]int{aud.Input.SegmentStepsPlus, aud.Dft.SizeHalf, aud.Input.Channels}, nil, nil)
+		aud.LogPowerSegment.SetShape([]int{aud.Input.SegmentStepsPlus, aud.Input.WinSamples/2 + 1, aud.Input.Channels}, nil, nil)
 	}
-	aud.MelFBankSegmentData.SetShape([]int{aud.Input.SegmentStepsPlus, aud.Mel.FBank.NFilters, aud.Input.Channels}, nil, nil)
+
+	aud.MelFBankSegment.SetShape([]int{aud.Input.SegmentStepsPlus, aud.Mel.FBank.NFilters, aud.Input.Channels}, nil, nil)
 	if aud.Mel.CompMfcc {
-		aud.MfccDctSegmentData.SetShape([]int{aud.Input.SegmentStepsPlus, aud.Mel.FBank.NFilters, aud.Input.Channels}, nil, nil)
+		aud.MfccDctSegment.SetShape([]int{aud.Input.SegmentStepsPlus, aud.Mel.FBank.NFilters, aud.Input.Channels}, nil, nil)
 	}
 	aud.FirstStep = true
 	aud.Segment = -1
@@ -99,14 +103,16 @@ func (aud *Aud) Config() {
 
 // Initialize sets all the tensor result data to zeros
 func (aud *Aud) Initialize() {
-	aud.DftPowerSegmentData.SetZeros()
-	aud.DftLogPowerSegmentData.SetZeros()
-	aud.MelFBankSegmentData.SetZeros()
-	aud.MfccDctSegmentData.SetZeros()
+	aud.Power.SetZeros()
+	aud.LogPower.SetZeros()
+	aud.PowerSegment.SetZeros()
+	aud.LogPowerSegment.SetZeros()
+	aud.MelFBankSegment.SetZeros()
+	aud.MfccDctSegment.SetZeros()
 }
 
 // LoadSound initializes the AuditoryProc with the sound loaded from file by "Sound"
-func (aud *Aud) LoadSound(snd *sound.Sound) {
+func (aud *Aud) LoadSound(snd *sound.Params) {
 	if aud.Input.Channels > 1 {
 		snd.SoundToMatrix(&aud.Signal, -1)
 	} else {
@@ -139,8 +145,8 @@ func (aud *Aud) ProcessSegment() {
 // bands that mimic the non-linear human perception of sound
 func (aud *Aud) ProcessStep(ch int, step int) bool {
 	available := aud.SoundToWindow(aud.Segment, aud.Input.Steps[step], ch)
-	aud.Dft.Filter(int(ch), int(step), aud.WindowIn, aud.FirstStep, &aud.DftPowerSegmentData, &aud.DftLogPowerSegmentData)
-	aud.Mel.Filter(int(ch), int(step), aud.WindowIn, &aud.Dft.Power, &aud.MelFBankSegmentData, &aud.MfccDctSegmentData)
+	aud.Dft.Filter(int(ch), int(step), &aud.WindowIn, aud.FirstStep, aud.Input.WinSamples, &aud.Power, &aud.LogPower, &aud.PowerSegment, &aud.LogPowerSegment)
+	aud.Mel.Filter(int(ch), int(step), &aud.WindowIn, &aud.Power, &aud.MelFBankSegment, &aud.MfccDctSegment)
 	aud.FirstStep = false
 	return available
 }
@@ -149,7 +155,7 @@ func (aud *Aud) ProcessStep(ch int, step int) bool {
 func (aud *Aud) ApplyGabor() {
 	if aud.Gabor.On {
 		for ch := int(0); ch < aud.Input.Channels; ch++ {
-			agabor.Conv(ch, aud.Gabor, aud.Input, &aud.GaborTsr, aud.Mel.FBank.NFilters, aud.MelFBankSegmentData)
+			agabor.Conv(ch, aud.Gabor, aud.Input, &aud.GaborTsr, aud.Mel.FBank.NFilters, &aud.MelFBankSegment)
 		}
 	}
 }
@@ -232,8 +238,8 @@ var TheSP Aud
 func mainrun() {
 	TheSP.SetPath()
 	TheSP.Input.Defaults()
-	fp := TheSP.SndPath + "bug.wav"
-	TheSP.Sound.Load(fp)
+	fn := TheSP.SndPath + "bug.wav"
+	TheSP.Sound.Load(fn)
 	TheSP.LoadSound(&TheSP.Sound)
 	TheSP.Config()
 	TheSP.Input.InitFromSound(&TheSP.Sound, TheSP.Input.Channels, 0)

@@ -1,6 +1,7 @@
 // Copyright (c) 2019, The Emergent Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
+
 package sound
 
 import (
@@ -30,12 +31,12 @@ const (
 	Float
 )
 
-type Sound struct {
+type Params struct {
 	Decoder *wav.Decoder
 }
 
 // Load loads the sound file and decodes it
-func (snd *Sound) Load(filename string) error {
+func (snd *Params) Load(filename string) error {
 	inFile, err := os.Open(filename)
 	if err != nil {
 		fmt.Printf("couldn't open %s %v", filename, err)
@@ -56,7 +57,7 @@ func (snd *Sound) Load(filename string) error {
 }
 
 // IsValid returns false if the sound is not a valid sound
-func (snd *Sound) IsValid() bool {
+func (snd *Params) IsValid() bool {
 	if snd == nil {
 		return false
 	}
@@ -64,7 +65,7 @@ func (snd *Sound) IsValid() bool {
 }
 
 // SampleRate returns the sample rate of the sound or 0 is snd is nil
-func (snd *Sound) SampleRate() uint32 {
+func (snd *Params) SampleRate() uint32 {
 	if snd == nil {
 		fmt.Printf("Sound.SampleRate: Sound is nil")
 		return 0
@@ -73,7 +74,7 @@ func (snd *Sound) SampleRate() uint32 {
 }
 
 // Channels returns the number of channels in the wav data or 0 is snd is nil
-func (snd *Sound) Channels() uint16 {
+func (snd *Params) Channels() uint16 {
 	if snd == nil {
 		fmt.Printf("Sound.Channels: Sound is nil")
 		return 0
@@ -82,7 +83,7 @@ func (snd *Sound) Channels() uint16 {
 }
 
 // Duration returns the duration in msec of the sound or zero if snd is nil
-func (snd *Sound) Duration() time.Duration {
+func (snd *Params) Duration() time.Duration {
 	if snd == nil {
 		fmt.Printf("Sound.Duration: Sound is nil")
 		return 0
@@ -96,7 +97,7 @@ func (snd *Sound) Duration() time.Duration {
 
 // todo: return to this
 // SoundSampleType
-func (snd *Sound) SampleType() SoundSampleType {
+func (snd *Params) SampleType() SoundSampleType {
 	return SignedInt
 }
 
@@ -105,7 +106,7 @@ func (snd *Sound) SampleType() SoundSampleType {
 // can optionally select a specific channel (formats sound_data as a single-dimensional matrix of frames size),
 // and -1 gets all available channels (formats sound_data as two-dimensional matrix with inner dimension as
 // channels and outer dimension frames
-func (snd *Sound) SoundToMatrix(soundData *etensor.Float32, channel int) bool {
+func (snd *Params) SoundToMatrix(soundData *etensor.Float32, channel int) bool {
 	buf, err := snd.Decoder.FullPCMBuffer()
 	if err != nil {
 		fmt.Printf("SoundToMatrix error: %v", err)
@@ -147,7 +148,7 @@ func (snd *Sound) SoundToMatrix(soundData *etensor.Float32, channel int) bool {
 }
 
 // GetFloatAtIdx
-func (snd *Sound) GetFloatAtIdx(buf *audio.IntBuffer, idx int) float32 {
+func (snd *Params) GetFloatAtIdx(buf *audio.IntBuffer, idx int) float32 {
 	if buf.SourceBitDepth == 32 {
 		return float32(buf.Data[idx]) / float32(0x7FFFFFFF)
 	} else if buf.SourceBitDepth == 24 {
