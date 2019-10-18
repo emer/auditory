@@ -9,7 +9,7 @@ import (
 	"image"
 
 	"github.com/chewxy/math32"
-	"github.com/emer/auditory/input"
+	"github.com/emer/auditory/sound"
 	"github.com/emer/etable/etensor"
 )
 
@@ -169,7 +169,7 @@ func (ga *Params) RenderFilters(filters *etensor.Float32) {
 }
 
 // Conv processes input using filters that operate over an entire segment of samples
-func Conv(ch int, spec Params, input input.Params, raw *etensor.Float32, filters int, melData *etensor.Float32) {
+func Conv(ch int, spec Params, input sound.Params, raw *etensor.Float32, filters int, melData *etensor.Float32) {
 	tHalfSz := spec.SizeTime / 2
 	//tOff := tHalfSz - input.BorderSteps
 	tOff := tHalfSz
