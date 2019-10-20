@@ -12,7 +12,6 @@ import (
 
 	"github.com/emer/auditory/agabor"
 	"github.com/emer/auditory/dft"
-	//"github.com/emer/auditory/input"
 	"github.com/emer/auditory/mel"
 	"github.com/emer/auditory/sound"
 	"github.com/emer/etable/etensor"
@@ -45,19 +44,24 @@ type Aud struct {
 	PowerSegment    etensor.Float32   `view:"no-inline" desc:" full segment's worth of power of the dft, up to the nyquist limit frequency (1/2 input.WinSamples)"`
 	LogPowerSegment etensor.Float32   `view:"no-inline" desc:" full segment's worth of log power of the dft, up to the nyquist limit frequency (1/2 input.WinSamples)"`
 	Mel             mel.Params        `view:"no-inline"`
+	MelFBank        etensor.Float32   `view:"no-inline" desc:" mel scale transformation of dft_power, using triangular filters, resulting in the mel filterbank output -- the natural log of this is typically applied"`
 	MelFBankSegment etensor.Float32   `view:"no-inline" desc:" full segment's worth of mel feature-bank output"`
+	MelFilters      etensor.Float32   `view:"no-inline" desc:" the actual filters"`
+	MfccDct         etensor.Float32   `view:"no-inline" desc:" discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
 	MfccDctSegment  etensor.Float32   `view:"no-inline" desc:" full segment's worth of discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
 	Gabor           agabor.Params     `viewif:"FBank.On" desc:" full set of frequency / time gabor filters -- first size"`
 	GaborTsr        etensor.Float32   `view:"no-inline" desc:" raw output of Gabor -- full segment's worth of gabor steps"`
 	Segment         int               `inactive:"+" desc:" the current segment (i.e. one segments worth of samples) - zero is first segment"`
 	FftCoefs        []complex128      `view:"-" desc:" discrete fourier transform (fft) output complex representation"`
 	Fft             *fourier.CmplxFFT `view:"-" desc:" struct for fast fourier transform"`
+	CurSndFile      gi.FileName       `view:"+" desc:" holds the name of the file to be loaded/processed"`
 
 	// internal state - view:"-"
 	FirstStep    bool        `view:"-" desc:" if first frame to process -- turns off prv smoothing of dft power"`
 	ToolBar      *gi.ToolBar `view:"-" desc:"the master toolbar"`
 	MoreSegments bool        `view:"-" desc:" are there more samples to process"`
 	SndPath      string      `view:"-" desc:" use to resolve different working directories for IDE and command line execution"`
+	PrevSndFile  string      `view:"-" desc:" holds the name of the previous sound file loaded"`
 }
 
 func (aud *Aud) SetPath() {
@@ -78,7 +82,7 @@ func (aud *Aud) SetPath() {
 func (aud *Aud) Config() {
 	aud.Signal.Values = aud.SoundParams.Config(aud.Signal.Values)
 	aud.Dft.Initialize(aud.SoundParams.WinSamples, aud.SoundParams.SampleRate)
-	aud.Mel.Initialize(aud.SoundParams.WinSamples/2+1, aud.SoundParams.WinSamples, aud.SoundParams.SampleRate, true)
+	aud.Mel.Defaults(aud.SoundParams.WinSamples/2+1, aud.SoundParams.WinSamples, aud.SoundParams.SampleRate, &aud.MelFilters)
 
 	aud.Samples.SetShape([]int{aud.SoundParams.WinSamples}, nil, nil)
 	aud.Power.SetShape([]int{aud.SoundParams.WinSamples/2 + 1}, nil, nil)
@@ -91,17 +95,19 @@ func (aud *Aud) Config() {
 	aud.FftCoefs = make([]complex128, aud.SoundParams.WinSamples)
 	aud.Fft = fourier.NewCmplxFFT(len(aud.FftCoefs))
 
+	aud.MelFBank.SetShape([]int{aud.Mel.FBank.NFilters}, nil, nil)
 	aud.MelFBankSegment.SetShape([]int{aud.SoundParams.SegmentStepsPlus, aud.Mel.FBank.NFilters, aud.SoundParams.Channels}, nil, nil)
 	if aud.Mel.CompMfcc {
 		aud.MfccDctSegment.SetShape([]int{aud.SoundParams.SegmentStepsPlus, aud.Mel.FBank.NFilters, aud.SoundParams.Channels}, nil, nil)
+		aud.MfccDct.SetShape([]int{aud.Mel.FBank.NFilters}, nil, nil)
 	}
+
 	aud.FirstStep = true
 	aud.Segment = -1
 	aud.MoreSegments = true
 
 	aud.Gabor.Initialize(aud.SoundParams.SegmentSteps, aud.Mel.FBank.NFilters)
 	aud.Gabor.On = true
-
 	if aud.Gabor.On {
 		aud.GaborTsr.SetShape([]int{aud.SoundParams.Channels, aud.Gabor.Shape.Y, aud.Gabor.Shape.X, 2, aud.Gabor.NFilters}, nil, nil)
 	}
@@ -127,23 +133,41 @@ func (aud *Aud) LoadSound(snd *sound.Wave) {
 	}
 }
 
+// ProcessSoundFile loads a sound from file and intializes for a new sound
+// if the sound is more than one segment long call ProcessSegment followed by ApplyGabor for each segment beyond the first
+func (aud *Aud) ProcessSoundFile(fn string) {
+	aud.PrevSndFile = string(aud.CurSndFile)
+	aud.CurSndFile = gi.FileName(fn)
+	aud.Sound.Load(fn)
+	aud.LoadSound(&aud.Sound)
+	aud.Config()
+	aud.ProcessSegment()
+	aud.ApplyGabor()
+	aud.ToolBar.UpdateActions()
+}
+
 // ProcessSegment processes the entire segment's input by processing a small overlapping set of samples on each pass
 func (aud *Aud) ProcessSegment() {
-	aud.Initialize()
-	moreSamples := true
-	aud.Segment++
-	for ch := int(0); ch < aud.SoundParams.Channels; ch++ {
-		for s := 0; s < int(aud.SoundParams.SegmentStepsPlus); s++ {
-			moreSamples = aud.ProcessStep(ch, s)
-			if !moreSamples {
-				aud.MoreSegments = false
-				break
+	//aud.Initialize()
+	cf := string(aud.CurSndFile)
+	if strings.Compare(cf, aud.PrevSndFile) != 0 {
+		aud.ProcessSoundFile(string(aud.CurSndFile))
+	} else {
+		moreSamples := true
+		aud.Segment++
+		for ch := int(0); ch < aud.SoundParams.Channels; ch++ {
+			for s := 0; s < int(aud.SoundParams.SegmentStepsPlus); s++ {
+				moreSamples = aud.ProcessStep(ch, s)
+				if !moreSamples {
+					aud.MoreSegments = false
+					break
+				}
 			}
 		}
-	}
-	remaining := len(aud.Signal.Values) - aud.SoundParams.SegmentSamples*(aud.Segment+1)
-	if remaining < aud.SoundParams.SegmentSamples {
-		aud.MoreSegments = false
+		remaining := len(aud.Signal.Values) - aud.SoundParams.SegmentSamples*(aud.Segment+1)
+		if remaining < aud.SoundParams.SegmentSamples {
+			aud.MoreSegments = false
+		}
 	}
 }
 
@@ -153,7 +177,7 @@ func (aud *Aud) ProcessSegment() {
 func (aud *Aud) ProcessStep(ch int, step int) bool {
 	available := aud.SoundToWindow(aud.Segment, aud.SoundParams.Steps[step], ch)
 	aud.Dft.Filter(int(ch), int(step), &aud.Samples, aud.FirstStep, aud.SoundParams.WinSamples, aud.FftCoefs, aud.Fft, &aud.Power, &aud.LogPower, &aud.PowerSegment, &aud.LogPowerSegment)
-	aud.Mel.Filter(int(ch), int(step), &aud.Samples, &aud.Power, &aud.MelFBankSegment, &aud.MfccDctSegment)
+	aud.Mel.Filter(int(ch), int(step), &aud.Samples, &aud.MelFilters, &aud.Power, &aud.MelFBankSegment, &aud.MelFBank, &aud.MfccDctSegment, &aud.MfccDct)
 	aud.FirstStep = false
 	return available
 }
@@ -245,14 +269,8 @@ var TheSP Aud
 func mainrun() {
 	TheSP.SetPath()
 	TheSP.SoundParams.Defaults()
-	fn := TheSP.SndPath + "bug.wav"
-	TheSP.Sound.Load(fn)
-	TheSP.LoadSound(&TheSP.Sound)
-	TheSP.Config()
-	TheSP.SoundParams.Init(&TheSP.Sound, TheSP.SoundParams.Channels, 0)
-	TheSP.ProcessSegment() // process the first segment of sound
-	TheSP.ApplyGabor()
-	TheSP.ToolBar.UpdateActions()
+	TheSP.CurSndFile = gi.FileName(TheSP.SndPath + "bug.wav")
+	TheSP.ProcessSoundFile(string(TheSP.CurSndFile))
 
 	win := TheSP.ConfigGui()
 	win.StartEventLoop()
