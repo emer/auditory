@@ -17,27 +17,26 @@ import (
 // by default produces 2 phase asymmetric edge detector filters -- horizontal tuning is different from V1 version --
 // has elongated frequency-band specific tuning, not a parallel horizontal tuning -- and has multiple of these
 type Params struct {
-	On              bool            `desc:"use this gabor filtering of the time-frequency space filtered input (time in terms of steps of the DFT transform, and discrete frequency factors based on the FFT window and input sample rate)"`
-	SizeTime        int             `viewif:"On" def:"6,8,12,16,24" desc:" size of the filter in the time (horizontal) domain, in terms of steps of the underlying DFT filtering steps"`
-	SizeFreq        int             `viewif:"On" def:"6,8,12,16,24" desc:" size of the filter in the frequency domain, in terms of discrete frequency factors based on the FFT window and input sample rate"`
-	SpaceTime       int             `viewif:"On" desc:" spacing in the time (horizontal) domain, in terms of steps"`
-	SpaceFreq       int             `viewif:"On" desc:" spacing in the frequency (vertical) domain"`
-	WaveLen         float32         `viewif:"On" def:"1.5,2" desc:"wavelength of the sine waves in normalized units"`
-	SigmaLen        float32         `viewif:"On" def:"0.6" desc:"gaussian sigma for the length dimension (elongated axis perpendicular to the sine waves) -- normalized as a function of filter size in relevant dimension"`
-	SigmaWidth      float32         `viewif:"On" def:"0.3" desc:"gaussian sigma for the width dimension (in the direction of the sine waves) -- normalized as a function of filter size in relevant dimension"`
-	HorizSigmaLen   float32         `viewif:"On" def:"0.3" desc:"gaussian sigma for the length of special horizontal narrow-band filters -- normalized as a function of filter size in relevant dimension"`
-	HorizSigmaWidth float32         `viewif:"On" def:"0.1" desc:"gaussian sigma for the horizontal dimension for special horizontal narrow-band filters -- normalized as a function of filter size in relevant dimension"`
-	Gain            float32         `viewif:"On" def:"2" desc:"overall gain multiplier applied after gabor filtering -- only relevant if not using renormalization (otherwize it just gets renormed awaY"`
-	NHoriz          int             `viewif:"On" def:"4" desc:"number of horizontally-elongated,  pure time-domain, frequency-band specific filters to include, evenly spaced over the available frequency space for this filter set -- in addition to these, there are two diagonals (45, 135) and a vertically-elongated (wide frequency band) filter"`
-	PhaseOffset     float32         `viewif:"On" def:"0,1.5708" desc:"offset for the sine phase -- default is an asymmetric sine wave -- can make it into a symmetric cosine gabor by using PI/2 = 1.5708"`
-	CircleEdge      bool            `viewif:"On" def:"true" desc:"cut off the filter (to zero) outside a circle of diameter filter_size -- makes the filter more radially symmetric"`
-	NFilters        int             `viewif:"On" desc:" total number of filters = 3 + NHoriz"`
-	Shape           image.Point     `viewif:"On=true" desc:"overall geometry of gabor1 output (group-level geometry -- feature / unit level geometry is n_features, 2)"`
-	Filters         etensor.Float32 `viewif:"On=true" desc:"full gabor filters"`
+	On              bool        `desc:"use this gabor filtering of the time-frequency space filtered input (time in terms of steps of the DFT transform, and discrete frequency factors based on the FFT window and input sample rate)"`
+	SizeTime        int         `viewif:"On" def:"6,8,12,16,24" desc:" size of the filter in the time (horizontal) domain, in terms of steps of the underlying DFT filtering steps"`
+	SizeFreq        int         `viewif:"On" def:"6,8,12,16,24" desc:" size of the filter in the frequency domain, in terms of discrete frequency factors based on the FFT window and input sample rate"`
+	SpaceTime       int         `viewif:"On" desc:" spacing in the time (horizontal) domain, in terms of steps"`
+	SpaceFreq       int         `viewif:"On" desc:" spacing in the frequency (vertical) domain"`
+	WaveLen         float32     `viewif:"On" def:"1.5,2" desc:"wavelength of the sine waves in normalized units"`
+	SigmaLen        float32     `viewif:"On" def:"0.6" desc:"gaussian sigma for the length dimension (elongated axis perpendicular to the sine waves) -- normalized as a function of filter size in relevant dimension"`
+	SigmaWidth      float32     `viewif:"On" def:"0.3" desc:"gaussian sigma for the width dimension (in the direction of the sine waves) -- normalized as a function of filter size in relevant dimension"`
+	HorizSigmaLen   float32     `viewif:"On" def:"0.3" desc:"gaussian sigma for the length of special horizontal narrow-band filters -- normalized as a function of filter size in relevant dimension"`
+	HorizSigmaWidth float32     `viewif:"On" def:"0.1" desc:"gaussian sigma for the horizontal dimension for special horizontal narrow-band filters -- normalized as a function of filter size in relevant dimension"`
+	Gain            float32     `viewif:"On" def:"2" desc:"overall gain multiplier applied after gabor filtering -- only relevant if not using renormalization (otherwize it just gets renormed awaY"`
+	NHoriz          int         `viewif:"On" def:"4" desc:"number of horizontally-elongated,  pure time-domain, frequency-band specific filters to include, evenly spaced over the available frequency space for this filter set -- in addition to these, there are two diagonals (45, 135) and a vertically-elongated (wide frequency band) filter"`
+	PhaseOffset     float32     `viewif:"On" def:"0,1.5708" desc:"offset for the sine phase -- default is an asymmetric sine wave -- can make it into a symmetric cosine gabor by using PI/2 = 1.5708"`
+	CircleEdge      bool        `viewif:"On" def:"true" desc:"cut off the filter (to zero) outside a circle of diameter filter_size -- makes the filter more radially symmetric"`
+	NFilters        int         `viewif:"On" desc:" total number of filters = 3 + NHoriz"`
+	Geom            image.Point `viewif:"On=true" desc:"overall geometry of gabor1 output (group-level geometry -- feature / unit level geometry is n_features, 2)"`
 }
 
 //Initialize initializes the Gabor
-func (ga *Params) Initialize(steps int, melFilters int) {
+func (ga *Params) Defaults(steps int, melFilters int) {
 	ga.On = true
 	ga.Gain = 2.0
 	ga.NHoriz = 4
@@ -53,22 +52,13 @@ func (ga *Params) Initialize(steps int, melFilters int) {
 	ga.PhaseOffset = 0.0
 	ga.CircleEdge = true
 	ga.NFilters = 3 + ga.NHoriz // 3 is number of angle filters
-
-	ga.SetShape(steps, melFilters)
-	ga.InitFilters()
-
+	ga.SetGeom(steps, melFilters)
 }
 
 // SetShape sets the shape of a gabor based on parameters of gabor, mel filters and input
-func (ga *Params) SetShape(segmentSteps int, nFilters int) { // nFilters is Mel.MelFBank.NFilters
-	ga.Shape.X = ((segmentSteps - 1) / ga.SpaceTime) + 1
-	ga.Shape.Y = ((nFilters - ga.SizeFreq - 1) / ga.SpaceFreq) + 1
-}
-
-// InitFilters
-func (ga *Params) InitFilters() {
-	ga.Filters.SetShape([]int{ga.NFilters, ga.SizeFreq, ga.SizeTime}, nil, nil)
-	ga.RenderFilters(&ga.Filters)
+func (ga *Params) SetGeom(segmentSteps int, nFilters int) { // nFilters is Mel.MelFBank.NFilters
+	ga.Geom.X = ((segmentSteps - 1) / ga.SpaceTime) + 1
+	ga.Geom.Y = ((nFilters - ga.SizeFreq - 1) / ga.SpaceFreq) + 1
 }
 
 // RenderFilters generates filters into the given matrix, which is formatted as: [ga.SizeTime_steps][ga.SizeFreq][n_filters]
@@ -169,9 +159,8 @@ func (ga *Params) RenderFilters(filters *etensor.Float32) {
 }
 
 // Conv processes input using filters that operate over an entire segment of samples
-func Conv(ch int, spec Params, input sound.Params, raw *etensor.Float32, filters int, melData *etensor.Float32) {
-	tHalfSz := spec.SizeTime / 2
-	//tOff := tHalfSz - input.BorderSteps
+func Conv(ch int, params Params, input sound.Params, raw *etensor.Float32, melFilterCount int, gaborFilters *etensor.Float32, melData *etensor.Float32) {
+	tHalfSz := params.SizeTime / 2
 	tOff := tHalfSz
 	tMin := tOff
 	if tMin < 0 {
@@ -180,11 +169,11 @@ func Conv(ch int, spec Params, input sound.Params, raw *etensor.Float32, filters
 	tMax := input.SegmentStepsPlus - tMin + 1
 
 	fMin := int(0)
-	fMax := filters - spec.SizeFreq
+	fMax := melFilterCount - params.SizeFreq
 
 	maxTimeIdx := raw.Dim(2) // dim 0 is channel
 	tIdx := 0
-	for s := tMin; s < tMax; s, tIdx = s+spec.SpaceTime, tIdx+1 {
+	for s := tMin; s < tMax; s, tIdx = s+params.SpaceTime, tIdx+1 {
 		inSt := s - tOff
 		if tIdx > maxTimeIdx {
 			fmt.Printf("GaborFilter: time index %v out of range: %v", tIdx, maxTimeIdx)
@@ -193,23 +182,23 @@ func Conv(ch int, spec Params, input sound.Params, raw *etensor.Float32, filters
 
 		maxFreqIdx := raw.Dim(1) // dim 0 is channel
 		fIdx := 0
-		for flt := fMin; flt < fMax; flt, fIdx = flt+spec.SpaceFreq, fIdx+1 {
+		for flt := fMin; flt < fMax; flt, fIdx = flt+params.SpaceFreq, fIdx+1 {
 			if fIdx > maxFreqIdx {
 				fmt.Printf("GaborFilter: freq index %v out of range: %v", tIdx, maxFreqIdx)
 				break
 			}
-			nf := spec.NFilters
+			nf := params.NFilters
 			for fi := int(0); fi < nf; fi++ {
 				fSum := float32(0.0)
-				for ff := int(0); ff < spec.SizeFreq; ff++ {
-					for ft := int(0); ft < spec.SizeTime; ft++ {
-						fVal := spec.Filters.Value([]int{fi, ff, ft})
+				for ff := int(0); ff < params.SizeFreq; ff++ {
+					for ft := int(0); ft < params.SizeTime; ft++ {
+						fVal := gaborFilters.Value([]int{fi, ff, ft})
 						iVal := melData.Value([]int{inSt + ft, flt + ff, ch})
 						fSum += fVal * iVal
 					}
 				}
 				pos := fSum >= 0.0
-				act := spec.Gain * math32.Abs(fSum)
+				act := params.Gain * math32.Abs(fSum)
 				if pos {
 					raw.SetFloat([]int{ch, fIdx, tIdx, 0, fi}, float64(act))
 					raw.SetFloat([]int{ch, fIdx, tIdx, 1, fi}, 0)

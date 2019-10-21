@@ -50,6 +50,7 @@ type Aud struct {
 	MfccDct         etensor.Float32   `view:"no-inline" desc:" discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
 	MfccDctSegment  etensor.Float32   `view:"no-inline" desc:" full segment's worth of discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
 	Gabor           agabor.Params     `viewif:"FBank.On" desc:" full set of frequency / time gabor filters -- first size"`
+	GaborFilters    etensor.Float32   `viewif:"On=true" desc:"full gabor filters"`
 	GaborTsr        etensor.Float32   `view:"no-inline" desc:" raw output of Gabor -- full segment's worth of gabor steps"`
 	Segment         int               `inactive:"+" desc:" the current segment (i.e. one segments worth of samples) - zero is first segment"`
 	FftCoefs        []complex128      `view:"-" desc:" discrete fourier transform (fft) output complex representation"`
@@ -106,10 +107,12 @@ func (aud *Aud) Config() {
 	aud.Segment = -1
 	aud.MoreSegments = true
 
-	aud.Gabor.Initialize(aud.SoundParams.SegmentSteps, aud.Mel.FBank.NFilters)
 	aud.Gabor.On = true
 	if aud.Gabor.On {
-		aud.GaborTsr.SetShape([]int{aud.SoundParams.Channels, aud.Gabor.Shape.Y, aud.Gabor.Shape.X, 2, aud.Gabor.NFilters}, nil, nil)
+		aud.Gabor.Defaults(aud.SoundParams.SegmentSteps, aud.Mel.FBank.NFilters)
+		aud.GaborFilters.SetShape([]int{aud.Gabor.NFilters, aud.Gabor.SizeFreq, aud.Gabor.SizeTime}, nil, nil)
+		aud.Gabor.RenderFilters(&aud.GaborFilters)
+		aud.GaborTsr.SetShape([]int{aud.SoundParams.Channels, aud.Gabor.Geom.Y, aud.Gabor.Geom.X, 2, aud.Gabor.NFilters}, nil, nil)
 	}
 }
 
@@ -148,7 +151,6 @@ func (aud *Aud) ProcessSoundFile(fn string) {
 
 // ProcessSegment processes the entire segment's input by processing a small overlapping set of samples on each pass
 func (aud *Aud) ProcessSegment() {
-	//aud.Initialize()
 	cf := string(aud.CurSndFile)
 	if strings.Compare(cf, aud.PrevSndFile) != 0 {
 		aud.ProcessSoundFile(string(aud.CurSndFile))
@@ -186,7 +188,7 @@ func (aud *Aud) ProcessStep(ch int, step int) bool {
 func (aud *Aud) ApplyGabor() {
 	if aud.Gabor.On {
 		for ch := int(0); ch < aud.SoundParams.Channels; ch++ {
-			agabor.Conv(ch, aud.Gabor, aud.SoundParams, &aud.GaborTsr, aud.Mel.FBank.NFilters, &aud.MelFBankSegment)
+			agabor.Conv(ch, aud.Gabor, aud.SoundParams, &aud.GaborTsr, aud.Mel.FBank.NFilters, &aud.GaborFilters, &aud.MelFBankSegment)
 		}
 	}
 }
