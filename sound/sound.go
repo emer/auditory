@@ -105,40 +105,41 @@ func (snd *Wave) SampleType() SoundSampleType {
 // SoundToTensor converts sound data to floating point etensor with normalized -1..1 values (unless sound is stored as a
 // float natively, in which case it is not guaranteed to be normalized) -- for use in signal processing routines --
 // can optionally select a specific channel (formats sound_data as a single-dimensional matrix of frames size),
-// and -1 gets all available channels (formats sound_data as two-dimensional matrix with inner dimension as
-// channels and outer dimension frames
-func (snd *Wave) SoundToTensor(soundData *etensor.Float32, channel int) bool {
+// and -1 gets all available channels (formats sound_data as two-dimensional matrix with outer dimension as
+// channels and inner dimension frames
+func (snd *Wave) SoundToTensor(samples *etensor.Float32, channel int) bool {
 	buf, err := snd.Decoder.FullPCMBuffer()
 	if err != nil {
 		fmt.Printf("SoundToMatrix error: %v", err)
+		return false
 	}
 	nFrames := buf.NumFrames()
 
-	if channel < 0 && snd.Channels() > 1 {
+	if channel < 0 && snd.Channels() > 1 { // multiple channels and we process all of them
 		shape := make([]int, 2)
-		shape[0] = int(snd.Channels())
+		shape[0] = snd.Channels()
 		shape[1] = nFrames
-		soundData.SetShape(shape, nil, nil)
+		samples.SetShape(shape, nil, nil)
 		idx := 0
 		for i := 0; i < nFrames; i++ {
-			for c := 0; c < int(snd.Channels()); c, idx = c+1, idx+1 {
-				soundData.SetFloat([]int{c, i}, float64(snd.GetFloatAtIdx(buf, idx)))
+			for c := 0; c < snd.Channels(); c, idx = c+1, idx+1 {
+				samples.SetFloat([]int{c, i}, float64(snd.GetFloatAtIdx(buf, idx)))
 			}
 		}
-	} else {
+	} else { // only process one channel
 		shape := make([]int, 1)
 		shape[0] = nFrames
-		soundData.SetShape(shape, nil, nil)
+		samples.SetShape(shape, nil, nil)
 
-		if snd.Channels() == 1 {
+		if snd.Channels() == 1 { // there is only one channel!
 			for i := 0; i < nFrames; i++ {
-				soundData.SetFloat1D(i, float64(snd.GetFloatAtIdx(buf, i)))
+				samples.SetFloat1D(i, float64(snd.GetFloatAtIdx(buf, i)))
 			}
 		} else {
 			idx := 0
-			for i := 0; i < nFrames; i++ {
-				soundData.SetFloat1D(i, float64(snd.GetFloatAtIdx(buf, idx+channel)))
-				idx += int(snd.Channels())
+			for i := 0; i < nFrames; i++ { // process a specific channel
+				samples.SetFloat1D(i, float64(snd.GetFloatAtIdx(buf, idx+channel)))
+				idx += snd.Channels()
 			}
 		}
 	}
