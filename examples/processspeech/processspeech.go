@@ -81,25 +81,25 @@ func (aud *Aud) SetPath() {
 }
 
 func (aud *Aud) Config() {
-	aud.Signal.Values = aud.SoundParams.Config(aud.Signal.Values)
-	aud.Dft.Initialize(aud.SoundParams.WinSamples, aud.SoundParams.SampleRate)
-	aud.Mel.Defaults(aud.SoundParams.WinSamples/2+1, aud.SoundParams.WinSamples, aud.SoundParams.SampleRate, &aud.MelFilters)
+	aud.Signal.Values = aud.SoundParams.Config(aud.Signal.Values, aud.Sound.SampleRate())
+	aud.Dft.Initialize(aud.SoundParams.WinSamples)
+	aud.Mel.Defaults(aud.SoundParams.WinSamples/2+1, aud.SoundParams.WinSamples, aud.Sound.SampleRate(), &aud.MelFilters)
 
 	aud.Samples.SetShape([]int{aud.SoundParams.WinSamples}, nil, nil)
 	aud.Power.SetShape([]int{aud.SoundParams.WinSamples/2 + 1}, nil, nil)
 	aud.LogPower.SetShape([]int{aud.SoundParams.WinSamples/2 + 1}, nil, nil)
-	aud.PowerSegment.SetShape([]int{aud.SoundParams.SegmentStepsPlus, aud.SoundParams.WinSamples/2 + 1, aud.SoundParams.Channels}, nil, nil)
+	aud.PowerSegment.SetShape([]int{aud.SoundParams.SegmentStepsPlus, aud.SoundParams.WinSamples/2 + 1, aud.Sound.Channels()}, nil, nil)
 	if aud.Dft.CompLogPow {
-		aud.LogPowerSegment.SetShape([]int{aud.SoundParams.SegmentStepsPlus, aud.SoundParams.WinSamples/2 + 1, aud.SoundParams.Channels}, nil, nil)
+		aud.LogPowerSegment.SetShape([]int{aud.SoundParams.SegmentStepsPlus, aud.SoundParams.WinSamples/2 + 1, aud.Sound.Channels()}, nil, nil)
 	}
 
 	aud.FftCoefs = make([]complex128, aud.SoundParams.WinSamples)
 	aud.Fft = fourier.NewCmplxFFT(len(aud.FftCoefs))
 
 	aud.MelFBank.SetShape([]int{aud.Mel.FBank.NFilters}, nil, nil)
-	aud.MelFBankSegment.SetShape([]int{aud.SoundParams.SegmentStepsPlus, aud.Mel.FBank.NFilters, aud.SoundParams.Channels}, nil, nil)
+	aud.MelFBankSegment.SetShape([]int{aud.SoundParams.SegmentStepsPlus, aud.Mel.FBank.NFilters, aud.Sound.Channels()}, nil, nil)
 	if aud.Mel.CompMfcc {
-		aud.MfccDctSegment.SetShape([]int{aud.SoundParams.SegmentStepsPlus, aud.Mel.FBank.NFilters, aud.SoundParams.Channels}, nil, nil)
+		aud.MfccDctSegment.SetShape([]int{aud.SoundParams.SegmentStepsPlus, aud.Mel.FBank.NFilters, aud.Sound.Channels()}, nil, nil)
 		aud.MfccDct.SetShape([]int{aud.Mel.FBank.NFilters}, nil, nil)
 	}
 
@@ -112,7 +112,7 @@ func (aud *Aud) Config() {
 		aud.Gabor.Defaults(aud.SoundParams.SegmentSteps, aud.Mel.FBank.NFilters)
 		aud.GaborFilters.SetShape([]int{aud.Gabor.NFilters, aud.Gabor.SizeFreq, aud.Gabor.SizeTime}, nil, nil)
 		aud.Gabor.RenderFilters(&aud.GaborFilters)
-		aud.GaborTsr.SetShape([]int{aud.SoundParams.Channels, aud.Gabor.Geom.Y, aud.Gabor.Geom.X, 2, aud.Gabor.NFilters}, nil, nil)
+		aud.GaborTsr.SetShape([]int{aud.Sound.Channels(), aud.Gabor.Geom.Y, aud.Gabor.Geom.X, 2, aud.Gabor.NFilters}, nil, nil)
 	}
 }
 
@@ -129,7 +129,7 @@ func (aud *Aud) Initialize() {
 
 // LoadSound initializes the AuditoryProc with the sound loaded from file by "Sound"
 func (aud *Aud) LoadSound(snd *sound.Wave) {
-	if aud.SoundParams.Channels > 1 {
+	if aud.Sound.Channels() > 1 {
 		snd.SoundToTensor(&aud.Signal, -1)
 	} else {
 		snd.SoundToTensor(&aud.Signal, aud.SoundParams.Channel)
@@ -157,7 +157,7 @@ func (aud *Aud) ProcessSegment() {
 	} else {
 		moreSamples := true
 		aud.Segment++
-		for ch := int(0); ch < aud.SoundParams.Channels; ch++ {
+		for ch := int(0); ch < aud.Sound.Channels(); ch++ {
 			for s := 0; s < int(aud.SoundParams.SegmentStepsPlus); s++ {
 				moreSamples = aud.ProcessStep(ch, s)
 				if !moreSamples {
@@ -187,7 +187,7 @@ func (aud *Aud) ProcessStep(ch int, step int) bool {
 // ApplyGabor convolves the gabor filters with the mel output
 func (aud *Aud) ApplyGabor() {
 	if aud.Gabor.On {
-		for ch := int(0); ch < aud.SoundParams.Channels; ch++ {
+		for ch := int(0); ch < aud.Sound.Channels(); ch++ {
 			agabor.Conv(ch, aud.Gabor, aud.SoundParams, &aud.GaborTsr, aud.Mel.FBank.NFilters, &aud.GaborFilters, &aud.MelFBankSegment)
 		}
 	}
@@ -237,6 +237,7 @@ func (aud *Aud) ConfigGui() *gi.Window {
 	split.SetStretchMaxHeight()
 
 	sv := giv.AddNewStructView(split, "sv")
+	// parent gets signal when file chooser dialog is closed - connect to view updates on parent
 	sv.SetStruct(aud)
 
 	split.SetSplits(1)

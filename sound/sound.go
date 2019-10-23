@@ -11,7 +11,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/chewxy/math32"
 	"github.com/emer/etable/etensor"
 	"github.com/go-audio/audio"
 	"github.com/go-audio/wav"
@@ -67,21 +66,21 @@ func (snd *Wave) IsValid() bool {
 }
 
 // SampleRate returns the sample rate of the sound or 0 is snd is nil
-func (snd *Wave) SampleRate() uint32 {
+func (snd *Wave) SampleRate() int {
 	if snd == nil {
 		fmt.Printf("Sound.SampleRate: Sound is nil")
 		return 0
 	}
-	return snd.Decoder.SampleRate
+	return int(snd.Decoder.SampleRate)
 }
 
 // Channels returns the number of channels in the wav data or 0 is snd is nil
-func (snd *Wave) Channels() uint16 {
+func (snd *Wave) Channels() int {
 	if snd == nil {
 		fmt.Printf("Sound.Channels: Sound is nil")
 		return 0
 	}
-	return snd.Decoder.NumChans
+	return int(snd.Decoder.NumChans)
 }
 
 // Duration returns the duration in msec of the sound or zero if snd is nil
@@ -114,18 +113,15 @@ func (snd *Wave) SoundToTensor(soundData *etensor.Float32, channel int) bool {
 		fmt.Printf("SoundToMatrix error: %v", err)
 	}
 	nFrames := buf.NumFrames()
-	//fmt.Printf("frames: %v\n", strconv.Itoa(int(buf.NumFrames())))
 
-	nChannels := snd.Channels()
-	//st := snd.SampleType()
-	if channel < 0 && nChannels > 1 {
+	if channel < 0 && snd.Channels() > 1 {
 		shape := make([]int, 2)
-		shape[0] = int(nChannels)
+		shape[0] = int(snd.Channels())
 		shape[1] = nFrames
 		soundData.SetShape(shape, nil, nil)
 		idx := 0
 		for i := 0; i < nFrames; i++ {
-			for c := 0; c < int(nChannels); c, idx = c+1, idx+1 {
+			for c := 0; c < int(snd.Channels()); c, idx = c+1, idx+1 {
 				soundData.SetFloat([]int{c, i}, float64(snd.GetFloatAtIdx(buf, idx)))
 			}
 		}
@@ -134,7 +130,7 @@ func (snd *Wave) SoundToTensor(soundData *etensor.Float32, channel int) bool {
 		shape[0] = nFrames
 		soundData.SetShape(shape, nil, nil)
 
-		if nChannels == 1 {
+		if snd.Channels() == 1 {
 			for i := 0; i < nFrames; i++ {
 				soundData.SetFloat1D(i, float64(snd.GetFloatAtIdx(buf, i)))
 			}
@@ -142,7 +138,7 @@ func (snd *Wave) SoundToTensor(soundData *etensor.Float32, channel int) bool {
 			idx := 0
 			for i := 0; i < nFrames; i++ {
 				soundData.SetFloat1D(i, float64(snd.GetFloatAtIdx(buf, idx+channel)))
-				idx += int(nChannels)
+				idx += int(snd.Channels())
 			}
 		}
 	}
@@ -168,8 +164,6 @@ type Params struct {
 	WinMs            float32 `def:"25" desc:"input window -- number of milliseconds worth of sound to filter at a time"`
 	StepMs           float32 `def:"5,10,12.5" desc:"input step -- number of milliseconds worth of sound that the input is stepped along to obtain the next window sample"`
 	SegmentMs        float32 `def:"100" desc:"length of full segment's worth of input -- total number of milliseconds to accumulate into a complete segment -- must be a multiple of StepMs -- input will be SegmentMs / StepMs = SegmentSteps wide in the X axis, and number of filters in the Y axis"`
-	SampleRate       int     `desc:"rate of sampling in our sound input (e.g., 16000 = 16Khz) -- can initialize this from a taSound object using InitFromSound method"`
-	Channels         int     `desc:"total number of channels to process"`
 	Channel          int     `viewif:"Channels=1" desc:"specific channel to process, if input has multiple channels, and we only process one of them (-1 = process all)"`
 	WinSamples       int     `inactive:"+" desc:"number of samples to process each step"`
 	StepSamples      int     `inactive:"+" desc:"number of samples to step input by"`
@@ -185,18 +179,16 @@ func (sp *Params) Defaults() {
 	sp.WinMs = 25.0
 	sp.StepMs = 5.0
 	sp.SegmentMs = 100.0
-	sp.SampleRate = 44100
-	sp.Channels = 1
 	sp.Channel = 0
 	sp.PadValue = 0.0
 }
 
 // ComputeSamples computes the sample counts based on time and sample rate
 // signal padded with zeros to ensure complete segments
-func (sp *Params) Config(signalRaw []float32) (signalPadded []float32) {
-	sp.WinSamples = MSecToSamples(sp.WinMs, sp.SampleRate)
-	sp.StepSamples = MSecToSamples(sp.StepMs, sp.SampleRate)
-	sp.SegmentSamples = MSecToSamples(sp.SegmentMs, sp.SampleRate)
+func (sp *Params) Config(signalRaw []float32, rate int) (signalPadded []float32) {
+	sp.WinSamples = MSecToSamples(sp.WinMs, rate)
+	sp.StepSamples = MSecToSamples(sp.StepMs, rate)
+	sp.SegmentSamples = MSecToSamples(sp.SegmentMs, rate)
 	sp.SegmentSteps = int(math.Round(float64(sp.SegmentMs / sp.StepMs)))
 	sp.SegmentStepsPlus = sp.SegmentSteps + int(math.Round(float64(sp.WinSamples/sp.StepSamples)))
 	tail := len(signalRaw) % sp.SegmentSamples
@@ -212,25 +204,6 @@ func (sp *Params) Config(signalRaw []float32) (signalPadded []float32) {
 		sp.Steps[i] = sp.StepSamples * i
 	}
 	return signalPadded
-}
-
-// Init loads a sound and sets the Input channel vars and sample rate
-func (sp *Params) Init(snd *Wave, nChannels int, channel int) {
-	if snd == nil {
-		fmt.Printf("InitFromSound: sound nil")
-		return
-	}
-	sp.SampleRate = int(snd.SampleRate())
-	if nChannels < 1 {
-		sp.Channels = int(snd.Channels())
-	} else {
-		sp.Channels = int(math32.Min(float32(nChannels), float32(sp.Channels)))
-	}
-	if sp.Channels > 1 {
-		sp.Channel = channel
-	} else {
-		sp.Channel = 0
-	}
 }
 
 // MSecToSamples converts milliseconds to samples, in terms of sample_rate

@@ -20,7 +20,7 @@ type Params struct {
 	CurSmooth  float32 `inactive:"+" desc:" how much of current power to include"`
 }
 
-func (dft *Params) Initialize(winSamples int, sampleRate int) {
+func (dft *Params) Initialize(winSamples int) {
 	dft.PrevSmooth = 0
 	dft.CurSmooth = 1.0 - dft.PrevSmooth
 	dft.CompLogPow = true
