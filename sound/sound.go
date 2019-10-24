@@ -172,7 +172,11 @@ type Params struct {
 	SegmentSteps     int     `inactive:"+" desc:"number of steps in a segment"`
 	SegmentStepsPlus int     `inactive:"+" desc:"SegmentSteps plus steps overlapping next segment or for padding if no next segment"`
 	Steps            []int   `inactive:"+" desc:"pre-calculated start position for each step"`
-	PadValue         float32 `view:"-" desc:" use this value for padding signal`
+	PadValue         float32 `inactive:"+" desc:"use this value for padding signal`
+	Start            int     `inactive:"+" desc:"The first sample we want to process - sometimes found by trimming silence  (see Config())"`
+	End              int     `inactive:"+" desc:"The last sample we want to process - sometimes found by trimming silence/padding, etc  (see Config())"`
+	SilenceMs        int     `desc:"virtually trim silence leaving no more than 'SilenceMs' of silence -- if less than 0 don't trim'"`
+	ProcessLen       int     `desc:"this is the length of the portion of the signal to process - less than or equal to full signal length'"`
 }
 
 //Defaults initializes the Input
@@ -182,6 +186,8 @@ func (sp *Params) Defaults() {
 	sp.SegmentMs = 100.0
 	sp.Channel = 0
 	sp.PadValue = 0.0
+	sp.SilenceMs = -1 // if less than zero don't trim
+	sp.ProcessLen = 0 // length of the portion of signal to actually process (signal may be trimmed - see start/end)
 }
 
 // ComputeSamples computes the sample counts based on time and sample rate
@@ -192,19 +198,64 @@ func (sp *Params) Config(signalRaw []float32, rate int) (signalPadded []float32)
 	sp.SegmentSamples = MSecToSamples(sp.SegmentMs, rate)
 	sp.SegmentSteps = int(math.Round(float64(sp.SegmentMs / sp.StepMs)))
 	sp.SegmentStepsPlus = sp.SegmentSteps + int(math.Round(float64(sp.WinSamples/sp.StepSamples)))
-	tail := len(signalRaw) % sp.SegmentSamples
+
+	sp.Start = 0
+	sp.End = len(signalRaw)
+	// calculate where we really want to start
+	if sp.SilenceMs > 0 {
+		for i := 0; i < len(signalRaw); i++ {
+			if signalRaw[i] > 0 {
+				sp.Start = i
+				break
+			}
+		}
+		if sp.Start > sp.SilenceMs {
+			sp.Start = sp.Start - sp.SilenceMs
+		}
+
+		// calculate where we really want to end
+		for i := len(signalRaw) - 1; i > sp.Start; i-- {
+			if signalRaw[i] > 0 {
+				sp.End = i
+				break
+			}
+		}
+		if len(signalRaw)-sp.End > sp.SilenceMs {
+			sp.End = sp.End + sp.SilenceMs
+		}
+	}
+	sp.ProcessLen = sp.End - sp.Start
+
+	// pad the signal if 'end' plus needed padding goes beyond length of raw signal
+	tail := sp.ProcessLen % sp.SegmentSamples
+
 	padLen := sp.SegmentStepsPlus*sp.StepSamples - tail
 	padLen = padLen + sp.WinSamples
+
+	existingPad := (len(signalRaw) - sp.End)
+	if padLen > existingPad {
+		pad := make([]float32, padLen-existingPad)
+		for i := range pad {
+			pad[i] = sp.PadValue
+		}
+	}
+
 	pad := make([]float32, padLen)
 	for i := range pad {
 		pad[i] = sp.PadValue
 	}
-	signalPadded = append(signalRaw, pad...)
+	signalPadded = append(signalRaw[sp.Start:sp.End], pad...)
 	sp.Steps = make([]int, sp.SegmentStepsPlus)
 	for i := 0; i < sp.SegmentStepsPlus; i++ {
 		sp.Steps[i] = sp.StepSamples * i
 	}
+
 	return signalPadded
+}
+
+// TrimSilence will be true if
+func (sp *Params) TrimSilence() bool {
+	return (sp.SilenceMs > 0)
 }
 
 // MSecToSamples converts milliseconds to samples, in terms of sample_rate

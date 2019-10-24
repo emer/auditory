@@ -114,6 +114,8 @@ func (aud *Aud) Config() {
 		aud.Gabor.RenderFilters(&aud.GaborFilters)
 		aud.GaborTsr.SetShape([]int{aud.Sound.Channels(), aud.Gabor.Geom.Y, aud.Gabor.Geom.X, 2, aud.Gabor.NFilters}, nil, nil)
 	}
+
+	aud.SoundParams.SilenceMs = 5000
 }
 
 // Initialize sets all the tensor result data to zeros
@@ -154,12 +156,14 @@ func (aud *Aud) ProcessSegment() {
 	cf := string(aud.CurSndFile)
 	if strings.Compare(cf, aud.PrevSndFile) != 0 {
 		aud.ProcessSoundFile(string(aud.CurSndFile))
+	} else if aud.MoreSegments == false {
+		aud.ProcessSoundFile(string(aud.CurSndFile)) // start over - same file
 	} else {
 		moreSamples := true
 		aud.Segment++
 		for ch := int(0); ch < aud.Sound.Channels(); ch++ {
 			for s := 0; s < int(aud.SoundParams.SegmentStepsPlus); s++ {
-				moreSamples = aud.ProcessStep(ch, s)
+				moreSamples = aud.ProcessStep(ch, s, aud.SoundParams.Start)
 				if !moreSamples {
 					aud.MoreSegments = false
 					break
@@ -176,8 +180,8 @@ func (aud *Aud) ProcessSegment() {
 // ProcessStep processes a step worth of sound input from current input_pos, and increment input_pos by input.step_samples
 // Process the data by doing a fourier transform and computing the power spectrum, then apply mel filters to get the frequency
 // bands that mimic the non-linear human perception of sound
-func (aud *Aud) ProcessStep(ch int, step int) bool {
-	available := aud.SoundToWindow(aud.Segment, aud.SoundParams.Steps[step], ch)
+func (aud *Aud) ProcessStep(ch, step, startOffset int) bool {
+	available := aud.SoundToWindow(aud.Segment, aud.SoundParams.Steps[step], startOffset, ch)
 	aud.Dft.Filter(int(ch), int(step), &aud.Samples, aud.FirstStep, aud.SoundParams.WinSamples, aud.FftCoefs, aud.Fft, &aud.Power, &aud.LogPower, &aud.PowerSegment, &aud.LogPowerSegment)
 	aud.Mel.Filter(int(ch), int(step), &aud.Samples, &aud.MelFilters, &aud.Power, &aud.MelFBankSegment, &aud.MelFBank, &aud.MfccDctSegment, &aud.MfccDct)
 	aud.FirstStep = false
@@ -194,9 +198,9 @@ func (aud *Aud) ApplyGabor() {
 }
 
 // SoundToWindow gets sound from SoundFull at given position and channel, into WindowIn
-func (aud *Aud) SoundToWindow(segment, stepOffset int, ch int) bool {
+func (aud *Aud) SoundToWindow(segment, stepOffset, startOffset, ch int) bool {
 	if aud.Signal.NumDims() == 1 {
-		start := segment*aud.SoundParams.SegmentSamples + stepOffset // segment zero based
+		start := segment*aud.SoundParams.SegmentSamples + stepOffset + startOffset // segment zero based
 		end := start + aud.SoundParams.WinSamples
 		if end > len(aud.Signal.Values) {
 			return false
