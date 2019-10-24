@@ -114,8 +114,7 @@ func (aud *Aud) Config() {
 		aud.Gabor.RenderFilters(&aud.GaborFilters)
 		aud.GaborTsr.SetShape([]int{aud.Sound.Channels(), aud.Gabor.Geom.Y, aud.Gabor.Geom.X, 2, aud.Gabor.NFilters}, nil, nil)
 	}
-
-	aud.SoundParams.SilenceMs = 5000
+	aud.SoundParams.SilenceMs = 300
 }
 
 // Initialize sets all the tensor result data to zeros
@@ -170,7 +169,7 @@ func (aud *Aud) ProcessSegment() {
 				}
 			}
 		}
-		remaining := len(aud.Signal.Values) - aud.SoundParams.SegmentSamples*(aud.Segment+1)
+		remaining := aud.SoundParams.ProcessLen - aud.SoundParams.SegmentSamples*(aud.Segment+1)
 		if remaining < aud.SoundParams.SegmentSamples {
 			aud.MoreSegments = false
 		}
@@ -197,12 +196,12 @@ func (aud *Aud) ApplyGabor() {
 	}
 }
 
-// SoundToWindow gets sound from SoundFull at given position and channel, into WindowIn
+// SoundToWindow gets sound from SignalRaw at given position and channel
 func (aud *Aud) SoundToWindow(segment, stepOffset, startOffset, ch int) bool {
 	if aud.Signal.NumDims() == 1 {
 		start := segment*aud.SoundParams.SegmentSamples + stepOffset + startOffset // segment zero based
 		end := start + aud.SoundParams.WinSamples
-		if end > len(aud.Signal.Values) {
+		if end > aud.SoundParams.End {
 			return false
 		}
 		aud.Samples.Values = aud.Signal.Values[start:end]
