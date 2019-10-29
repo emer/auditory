@@ -7,6 +7,7 @@ package sound
 import (
 	"errors"
 	"fmt"
+	"io"
 	"math"
 	"os"
 	"time"
@@ -37,24 +38,24 @@ type Wave struct {
 }
 
 // Load loads the sound file and decodes it
-func (snd *Wave) Load(filename string) error {
+func (snd *Wave) Load(filename string) (error, io.ReadCloser) {
 	inFile, err := os.Open(filename)
 	if err != nil {
 		fmt.Printf("couldn't open %s %v", filename, err)
-		return err
+		return err, nil
 	}
 	snd.Decoder = wav.NewDecoder(inFile)
 
 	if snd.Decoder.IsValidFile() != true {
 		err := errors.New("Sound.LoadSound: Invalid wav file")
-		return err
+		return err, nil
 	}
 	fmt.Printf("sample rate: %v\n", snd.Decoder.SampleRate)
 	duration, err := snd.Decoder.Duration()
 	fmt.Printf("duration: %v\n", duration)
-	//defer inFile.Close()
+	//defer inFile.Close()  // don't do this - we need the file to stay open - returning inFile (io.ReadCloser)
 
-	return err
+	return err, inFile
 }
 
 // IsValid returns false if the sound is not a valid sound

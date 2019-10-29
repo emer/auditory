@@ -82,6 +82,7 @@ func (aud *Aud) SetPath() {
 
 func (aud *Aud) Config() {
 	aud.Signal.Values = aud.SoundParams.Config(aud.Signal.Values, aud.Sound.SampleRate())
+	aud.SoundParams.SilenceMs = 300
 	aud.Dft.Initialize(aud.SoundParams.WinSamples)
 	aud.Mel.Defaults(aud.SoundParams.WinSamples/2+1, aud.SoundParams.WinSamples, aud.Sound.SampleRate(), &aud.MelFilters)
 
@@ -113,8 +114,9 @@ func (aud *Aud) Config() {
 		aud.GaborFilters.SetShape([]int{aud.Gabor.NFilters, aud.Gabor.SizeFreq, aud.Gabor.SizeTime}, nil, nil)
 		aud.Gabor.RenderFilters(&aud.GaborFilters)
 		aud.GaborTsr.SetShape([]int{aud.Sound.Channels(), aud.Gabor.Geom.Y, aud.Gabor.Geom.X, 2, aud.Gabor.NFilters}, nil, nil)
+		aud.GaborTsr.SetMetaData("odd-row", "true")
+		aud.GaborTsr.SetMetaData("grid-fill", ".9")
 	}
-	aud.SoundParams.SilenceMs = 300
 }
 
 // Initialize sets all the tensor result data to zeros
@@ -142,12 +144,16 @@ func (aud *Aud) LoadSound(snd *sound.Wave) {
 func (aud *Aud) ProcessSoundFile(fn string) {
 	aud.PrevSndFile = string(aud.CurSndFile)
 	aud.CurSndFile = gi.FileName(fn)
-	aud.Sound.Load(fn)
+	err, closer := aud.Sound.Load(fn)
+	if err != nil {
+		return
+	}
 	aud.LoadSound(&aud.Sound)
 	aud.Config()
 	aud.ProcessSegment()
 	aud.ApplyGabor()
 	aud.ToolBar.UpdateActions()
+	closer.Close() // close the sound file
 }
 
 // ProcessSegment processes the entire segment's input by processing a small overlapping set of samples on each pass
