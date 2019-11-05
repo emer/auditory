@@ -50,9 +50,9 @@ func (snd *Wave) Load(filename string) (error, io.ReadCloser) {
 		err := errors.New("Sound.LoadSound: Invalid wav file")
 		return err, nil
 	}
-	fmt.Printf("sample rate: %v\n", snd.Decoder.SampleRate)
-	duration, err := snd.Decoder.Duration()
-	fmt.Printf("duration: %v\n", duration)
+	//fmt.Printf("sample rate: %v\n", snd.Decoder.SampleRate)
+	//duration, err := snd.Decoder.Duration()
+	//fmt.Printf("duration: %v\n", duration)
 	//defer inFile.Close()  // don't do this - we need the file to stay open - returning inFile (io.ReadCloser)
 
 	return err, inFile
@@ -177,7 +177,9 @@ type Params struct {
 	Start            int     `inactive:"+" desc:"The first sample we want to process - sometimes found by trimming silence  (see Config())"`
 	End              int     `inactive:"+" desc:"The last sample we want to process - sometimes found by trimming silence/padding, etc  (see Config())"`
 	SilenceMs        int     `desc:"virtually trim silence leaving no more than 'SilenceMs' of silence -- if less than 0 don't trim'"`
-	ProcessLen       int     `desc:"this is the length of the portion of the signal to process - less than or equal to full signal length'"`
+	ProcessLen       int     `desc:"the length of the portion of the signal to process - less than or equal to full signal length'"`
+	SumOver          int     `desc:"sum over this many signal values when finding silence'"`
+	Threshold        float32 `desc:"the threshold for finding end of signal'"`
 }
 
 //Defaults initializes the Input
@@ -189,6 +191,8 @@ func (sp *Params) Defaults() {
 	sp.PadValue = 0.0
 	sp.SilenceMs = -1 // if less than zero don't trim
 	sp.ProcessLen = 0 // length of the portion of signal to actually process (signal may be trimmed - see start/end)
+	sp.SumOver = 100
+	sp.Threshold = .5
 }
 
 // ComputeSamples computes the sample counts based on time and sample rate
@@ -200,30 +204,55 @@ func (sp *Params) Config(signalRaw []float32, rate int) (signalPadded []float32)
 	sp.SegmentSteps = int(math.Round(float64(sp.SegmentMs / sp.StepMs)))
 	sp.SegmentStepsPlus = sp.SegmentSteps + int(math.Round(float64(sp.WinSamples/sp.StepSamples)))
 
+	siglen := len(signalRaw)
 	sp.Start = 0
-	sp.End = len(signalRaw)
+	sp.End = siglen
 	// calculate where we really want to start
-	if sp.SilenceMs > 0 {
-		for i := 0; i < len(signalRaw); i++ {
-			if signalRaw[i] > 0 {
-				sp.Start = i
+	sumstart := float32(0.0)
+	for s := 0; s < sp.SumOver; s++ {
+		sumstart += signalRaw[s]
+	}
+	if sumstart > sp.Threshold {
+		sp.Start = 0 // the start
+	} else { // keep looking
+		front := 0
+		back := front + sp.SumOver
+		for i := front; i < siglen; i++ {
+			sumstart = sumstart + signalRaw[back] - signalRaw[front]
+			if sumstart > sp.Threshold {
+				sp.Start = front
 				break
 			}
+			front++
+			back++
 		}
-		if sp.Start > sp.SilenceMs {
-			sp.Start = sp.Start - sp.SilenceMs
-		}
+	}
+	if sp.Start > sp.SilenceMs {
+		sp.Start = sp.Start - sp.SilenceMs
+	}
 
-		// calculate where we really want to end
-		for i := len(signalRaw) - 1; i > sp.Start; i-- {
-			if signalRaw[i] > 0 {
-				sp.End = i
+	// calculate where we really want to end
+	sumend := float32(0.0)
+	for s := siglen - sp.SumOver; s < siglen; s++ {
+		sumend += signalRaw[s]
+	}
+	if sumend > sp.Threshold {
+		sp.End = siglen - 1 // the very end
+	} else { // keep looking
+		front := siglen - sp.SumOver - 1
+		back := front + sp.SumOver
+		for i := front; i > sp.Start; i-- {
+			sumend = sumend + signalRaw[front] - signalRaw[back]
+			if sumend > sp.Threshold {
+				sp.End = back
 				break
 			}
+			front--
+			back--
 		}
-		if len(signalRaw)-sp.End > sp.SilenceMs {
-			sp.End = sp.End + sp.SilenceMs
-		}
+	}
+	if siglen-sp.End > sp.SilenceMs {
+		sp.End = sp.End + sp.SilenceMs
 	}
 	sp.ProcessLen = sp.End - sp.Start
 
@@ -233,14 +262,13 @@ func (sp *Params) Config(signalRaw []float32, rate int) (signalPadded []float32)
 	padLen := sp.SegmentStepsPlus*sp.StepSamples - tail
 	padLen = padLen + sp.WinSamples
 
-	existingPad := (len(signalRaw) - sp.End)
+	existingPad := (siglen - sp.End)
 	if padLen > existingPad {
 		pad := make([]float32, padLen-existingPad)
 		for i := range pad {
 			pad[i] = sp.PadValue
 		}
 	}
-
 	pad := make([]float32, padLen)
 	for i := range pad {
 		pad[i] = sp.PadValue
@@ -250,7 +278,6 @@ func (sp *Params) Config(signalRaw []float32, rate int) (signalPadded []float32)
 	for i := 0; i < sp.SegmentStepsPlus; i++ {
 		sp.Steps[i] = sp.StepSamples * i
 	}
-
 	return signalPadded
 }
 
