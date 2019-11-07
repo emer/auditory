@@ -178,8 +178,9 @@ type Params struct {
 	End              int     `inactive:"+" desc:"The last sample we want to process - sometimes found by trimming silence/padding, etc  (see Config())"`
 	SilenceMs        int     `desc:"virtually trim silence leaving no more than 'SilenceMs' of silence -- if less than 0 don't trim'"`
 	ProcessLen       int     `desc:"the length of the portion of the signal to process - less than or equal to full signal length'"`
-	SumOver          int     `desc:"sum over this many signal values when finding silence'"`
-	Threshold        float32 `desc:"the threshold for finding end of signal'"`
+	SumOver          int     `def:"100" desc:"sum over this many signal values when finding silence'"`
+	Threshold        float32 `def:"0.5" desc:"the threshold for finding end of signal'"`
+	MinSamples       int     `def:"-1" desc:"the minimum number of samples in a segment (default WinSamples if value is -1) - if fewer than MinSamples cut off the \"tail\" '"`
 }
 
 //Defaults initializes the Input
@@ -193,6 +194,7 @@ func (sp *Params) Defaults() {
 	sp.ProcessLen = 0 // length of the portion of signal to actually process (signal may be trimmed - see start/end)
 	sp.SumOver = 100
 	sp.Threshold = .5
+	sp.MinSamples = -1
 }
 
 // ComputeSamples computes the sample counts based on time and sample rate
@@ -203,7 +205,9 @@ func (sp *Params) Config(signalRaw []float32, rate int) (signalPadded []float32)
 	sp.SegmentSamples = MSecToSamples(sp.SegmentMs, rate)
 	sp.SegmentSteps = int(math.Round(float64(sp.SegmentMs / sp.StepMs)))
 	sp.SegmentStepsPlus = sp.SegmentSteps + int(math.Round(float64(sp.WinSamples/sp.StepSamples)))
-
+	if sp.MinSamples == -1 { // use default
+		sp.MinSamples = sp.WinSamples
+	}
 	siglen := len(signalRaw)
 	sp.Start = 0
 	sp.End = siglen
@@ -259,9 +263,14 @@ func (sp *Params) Config(signalRaw []float32, rate int) (signalPadded []float32)
 	// pad the signal if 'end' plus needed padding goes beyond length of raw signal
 	tail := sp.ProcessLen % sp.SegmentSamples
 
-	padLen := sp.SegmentStepsPlus*sp.StepSamples - tail
-	padLen = padLen + sp.WinSamples
+	padLen := 0
+	if tail < sp.WinSamples { // less than one window remaining - cut it off
+		padLen = 0
+	} else {
+		padLen = sp.SegmentStepsPlus*sp.StepSamples - tail // more than one window remaining - keep and pad
+	}
 
+	padLen = padLen + sp.WinSamples
 	existingPad := (siglen - sp.End)
 	if padLen > existingPad {
 		pad := make([]float32, padLen-existingPad)

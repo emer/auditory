@@ -133,16 +133,16 @@ func FreqToBin(freq, nFft, sampleRate float32) int {
 
 //Defaults initializes FBank values - these are the ones you most likely need to adjust for your particular signals
 func (mfb *FilterBank) Defaults() {
-	mfb.LoHz = 120.0
-	mfb.HiHz = 10000.0
+	mfb.LoHz = 300
+	mfb.HiHz = 8000.0
 	mfb.NFilters = 32
 	mfb.LogOff = 0.0
 	mfb.LogMin = -10.0
 	mfb.LoMel = FreqToMel(mfb.LoHz)
 	mfb.HiMel = FreqToMel(mfb.HiHz)
 	mfb.Renorm = true
-	mfb.RenormMin = -10
-	mfb.RenormMax = 7.0
+	mfb.RenormMin = -5.0
+	mfb.RenormMax = 9.0
 	mfb.RenormScale = 1.0 / (mfb.RenormMax - mfb.RenormMin)
 }
 
