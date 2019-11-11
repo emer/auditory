@@ -161,7 +161,7 @@ func (snd *Wave) GetFloatAtIdx(buf *audio.IntBuffer, idx int) float32 {
 	return 0
 }
 
-// Input defines the sound input parameters for auditory processing
+// Params defines the sound input parameters for auditory processing
 type Params struct {
 	WinMs            float32 `def:"25" desc:"input window -- number of milliseconds worth of sound to filter at a time"`
 	StepMs           float32 `def:"5,10,12.5" desc:"input step -- number of milliseconds worth of sound that the input is stepped along to obtain the next window sample"`
@@ -179,11 +179,11 @@ type Params struct {
 	SilenceMs        int     `desc:"virtually trim silence leaving no more than 'SilenceMs' of silence -- if less than 0 don't trim'"`
 	ProcessLen       int     `desc:"the length of the portion of the signal to process - less than or equal to full signal length'"`
 	SumOver          int     `def:"100" desc:"sum over this many signal values when finding silence'"`
-	Threshold        float32 `def:"0.5" desc:"the threshold for finding end of signal'"`
+	Threshold        float32 `def:"1.0" desc:"the threshold for finding end of signal - sum of the SumOver number of samples tested against this threshold - see Config()'"`
 	MinSamples       int     `def:"-1" desc:"the minimum number of samples in a segment (default WinSamples if value is -1) - if fewer than MinSamples cut off the \"tail\" '"`
 }
 
-//Defaults initializes the Input
+// Defaults initializes the Input
 func (sp *Params) Defaults() {
 	sp.WinMs = 25.0
 	sp.StepMs = 5.0
@@ -193,12 +193,13 @@ func (sp *Params) Defaults() {
 	sp.SilenceMs = -1 // if less than zero don't trim
 	sp.ProcessLen = 0 // length of the portion of signal to actually process (signal may be trimmed - see start/end)
 	sp.SumOver = 100
-	sp.Threshold = .5
+	sp.Threshold = 1.0
 	sp.MinSamples = -1
 }
 
-// ComputeSamples computes the sample counts based on time and sample rate
-// signal padded with zeros to ensure complete segments
+// Config computes the sample counts based on time and sample rate
+// Start and End of non-silent signal found
+// Signal padded with zeros to ensure complete segments
 func (sp *Params) Config(signalRaw []float32, rate int) (signalPadded []float32) {
 	sp.WinSamples = MSecToSamples(sp.WinMs, rate)
 	sp.StepSamples = MSecToSamples(sp.StepMs, rate)
