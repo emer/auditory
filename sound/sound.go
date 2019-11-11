@@ -5,12 +5,10 @@
 package sound
 
 import (
-	"errors"
 	"fmt"
-	"io"
+	"log"
 	"math"
 	"os"
-	"time"
 
 	"github.com/emer/etable/etensor"
 	"github.com/go-audio/audio"
@@ -34,36 +32,24 @@ const (
 )
 
 type Wave struct {
-	Decoder *wav.Decoder
+	Buf *audio.IntBuffer
 }
 
 // Load loads the sound file and decodes it
-func (snd *Wave) Load(filename string) (error, io.ReadCloser) {
-	inFile, err := os.Open(filename)
+func (snd *Wave) Load(filename string) error {
+	f, err := os.Open(filename)
 	if err != nil {
 		fmt.Printf("couldn't open %s %v", filename, err)
-		return err, nil
+		return err
 	}
-	snd.Decoder = wav.NewDecoder(inFile)
-
-	if snd.Decoder.IsValidFile() != true {
-		err := errors.New("Sound.LoadSound: Invalid wav file")
-		return err, nil
+	defer f.Close()
+	d := wav.NewDecoder(f)
+	snd.Buf, err = d.FullPCMBuffer()
+	if err != nil {
+		log.Fatal(err)
 	}
-	//fmt.Printf("sample rate: %v\n", snd.Decoder.SampleRate)
-	//duration, err := snd.Decoder.Duration()
-	//fmt.Printf("duration: %v\n", duration)
-	//defer inFile.Close()  // don't do this - we need the file to stay open - returning inFile (io.ReadCloser)
 
-	return err, inFile
-}
-
-// IsValid returns false if the sound is not a valid sound
-func (snd *Wave) IsValid() bool {
-	if snd == nil {
-		return false
-	}
-	return snd.Decoder.IsValidFile()
+	return err
 }
 
 // SampleRate returns the sample rate of the sound or 0 is snd is nil
@@ -72,7 +58,7 @@ func (snd *Wave) SampleRate() int {
 		fmt.Printf("Sound.SampleRate: Sound is nil")
 		return 0
 	}
-	return int(snd.Decoder.SampleRate)
+	return int(snd.Buf.Format.SampleRate)
 }
 
 // Channels returns the number of channels in the wav data or 0 is snd is nil
@@ -81,20 +67,7 @@ func (snd *Wave) Channels() int {
 		fmt.Printf("Sound.Channels: Sound is nil")
 		return 0
 	}
-	return int(snd.Decoder.NumChans)
-}
-
-// Duration returns the duration in msec of the sound or zero if snd is nil
-func (snd *Wave) Duration() time.Duration {
-	if snd == nil {
-		fmt.Printf("Sound.Duration: Sound is nil")
-		return 0
-	}
-	d, err := snd.Decoder.Duration()
-	if err != nil {
-		return d
-	}
-	return 0
+	return int(snd.Buf.Format.NumChannels)
 }
 
 // todo: return to this
@@ -109,12 +82,7 @@ func (snd *Wave) SampleType() SoundSampleType {
 // and -1 gets all available channels (formats sound_data as two-dimensional matrix with outer dimension as
 // channels and inner dimension frames
 func (snd *Wave) SoundToTensor(samples *etensor.Float32, channel int) bool {
-	buf, err := snd.Decoder.FullPCMBuffer()
-	if err != nil {
-		fmt.Printf("SoundToMatrix error: %v", err)
-		return false
-	}
-	nFrames := buf.NumFrames()
+	nFrames := snd.Buf.NumFrames()
 
 	if channel < 0 && snd.Channels() > 1 { // multiple channels and we process all of them
 		shape := make([]int, 2)
@@ -124,7 +92,7 @@ func (snd *Wave) SoundToTensor(samples *etensor.Float32, channel int) bool {
 		idx := 0
 		for i := 0; i < nFrames; i++ {
 			for c := 0; c < snd.Channels(); c, idx = c+1, idx+1 {
-				samples.SetFloat([]int{c, i}, float64(snd.GetFloatAtIdx(buf, idx)))
+				samples.SetFloat([]int{c, i}, float64(snd.GetFloatAtIdx(snd.Buf, idx)))
 			}
 		}
 	} else { // only process one channel
@@ -134,12 +102,12 @@ func (snd *Wave) SoundToTensor(samples *etensor.Float32, channel int) bool {
 
 		if snd.Channels() == 1 { // there is only one channel!
 			for i := 0; i < nFrames; i++ {
-				samples.SetFloat1D(i, float64(snd.GetFloatAtIdx(buf, i)))
+				samples.SetFloat1D(i, float64(snd.GetFloatAtIdx(snd.Buf, i)))
 			}
 		} else {
 			idx := 0
 			for i := 0; i < nFrames; i++ { // process a specific channel
-				samples.SetFloat1D(i, float64(snd.GetFloatAtIdx(buf, idx+channel)))
+				samples.SetFloat1D(i, float64(snd.GetFloatAtIdx(snd.Buf, idx+channel)))
 				idx += snd.Channels()
 			}
 		}
