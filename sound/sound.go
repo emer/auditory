@@ -142,13 +142,6 @@ type Params struct {
 	SegmentStepsPlus int     `inactive:"+" desc:"SegmentSteps plus steps overlapping next segment or for padding if no next segment"`
 	Steps            []int   `inactive:"+" desc:"pre-calculated start position for each step"`
 	PadValue         float32 `inactive:"+" desc:"use this value for padding signal`
-	Start            int     `inactive:"+" desc:"The first sample we want to process - sometimes found by trimming silence  (see Config())"`
-	End              int     `inactive:"+" desc:"The last sample we want to process - sometimes found by trimming silence/padding, etc  (see Config())"`
-	SilenceMs        int     `desc:"virtually trim silence leaving no more than 'SilenceMs' of silence -- if less than 0 don't trim'"`
-	ProcessLen       int     `desc:"the length of the portion of the signal to process - less than or equal to full signal length'"`
-	SumOver          int     `def:"100" desc:"sum over this many signal values when finding silence'"`
-	Threshold        float32 `def:"1.0" desc:"the threshold for finding end of signal - sum of the SumOver number of samples tested against this threshold - see Config()'"`
-	MinSamples       int     `def:"-1" desc:"the minimum number of samples in a segment (default WinSamples if value is -1) - if fewer than MinSamples cut off the \"tail\" '"`
 }
 
 // Defaults initializes the Input
@@ -158,110 +151,17 @@ func (sp *Params) Defaults() {
 	sp.SegmentMs = 100.0
 	sp.Channel = 0
 	sp.PadValue = 0.0
-	sp.SilenceMs = -1 // if less than zero don't trim
-	sp.ProcessLen = 0 // length of the portion of signal to actually process (signal may be trimmed - see start/end)
-	sp.SumOver = 100
-	sp.Threshold = 1.0
-	sp.MinSamples = -1
 }
 
 // Config computes the sample counts based on time and sample rate
 // Start and End of non-silent signal found
 // Signal padded with zeros to ensure complete segments
-func (sp *Params) Config(signalRaw []float32, rate int) (signalPadded []float32) {
+func (sp *Params) Config(rate int) {
 	sp.WinSamples = MSecToSamples(sp.WinMs, rate)
 	sp.StepSamples = MSecToSamples(sp.StepMs, rate)
 	sp.SegmentSamples = MSecToSamples(sp.SegmentMs, rate)
 	sp.SegmentSteps = int(math.Round(float64(sp.SegmentMs / sp.StepMs)))
 	sp.SegmentStepsPlus = sp.SegmentSteps + int(math.Round(float64(sp.WinSamples/sp.StepSamples)))
-	if sp.MinSamples == -1 { // use default
-		sp.MinSamples = sp.WinSamples
-	}
-	siglen := len(signalRaw)
-	sp.Start = 0
-	sp.End = siglen
-	// calculate where we really want to start
-	sumstart := float32(0.0)
-	for s := 0; s < sp.SumOver; s++ {
-		sumstart += signalRaw[s]
-	}
-	if sumstart > sp.Threshold {
-		sp.Start = 0 // the start
-	} else { // keep looking
-		front := 0
-		back := front + sp.SumOver
-		for i := front; i < siglen; i++ {
-			sumstart = sumstart + signalRaw[back] - signalRaw[front]
-			if sumstart > sp.Threshold {
-				sp.Start = front
-				break
-			}
-			front++
-			back++
-		}
-	}
-	if sp.Start > sp.SilenceMs {
-		sp.Start = sp.Start - sp.SilenceMs
-	}
-
-	// calculate where we really want to end
-	sumend := float32(0.0)
-	for s := siglen - sp.SumOver; s < siglen; s++ {
-		sumend += signalRaw[s]
-	}
-	if sumend > sp.Threshold {
-		sp.End = siglen - 1 // the very end
-	} else { // keep looking
-		front := siglen - sp.SumOver - 1
-		back := front + sp.SumOver
-		for i := front; i > sp.Start; i-- {
-			sumend = sumend + signalRaw[front] - signalRaw[back]
-			if sumend > sp.Threshold {
-				sp.End = back
-				break
-			}
-			front--
-			back--
-		}
-	}
-	if siglen-sp.End > sp.SilenceMs {
-		sp.End = sp.End + sp.SilenceMs
-	}
-	sp.ProcessLen = sp.End - sp.Start
-
-	// pad the signal if 'end' plus needed padding goes beyond length of raw signal
-	tail := sp.ProcessLen % sp.SegmentSamples
-
-	padLen := 0
-	if tail < sp.WinSamples { // less than one window remaining - cut it off
-		padLen = 0
-	} else {
-		padLen = sp.SegmentStepsPlus*sp.StepSamples - tail // more than one window remaining - keep and pad
-	}
-
-	padLen = padLen + sp.WinSamples
-	existingPad := (siglen - sp.End)
-	if padLen > existingPad {
-		pad := make([]float32, padLen-existingPad)
-		for i := range pad {
-			pad[i] = sp.PadValue
-		}
-	}
-	pad := make([]float32, padLen)
-	for i := range pad {
-		pad[i] = sp.PadValue
-	}
-	signalPadded = append(signalRaw[sp.Start:sp.End], pad...)
-	sp.Steps = make([]int, sp.SegmentStepsPlus)
-	for i := 0; i < sp.SegmentStepsPlus; i++ {
-		sp.Steps[i] = sp.StepSamples * i
-	}
-	return signalPadded
-}
-
-// TrimSilence will be true if
-func (sp *Params) TrimSilence() bool {
-	return (sp.SilenceMs > 0)
 }
 
 // MSecToSamples converts milliseconds to samples, in terms of sample_rate
@@ -272,4 +172,88 @@ func MSecToSamples(ms float32, rate int) int {
 // SamplesToMSec converts samples to milliseconds, in terms of sample_rate
 func SamplesToMSec(samples int, rate int) float32 {
 	return 1000.0 * float32(samples) / float32(rate)
+}
+
+// Trim finds "silence" at the start and the end of the signal
+// and returns the trimmed signal including the lead and tail silence up to maxSilence.
+// if the sum over the duration is greater than the threshold value we have found the start/end
+// duration is the number of samples to sum.
+// maxSilence is the amount of silence to leave if lead or tail silence is longer than max.
+func Trim(signal []float32, rate int, threshold float32, duration int, maxSilence int) (trimmed []float32) {
+	siglen := len(signal)
+	start := 0
+	end := siglen
+	sum := float32(0.0)
+	for s := 0; s < duration; s++ {
+		sum += signal[s]
+	}
+	if sum > threshold {
+		start = 0 // the start
+	} else { // keep looking
+		front := 0
+		back := front + duration
+		for i := front; i < siglen; i++ {
+			sum = sum + signal[back] - signal[front]
+			if sum > threshold {
+				start = front
+				break
+			}
+			front++
+			back++
+		}
+	}
+	if start > maxSilence { // otherwise start is original start of signal
+		start = start - maxSilence
+	}
+
+	// calculate where we really want to end
+	sum = float32(0.0)
+	for s := siglen - duration; s < siglen; s++ {
+		sum += signal[s]
+	}
+	if sum > threshold {
+		end = siglen - 1 // the very end
+	} else { // keep looking
+		front := siglen - duration - 1
+		back := front + duration
+		for i := front; i > start; i-- {
+			sum = sum + signal[front] - signal[back]
+			if sum > threshold {
+				end = back
+				break
+			}
+			front--
+			back--
+		}
+	}
+	if siglen-end > maxSilence { // otherwise end is original end of signal
+		end = end + maxSilence
+	}
+
+	return signal[start:end]
+}
+
+// Pad pads the signal so that the length of signal divided by segment has no remainder
+func (sp *Params) Pad(signal []float32) (padded []float32) {
+	siglen := len(signal)
+	tail := siglen % sp.SegmentSamples
+
+	padLen := 0
+	if tail < sp.WinSamples { // less than one window remaining - cut it off
+		padLen = 0
+	} else {
+		padLen = sp.SegmentStepsPlus*sp.StepSamples - tail // more than one window remaining - keep and pad
+	}
+
+	padLen = padLen + sp.WinSamples
+	pad := make([]float32, padLen)
+	for i := range pad {
+		pad[i] = sp.PadValue
+	}
+	padded = append(signal, pad...)
+	sp.Steps = make([]int, sp.SegmentStepsPlus)
+	for i := 0; i < sp.SegmentStepsPlus; i++ {
+		sp.Steps[i] = sp.StepSamples * i
+	}
+	return padded
 }

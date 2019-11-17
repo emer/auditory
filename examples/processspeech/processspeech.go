@@ -81,8 +81,8 @@ func (aud *Aud) SetPath() {
 }
 
 func (aud *Aud) Config() {
-	aud.Signal.Values = aud.SoundParams.Config(aud.Signal.Values, aud.Sound.SampleRate())
-	aud.SoundParams.SilenceMs = 300
+	//aud.Signal.Values = aud.SoundParams.Config(aud.Signal.Values, aud.Sound.SampleRate())
+	aud.SoundParams.Config(aud.Sound.SampleRate())
 	aud.Dft.Initialize(aud.SoundParams.WinSamples)
 	aud.Mel.Defaults(aud.SoundParams.WinSamples/2+1, aud.SoundParams.WinSamples, aud.Sound.SampleRate(), &aud.MelFilters)
 
@@ -144,16 +144,17 @@ func (aud *Aud) LoadSound(snd *sound.Wave) {
 func (aud *Aud) ProcessSoundFile(fn string) {
 	aud.PrevSndFile = string(aud.CurSndFile)
 	aud.CurSndFile = gi.FileName(fn)
-	err, closer := aud.Sound.Load(fn)
+	err := aud.Sound.Load(fn)
 	if err != nil {
 		return
 	}
 	aud.LoadSound(&aud.Sound)
 	aud.Config()
+	aud.Signal.Values = sound.Trim(aud.Signal.Values, aud.Sound.SampleRate(), 1.0, 100, 300)
+	aud.SoundParams.Pad(aud.Signal.Values)
 	aud.ProcessSegment()
 	aud.ApplyGabor()
 	aud.ToolBar.UpdateActions()
-	closer.Close() // close the sound file
 }
 
 // ProcessSegment processes the entire segment's input by processing a small overlapping set of samples on each pass
@@ -168,14 +169,14 @@ func (aud *Aud) ProcessSegment() {
 		aud.Segment++
 		for ch := int(0); ch < aud.Sound.Channels(); ch++ {
 			for s := 0; s < int(aud.SoundParams.SegmentStepsPlus); s++ {
-				moreSamples = aud.ProcessStep(ch, s, aud.SoundParams.Start)
+				moreSamples = aud.ProcessStep(ch, s)
 				if !moreSamples {
 					aud.MoreSegments = false
 					break
 				}
 			}
 		}
-		remaining := aud.SoundParams.ProcessLen - aud.SoundParams.SegmentSamples*(aud.Segment+1)
+		remaining := len(aud.Signal.Values) - aud.SoundParams.SegmentSamples*(aud.Segment+1)
 		if remaining < aud.SoundParams.SegmentSamples {
 			aud.MoreSegments = false
 		}
@@ -185,8 +186,8 @@ func (aud *Aud) ProcessSegment() {
 // ProcessStep processes a step worth of sound input from current input_pos, and increment input_pos by input.step_samples
 // Process the data by doing a fourier transform and computing the power spectrum, then apply mel filters to get the frequency
 // bands that mimic the non-linear human perception of sound
-func (aud *Aud) ProcessStep(ch, step, startOffset int) bool {
-	available := aud.SoundToWindow(aud.Segment, aud.SoundParams.Steps[step], startOffset, ch)
+func (aud *Aud) ProcessStep(ch, step int) bool {
+	available := aud.SoundToWindow(aud.Segment, aud.SoundParams.Steps[step], ch)
 	aud.Dft.Filter(int(ch), int(step), &aud.Samples, aud.FirstStep, aud.SoundParams.WinSamples, aud.FftCoefs, aud.Fft, &aud.Power, &aud.LogPower, &aud.PowerSegment, &aud.LogPowerSegment)
 	aud.Mel.Filter(int(ch), int(step), &aud.Samples, &aud.MelFilters, &aud.Power, &aud.MelFBankSegment, &aud.MelFBank, &aud.MfccDctSegment, &aud.MfccDct)
 	aud.FirstStep = false
@@ -203,13 +204,10 @@ func (aud *Aud) ApplyGabor() {
 }
 
 // SoundToWindow gets sound from SignalRaw at given position and channel
-func (aud *Aud) SoundToWindow(segment, stepOffset, startOffset, ch int) bool {
+func (aud *Aud) SoundToWindow(segment, stepOffset, ch int) bool {
 	if aud.Signal.NumDims() == 1 {
-		start := segment*aud.SoundParams.SegmentSamples + stepOffset + startOffset // segment zero based
+		start := segment*aud.SoundParams.SegmentSamples + stepOffset // segment zero based
 		end := start + aud.SoundParams.WinSamples
-		if end > aud.SoundParams.End {
-			return false
-		}
 		aud.Samples.Values = aud.Signal.Values[start:end]
 	} else {
 		// ToDo: implement
