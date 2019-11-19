@@ -5,7 +5,6 @@
 package sound
 
 import (
-	"fmt"
 	"log"
 	"math"
 	"os"
@@ -39,7 +38,7 @@ type Wave struct {
 func (snd *Wave) Load(filename string) error {
 	f, err := os.Open(filename)
 	if err != nil {
-		fmt.Printf("couldn't open %s %v", filename, err)
+		log.Printf("sound.Load: couldn't open %s %v", filename, err)
 		return err
 	}
 	defer f.Close()
@@ -55,7 +54,7 @@ func (snd *Wave) Load(filename string) error {
 // SampleRate returns the sample rate of the sound or 0 is snd is nil
 func (snd *Wave) SampleRate() int {
 	if snd == nil {
-		fmt.Printf("Sound.SampleRate: Sound is nil")
+		log.Printf("sound.SampleRate: Sound is nil")
 		return 0
 	}
 	return int(snd.Buf.Format.SampleRate)
@@ -64,7 +63,7 @@ func (snd *Wave) SampleRate() int {
 // Channels returns the number of channels in the wav data or 0 is snd is nil
 func (snd *Wave) Channels() int {
 	if snd == nil {
-		fmt.Printf("Sound.Channels: Sound is nil")
+		log.Printf("sound.Channels: Sound is nil")
 		return 0
 	}
 	return int(snd.Buf.Format.NumChannels)

@@ -5,8 +5,8 @@
 package agabor
 
 import (
-	"fmt"
 	"image"
+	"log"
 
 	"github.com/chewxy/math32"
 	"github.com/emer/auditory/sound"
@@ -176,7 +176,7 @@ func Conv(ch int, params Params, input sound.Params, raw *etensor.Float32, melFi
 	for s := tMin; s < tMax; s, tIdx = s+params.SpaceTime, tIdx+1 {
 		inSt := s - tOff
 		if tIdx > maxTimeIdx {
-			fmt.Printf("GaborFilter: time index %v out of range: %v", tIdx, maxTimeIdx)
+			log.Printf("gabor.GaborFilter: time index %v out of range: %v", tIdx, maxTimeIdx)
 			break
 		}
 
@@ -184,7 +184,7 @@ func Conv(ch int, params Params, input sound.Params, raw *etensor.Float32, melFi
 		fIdx := 0
 		for flt := fMin; flt < fMax; flt, fIdx = flt+params.SpaceFreq, fIdx+1 {
 			if fIdx > maxFreqIdx {
-				fmt.Printf("GaborFilter: freq index %v out of range: %v", tIdx, maxFreqIdx)
+				log.Printf("gabor.GaborFilter: freq index %v out of range: %v", tIdx, maxFreqIdx)
 				break
 			}
 			nf := params.NFilters

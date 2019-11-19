@@ -5,7 +5,7 @@
 package mel
 
 import (
-	"fmt"
+	"log"
 	"math"
 
 	"github.com/chewxy/math32"
@@ -163,25 +163,11 @@ func (mel *Params) FftReal(out []complex128, in *etensor.Float32) {
 	}
 }
 
-// CopyStepFromStep
-//func (mel *Params) CopyStepFromStep(toStep, fmStep, ch int, segmentData *etensor.Float32, mfccSegmentData *etensor.Float32) {
-//	for i := 0; i < int(mel.FBank.NFilters); i++ {
-//		val := segmentData.Value([]int{fmStep, i, ch})
-//		segmentData.Set([]int{toStep, i, ch}, val)
-//		if mel.CompMfcc {
-//			for i := 0; i < int(mel.FBank.NFilters); i++ {
-//				val := mfccSegmentData.Value([]int{fmStep, i, ch})
-//				mfccSegmentData.Set([]int{toStep, i, ch}, val)
-//			}
-//		}
-//	}
-//}
-
 // CepstrumDct applies a discrete cosine transform (DCT) to get the cepstrum coefficients on the mel filterbank values
 func (mel *Params) CepstrumDct(ch, step int, fBankData *etensor.Float32, mfccSegmentData *etensor.Float32, mfccDct *etensor.Float32) {
 	sz := copy(mfccDct.Values, fBankData.Values)
 	if sz != len(mfccDct.Values) {
-		fmt.Printf("CepstrumDctMel: memory copy size wrong")
+		log.Printf("mel.CepstrumDctMel: memory copy size wrong")
 	}
 
 	dct := fourier.NewDCT(len(mfccDct.Values))

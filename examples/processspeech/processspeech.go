@@ -5,7 +5,6 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"os"
 	"strings"
@@ -211,7 +210,7 @@ func (aud *Aud) SoundToWindow(segment, stepOffset, ch int) bool {
 		aud.Samples.Values = aud.Signal.Values[start:end]
 	} else {
 		// ToDo: implement
-		fmt.Printf("SoundToWindow: else case not implemented - please report this issue")
+		log.Printf("SoundToWindow: else case not implemented - please report this issue")
 	}
 	return true
 }
