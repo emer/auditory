@@ -226,7 +226,7 @@ func (aud *Aud) ConfigGui() *gi.Window {
 	gi.SetAppName("ProcessSpeech")
 	gi.SetAppAbout(`This demonstrates processing a wav file with 100ms of speech.`)
 
-	win := gi.NewWindow2D("one", "Process Speech ...", width, height, true)
+	win := gi.NewMainWindow("one", "Process Speech ...", width, height)
 
 	vp := win.WinViewport2D()
 	updt := vp.UpdateStart()

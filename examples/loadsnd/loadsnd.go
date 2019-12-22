@@ -62,7 +62,7 @@ func (aud *Aud) ConfigGui() *gi.Window {
 	gi.SetAppName("loadsnd")
 	gi.SetAppAbout(`This demonstrates loading a sound but will be extended to show more capabilities of the auditory package`)
 
-	win := gi.NewWindow2D("one", "Auditory ...", width, height, true)
+	win := gi.NewMainWindow("one", "Auditory ...", width, height)
 
 	vp := win.WinViewport2D()
 	updt := vp.UpdateStart()

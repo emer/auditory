@@ -39,7 +39,7 @@ func (syn *Synth) ConfigGui() *gi.Window {
 	gi.SetAppName("Synth")
 	gi.SetAppAbout(`This demonstrates synthesizing a sound (phone or word)`)
 
-	win := gi.NewWindow2D("one", "Auditory ...", width, height, true)
+	win := gi.NewMainWindow("one", "Auditory ...", width, height)
 
 	vp := win.WinViewport2D()
 	updt := vp.UpdateStart()
