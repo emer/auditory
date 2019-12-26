@@ -83,8 +83,9 @@ func (aud *Aud) Config() {
 	//aud.Signal.Values = aud.SoundParams.Config(aud.Signal.Values, aud.Sound.SampleRate())
 	aud.SoundParams.Config(aud.Sound.SampleRate())
 	aud.Dft.Initialize(aud.SoundParams.WinSamples)
-	aud.Mel.Defaults(aud.SoundParams.WinSamples/2+1, aud.SoundParams.WinSamples, aud.Sound.SampleRate(), &aud.MelFilters)
-
+	aud.Mel.Defaults()
+	// override any default Mel values here - then call InitFilters
+	aud.Mel.InitFilters(aud.SoundParams.WinSamples/2+1, aud.Sound.SampleRate(), &aud.MelFilters)
 	aud.Samples.SetShape([]int{aud.SoundParams.WinSamples}, nil, nil)
 	aud.Power.SetShape([]int{aud.SoundParams.WinSamples/2 + 1}, nil, nil)
 	aud.LogPower.SetShape([]int{aud.SoundParams.WinSamples/2 + 1}, nil, nil)

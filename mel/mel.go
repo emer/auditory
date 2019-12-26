@@ -20,8 +20,6 @@ type FilterBank struct {
 	HiHz        float32 `viewif:"On" def:"10000,8000" step:"1000.0" desc:"high frequency end of mel frequency spectrum -- must be <= sample_rate / 2 (i.e., less than the Nyquist frequencY"`
 	LogOff      float32 `viewif:"On" def:"0" desc:"on add this amount when taking the log of the Mel filter sums to produce the filter-bank output -- e.g., 1.0 makes everything positive -- affects the relative contrast of the outputs"`
 	LogMin      float32 `viewif:"On" def:"-10" desc:"minimum value a log can produce -- puts a lower limit on log output"`
-	LoMel       float32 `viewif:"On" inactive:"+" desc:" low end of mel scale in mel units"`
-	HiMel       float32 `viewif:"On" inactive:"+" desc:" high end of mel scale in mel units"`
 	Renorm      bool    `desc:" whether to perform renormalization of the mel values"`
 	RenormMin   float32 `viewif:"On" step:"1.0" desc:"minimum value to use for renormalization -- you must experiment with range of inputs to determine appropriate values"`
 	RenormMax   float32 `viewif:"On" step:"1.0" desc:"maximum value to use for renormalization -- you must experiment with range of inputs to determine appropriate values"`
@@ -37,21 +35,22 @@ type Params struct {
 }
 
 // Defaults
-func (mel *Params) Defaults(dftSize int, winSamples int, sampleRate int, filters *etensor.Float32) {
+func (mel *Params) Defaults() {
 	mel.CompMfcc = false
 	mel.MfccNCoefs = 13
 	mel.FBank.Defaults()
-	mel.InitFilters(dftSize, sampleRate, filters)
 }
 
 // InitFilters computes the filter bin values
 func (mel *Params) InitFilters(dftSize int, sampleRate int, filters *etensor.Float32) {
+	hiMel := FreqToMel(mel.FBank.HiHz)
+	loMel := FreqToMel(mel.FBank.LoHz)
 	nFiltersEff := mel.FBank.NFilters + 2
 	mel.PtBins.SetShape([]int{nFiltersEff}, nil, nil)
-	melIncr := (mel.FBank.HiMel - mel.FBank.LoMel) / float32(mel.FBank.NFilters+1)
+	melIncr := (hiMel - loMel) / float32(mel.FBank.NFilters+1)
 
 	for i := 0; i < nFiltersEff; i++ {
-		ml := mel.FBank.LoMel + float32(i)*melIncr
+		ml := loMel + float32(i)*melIncr
 		hz := MelToFreq(ml)
 		bin := FreqToBin(hz, float32(dftSize), float32(sampleRate))
 		mel.PtBins.SetFloat1D(i, float64(bin))
@@ -138,8 +137,6 @@ func (mfb *FilterBank) Defaults() {
 	mfb.NFilters = 32
 	mfb.LogOff = 0.0
 	mfb.LogMin = -10.0
-	mfb.LoMel = FreqToMel(mfb.LoHz)
-	mfb.HiMel = FreqToMel(mfb.HiHz)
 	mfb.Renorm = true
 	mfb.RenormMin = -5.0
 	mfb.RenormMax = 9.0
