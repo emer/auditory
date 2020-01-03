@@ -43,8 +43,10 @@ package trm
 import (
 	"fmt"
 	"github.com/chewxy/math32"
+	"github.com/emer/auditory/sound"
 	"github.com/emer/etable/etable"
 	"github.com/emer/etable/etensor"
+	"github.com/go-audio/audio"
 	"github.com/goki/gi/gi"
 	"math"
 	"strings"
@@ -264,13 +266,9 @@ func (vtc *VocalTractCtrl) Init() {
 	vtc.FricPos = 4.0
 	vtc.FricCf = 2500.0
 	vtc.FricBw = 2000.0
-	vtc.Radii[0] = 1.0 // Radius2
-	vtc.Radii[1] = 1.0
-	vtc.Radii[2] = 1.0
-	vtc.Radii[3] = 1.0
-	vtc.Radii[4] = 1.0
-	vtc.Radii[5] = 1.0
-	vtc.Radii[6] = 1.0 // Radius8
+	for i, _ := range vtc.Radii {
+		vtc.Radii[i] = 1.0
+	}
 	vtc.Velum = 0.1
 }
 
@@ -321,83 +319,35 @@ func (vtc *VocalTractCtrl) DefaultMaxDeltas() {
 
 }
 
-//
-//void VocalTractCtrl::SetFromParams(const VocalTractCtrl& oth) {
-//  for(int i=0; i< N_PARAMS; i++) {
-//    ParamVal(i) = oth.ParamVal(i);
-//  }
-//}
-
 // SetFromParams
 func (vtc *VocalTractCtrl) SetFromParams(vtcOther *VocalTractCtrl) {
-
+	vtc.GlotPitch = vtcOther.GlotPitch
+	vtc.GlotVol = vtcOther.GlotVol
+	vtc.AspVol = vtcOther.AspVol
+	vtc.FricVol = vtcOther.FricVol
+	vtc.FricPos = vtcOther.FricPos
+	vtc.FricCf = vtcOther.FricCf
+	vtc.FricBw = vtcOther.FricBw
+	for i, _ := range vtc.Radii {
+		vtc.Radii[i] = vtc.Radii[i]
+	}
+	vtc.Velum = vtcOther.Velum
 }
 
-//
-//void VocalTractCtrl::SetFromFloat(float val, ParamIndex param, bool normalized) {
-//  TypeDef* td = GetTypeDef();
-//  int stidx = td->members.FindNameIdx("glot_pitch");
-//  MemberDef* md = td->members[stidx + param];
-//  float* par = (float*)md->GetOff(this);
-//  if(normalized) {
-//    float min = md->OptionAfter("MIN_").toFloat();
-//    float max = md->OptionAfter("MAX_").toFloat();
-//    *par = min + val * (max - min);
-//  }
-//  else {
-//    *par = val;
-//  }
-//}
-//
-//float VocalTractCtrl::Normalize(float val, ParamIndex param) {
-//  TypeDef* td = GetTypeDef();
-//  int stidx = td->members.FindNameIdx("glot_pitch");
-//  MemberDef* md = td->members[stidx + param];
-//  float* par = (float*)md->GetOff(this);
-//  float min = md->OptionAfter("MIN_").toFloat();
-//  float max = md->OptionAfter("MAX_").toFloat();
-//  return (val - min) / (max - min);
-//}
-//
-//float VocalTractCtrl::UnNormalize(float val, ParamIndex param) {
-//  TypeDef* td = GetTypeDef();
-//  int stidx = td->members.FindNameIdx("glot_pitch");
-//  MemberDef* md = td->members[stidx + param];
-//  float* par = (float*)md->GetOff(this);
-//  float min = md->OptionAfter("MIN_").toFloat();
-//  float max = md->OptionAfter("MAX_").toFloat();
-//  return min + val * (max - min);
-//}
-//
-//void VocalTractCtrl::SetFromFloats(const float* vals, bool normalized) {
-//  for(int i=0; i < N_PARAMS; i++) {
-//    SetFromFloat(vals[i], (ParamIndex)i, normalized);
-//  }
-//}
-//
-//void VocalTractCtrl::SetFromMatrix(const float_Matrix& matrix, bool normalized) {
-//  if(TestError(matrix.size < N_PARAMS, "SetFromMatrix", "need at least", String(N_PARAMS),
-//               "elements in the matrix!")) {
-//    return;
-//  }
-//  SetFromFloats(matrix.el, normalized);
-//}
-//
-
-func (vtc *VocalTractCtrl) SetFromDataTable(table etable.Table, col etensor.Tensor, row int, normalized bool) {
-
+// SetFromValues - order must be preserved!
+func (vtc *VocalTractCtrl) SetFromValues(values []float32) {
+	vtc.GlotPitch = values[0]
+	vtc.GlotVol = values[1]
+	vtc.AspVol = values[2]
+	vtc.FricVol = values[3]
+	vtc.FricPos = values[4]
+	vtc.FricCf = values[5]
+	vtc.FricBw = values[6]
+	for i, _ := range vtc.Radii {
+		vtc.Radii[i] = values[i+7]
+	}
+	vtc.Velum = values[14]
 }
-
-//void VocalTractCtrl::SetFromDataTable(const DataTable& table, const Variant& col, int row,
-//                                      bool normalized) {
-//  float_MatrixPtr mtx;
-//  mtx = (float_Matrix*)table.GetValAsMatrix(col, row);
-//  if(TestError(!(bool)mtx, "SetFromDataTable", "matrix column not found")) {
-//    return;
-//  }
-//  SetFromMatrix(*(mtx.ptr()), normalized);
-//}
-//
 
 func (vtc *VocalTractCtrl) RadiusVal(idx int) float32 {
 	if idx <= 0 {
@@ -525,17 +475,18 @@ const (
 //go:generate stringer -type=FricationInjCoefs
 
 type VocalTract struct {
-	Volume        float32
-	Balance       float32
-	SynthDuration float32
-	Config        VocalTractConfig
-	Voice         VoiceParams
-	CurControl    VocalTractCtrl
-	PrevControl   VocalTractCtrl
-	DeltaControl  VocalTractCtrl
-	DeltaMax      VocalTractCtrl
-	PhoneTable    etable.Table
-	DictTable     etable.Table
+	AudioBuf     sound.Wave
+	Volume       float32
+	Balance      float32
+	Duration     float32 // duration of synthesized sound
+	Config       VocalTractConfig
+	Voice        VoiceParams
+	CurControl   VocalTractCtrl
+	PrevControl  VocalTractCtrl
+	DeltaControl VocalTractCtrl
+	DeltaMax     VocalTractCtrl
+	PhoneTable   etable.Table
+	DictTable    etable.Table
 
 	// derived values
 	ControlRate      float32 // 1.0-1000.0 input tables/second (Hz)
@@ -578,40 +529,21 @@ type VocalTract struct {
 
 // Init gets us going - this is the first function to call
 func (vt *VocalTract) Init() {
-	vt.SynthInitBuffer()
+	vt.SampleRate = 44100
+	vt.Duration = 25
+	vt.Voice.SetDefault(Male)
+	vt.InitBuffer()
 	vt.Reset()
-	ctrlRate := 1.0 / (vt.SynthDuration / 1000.0)
+	ctrlRate := 1.0 / (vt.Duration / 1000.0)
 	vt.ControlRate = ctrlRate
 	vt.InitializeSynthesizer()
 	vt.PrevControl.SetFromParams(&vt.CurControl) // no deltas if reset
 	vt.CurrentData.SetFromParams(&vt.CurControl)
-	// ToDo:
-	//SigEmitUpdated();
 }
 
-func (vt *VocalTract) ControlFromFloats(vals []float32, normalized bool) {
-
-}
-
-func (vt *VocalTract) ControlFromMatrix(vals etensor.Tensor, normalized bool) {
-
-}
-
-//void VocalTract::CtrlFromFloats(const float* vals, bool normalized) {
-//cur_ctrl.SetFromFloats(vals, normalized);
-//}
-
-//void VocalTract::CtrlFromMatrix(const float_Matrix& matrix, bool normalized) {
-// cur_ctrl.SetFromMatrix(matrix, normalized);
-//}
-//
-
-func (vt *VocalTract) ControlFromDataTable(table etable.Table, col etensor.Tensor, row int, normalized bool) {
-	vt.CurControl.SetFromDataTable(table, col, row, normalized)
-}
-
-func (vt *VocalTract) SynthFromDataTable(table etable.Table, col etensor.Tensor, row int, normalized bool, resetFirst bool) {
-
+func (vt *VocalTract) ControlFromDataTable(col etensor.Tensor, row int, normalized bool) {
+	params := col.SubSpace([]int{row}).(*etensor.Float32)
+	vt.CurControl.SetFromValues(params.Values)
 }
 
 //void VocalTract::SynthFromDataTable(const DataTable& table, const Variant& col, int row,
@@ -661,38 +593,48 @@ func (vt *VocalTract) LoadEnglishDict() {
 
 // SynthPhone
 func (vt *VocalTract) SynthPhone(phon string, stress, doubleStress, syllable, reset bool) bool {
-	//if vt.PhoneTable.Rows == 0 {
-	//	vt.LoadEnglishPhones()
-	//}
-	//act := phon
-	//if stress {
-	//	act = act + "'"
-	//}
-	//idx := vt.PhoneTable.FindVal(act, "phone", 0, true)
-	//if idx < 0 {
-	//	return false
-	//}
-	//duration := vt.PhoneTable.GetVal("duration", idx).toFloat()
-	//transition := vt.PhoneTable.GetVal("transition", idx).toFloat()
-	//totalTime := (duration + transition) * 1.5
-	//nReps := math32.Ceil(totalTime / vt.SynthDuration)
-	//nReps = math32.Max(nReps, 1.0)
-	//vt.ControlFromDataTable(vt.PhoneTable, "phone_data", idx, false)
-	//// todo: syllable, double_stress, qsss other params??
-	//// fmt.Println("saying:", phon, "dur:", String(tot_time), "n_reps:", String(n_reps),
-	////              "start pos:", String(outputData_.size()));
-	//if reset {
-	//	vt.SynthReset(true)
-	//}
-	//for i := 0; i < int(nReps); i++ {
-	//	vt.Synthesize(false)
-	//}
+	if vt.PhoneTable.Rows == 0 {
+		vt.LoadEnglishPhones()
+	}
+	if stress {
+		phon = phon + "'"
+	}
+	pcol := vt.PhoneTable.ColByName("phone")
+	idx := -1
+	for i := 0; i < pcol.Len(); i++ {
+		if pcol.StringVal1D(i) == phon {
+			idx = i
+			break
+		}
+	}
+	if idx < 0 {
+		return false
+	}
+
+	dcol := vt.PhoneTable.ColByName("duration")
+	dur := dcol.FloatVal1D(idx)
+	tcol := vt.PhoneTable.ColByName("transition")
+	trans := tcol.FloatVal1D(idx)
+	totalTime := (dur + trans) * 1.5
+
+	nReps := math.Ceil(totalTime / float64(vt.Duration))
+	nReps = math.Max(nReps, 1.0)
+
+	vt.ControlFromDataTable(vt.PhoneTable.ColByName("phone_data"), idx, false)
+	// todo: syllable, double_stress, qsss other params??
+	// fmt.Println("saying:", phon, "dur:", String(tot_time), "n_reps:", String(n_reps),
+	//              "start pos:", String(outputData_.size()));
+	if reset {
+		vt.SynthReset(true)
+	}
+	for i := 0; i < int(nReps); i++ {
+		vt.Synthesize(false)
+	}
 	return true
 }
 
 // SynthPhones
 func (vt *VocalTract) SynthPhones(phones string, resetFirst, play bool) bool {
-	//count := len(phones)
 	var phone string
 	stress := false
 	doubleStress := false
@@ -798,7 +740,7 @@ func (vt *VocalTract) SynthWords(ws string, resetFirst bool, play bool) bool {
 func (vt *VocalTract) Initialize() {
 	vt.Volume = 60.0
 	vt.Balance = 0.0
-	vt.SynthDuration = 25.0
+	vt.Duration = 25.0
 	vt.ControlRate = 0.0
 	vt.DeltaMax.DefaultMaxDeltas()
 	// outputData_.reserve(OUTPUT_VECTOR_RESERVE);
@@ -914,41 +856,35 @@ func (vt *VocalTract) InitializeSynthesizer() {
 }
 
 func (vt *VocalTract) InitSynth() {
-	vt.SynthInitBuffer()
+	vt.InitBuffer()
 	vt.Reset()
-	vt.ControlRate = 1.0 / (vt.SynthDuration / 1000.0)
+	vt.ControlRate = 1.0 / (vt.Duration / 1000.0)
 	vt.InitializeSynthesizer()
 	vt.PrevControl.SetFromParams(&vt.CurControl)
 	vt.CurrentData.SetFromParams(&vt.CurControl)
-	// SigEmitUpdated()
 }
 
-//
-//void
-//VocalTract::SetVoice() {
-// voice.CallFun("SetDefault");
-// InitSynth();
-// SigEmitUpdated();
-//}
-//
-
-// SynthInitBuffer
-func (vt *VocalTract) SynthInitBuffer() {
-	// todo:
-	//InitBuffer((vt.SynthDuration/1000.0)*44100.0, 44100.0)
+// InitBuffer
+func (vt *VocalTract) InitBuffer() {
+	frames := (vt.Duration / 1000.0) * float32(vt.SampleRate)
+	format := &audio.Format{
+		NumChannels: 1,
+		SampleRate:  vt.SampleRate,
+	}
+	vt.AudioBuf.Buf = &audio.IntBuffer{Data: make([]int, int(frames)), Format: format, SourceBitDepth: 16}
 }
 
 // SynthReset
 func (vt *VocalTract) SynthReset(initBuffer bool) {
 	vt.InitSynth()
 	if initBuffer {
-		vt.SynthInitBuffer()
+		vt.InitBuffer()
 	}
 }
 
 // Synthesize
 func (vt *VocalTract) Synthesize(resetFirst bool) {
-	ctrlRate := 1.0 / (vt.SynthDuration / 1000.0)
+	ctrlRate := 1.0 / (vt.Duration / 1000.0)
 	if ctrlRate != vt.ControlRate {
 		// todo:
 		//if ctrlRate != vt.ControlRate || !IsValid() {
