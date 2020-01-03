@@ -894,7 +894,7 @@ func (vt *VocalTract) Synthesize(resetFirst bool) {
 	}
 
 	controlFreq := 1.0 / vt.ControlPeriod
-	fmt.Printf("control period: %v ", vt.ControlPeriod, "freq: %v ", controlFreq)
+	fmt.Printf("control period: %v, freq: %v", vt.ControlPeriod, controlFreq)
 
 	vt.DeltaControl.ComputeDeltas(&vt.CurControl, &vt.PrevControl, &vt.DeltaMax, float32(controlFreq))
 
