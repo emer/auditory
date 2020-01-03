@@ -43,6 +43,8 @@ func (mel *Params) Defaults() {
 
 // InitFilters computes the filter bin values
 func (mel *Params) InitFilters(dftSize int, sampleRate int, filters *etensor.Float32) {
+	mel.FBank.RenormScale = 1.0 / (mel.FBank.RenormMax - mel.FBank.RenormMin)
+
 	hiMel := FreqToMel(mel.FBank.HiHz)
 	loMel := FreqToMel(mel.FBank.LoHz)
 	nFiltersEff := mel.FBank.NFilters + 2
@@ -140,7 +142,6 @@ func (mfb *FilterBank) Defaults() {
 	mfb.Renorm = true
 	mfb.RenormMin = -5.0
 	mfb.RenormMax = 9.0
-	mfb.RenormScale = 1.0 / (mfb.RenormMax - mfb.RenormMin)
 }
 
 // Filter filters the current window_in input data according to current settings -- called by ProcessStep, but can be called separately
