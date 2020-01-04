@@ -9,7 +9,6 @@ import (
 	"log"
 
 	"github.com/chewxy/math32"
-	"github.com/emer/auditory/sound"
 	"github.com/emer/etable/etensor"
 )
 
@@ -159,14 +158,14 @@ func (ga *Params) RenderFilters(filters *etensor.Float32) {
 }
 
 // Conv processes input using filters that operate over an entire segment of samples
-func Conv(ch int, params Params, input sound.Params, raw *etensor.Float32, melFilterCount int, gaborFilters *etensor.Float32, melData *etensor.Float32) {
+func Conv(ch int, params Params, steps int, raw *etensor.Float32, melFilterCount int, gaborFilters *etensor.Float32, melData *etensor.Float32) {
 	tHalfSz := params.SizeTime / 2
 	tOff := tHalfSz
 	tMin := tOff
 	if tMin < 0 {
 		tMin = 0
 	}
-	tMax := input.SegmentStepsPlus - tMin + 1
+	tMax := steps - tMin + 1
 
 	fMin := int(0)
 	fMax := melFilterCount - params.SizeFreq

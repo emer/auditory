@@ -128,39 +128,49 @@ func (snd *Wave) GetFloatAtIdx(buf *audio.IntBuffer, idx int) float32 {
 	return 0
 }
 
-// Params defines the sound input parameters for auditory processing
-type Params struct {
-	WinMs            float32 `def:"25" desc:"input window -- number of milliseconds worth of sound to filter at a time"`
-	StepMs           float32 `def:"5,10,12.5" desc:"input step -- number of milliseconds worth of sound that the input is stepped along to obtain the next window sample"`
-	SegmentMs        float32 `def:"100" desc:"length of full segment's worth of input -- total number of milliseconds to accumulate into a complete segment -- must be a multiple of StepMs -- input will be SegmentMs / StepMs = SegmentSteps wide in the X axis, and number of filters in the Y axis"`
-	Channel          int     `viewif:"Channels=1" desc:"specific channel to process, if input has multiple channels, and we only process one of them (-1 = process all)"`
-	WinSamples       int     `inactive:"+" desc:"number of samples to process each step"`
-	StepSamples      int     `inactive:"+" desc:"number of samples to step input by"`
-	SegmentSamples   int     `inactive:"+" desc:"number of samples in a segment"`
-	SegmentSteps     int     `inactive:"+" desc:"number of steps in a segment"`
-	SegmentStepsPlus int     `inactive:"+" desc:"SegmentSteps plus steps overlapping next segment or for padding if no next segment"`
-	Steps            []int   `inactive:"+" desc:"pre-calculated start position for each step"`
-	PadValue         float32 `inactive:"+" desc:"use this value for padding signal`
+type Process struct {
+	Params  Params
+	Derived Derived
 }
 
+// Params defines the sound input parameters for auditory processing
+type Params struct {
+	WinMs     float32 `def:"25" desc:"input window -- number of milliseconds worth of sound to filter at a time"`
+	StepMs    float32 `def:"5,10,12.5" desc:"input step -- number of milliseconds worth of sound that the input is stepped along to obtain the next window sample"`
+	SegmentMs float32 `def:"100" desc:"length of full segment's worth of input -- total number of milliseconds to accumulate into a complete segment -- must be a multiple of StepMs -- input will be SegmentMs / StepMs = SegmentSteps wide in the X axis, and number of filters in the Y axis"`
+	Channel   int     `viewif:"Channels=1" desc:"specific channel to process, if input has multiple channels, and we only process one of them (-1 = process all)"`
+	PadValue  float32 `inactive:"+" desc:"use this value for padding signal`
+}
+
+// Derived are values calculated from user settable params and auditory input
+type Derived struct {
+	WinSamples       int   `inactive:"+" desc:"number of samples to process each step"`
+	StepSamples      int   `inactive:"+" desc:"number of samples to step input by"`
+	SegmentSamples   int   `inactive:"+" desc:"number of samples in a segment"`
+	SegmentSteps     int   `inactive:"+" desc:"number of steps in a segment"`
+	SegmentStepsPlus int   `inactive:"+" desc:"SegmentSteps plus steps overlapping next segment or for padding if no next segment"`
+	Steps            []int `inactive:"+" desc:"pre-calculated start position for each step"`
+}
+
+//
 // Defaults initializes the Input
-func (sp *Params) Defaults() {
-	sp.WinMs = 25.0
-	sp.StepMs = 5.0
-	sp.SegmentMs = 100.0
-	sp.Channel = 0
-	sp.PadValue = 0.0
+func (sp *Process) Defaults() {
+	sp.Params.WinMs = 25.0
+	sp.Params.StepMs = 5.0
+	sp.Params.SegmentMs = 100.0
+	sp.Params.Channel = 0
+	sp.Params.PadValue = 0.0
 }
 
 // Config computes the sample counts based on time and sample rate
 // Start and End of non-silent signal found
 // Signal padded with zeros to ensure complete segments
-func (sp *Params) Config(rate int) {
-	sp.WinSamples = MSecToSamples(sp.WinMs, rate)
-	sp.StepSamples = MSecToSamples(sp.StepMs, rate)
-	sp.SegmentSamples = MSecToSamples(sp.SegmentMs, rate)
-	sp.SegmentSteps = int(math.Round(float64(sp.SegmentMs / sp.StepMs)))
-	sp.SegmentStepsPlus = sp.SegmentSteps + int(math.Round(float64(sp.WinSamples/sp.StepSamples)))
+func (sp *Process) Config(rate int) {
+	sp.Derived.WinSamples = MSecToSamples(sp.Params.WinMs, rate)
+	sp.Derived.StepSamples = MSecToSamples(sp.Params.StepMs, rate)
+	sp.Derived.SegmentSamples = MSecToSamples(sp.Params.SegmentMs, rate)
+	sp.Derived.SegmentSteps = int(math.Round(float64(sp.Params.SegmentMs / sp.Params.StepMs)))
+	sp.Derived.SegmentStepsPlus = sp.Derived.SegmentSteps + int(math.Round(float64(sp.Derived.WinSamples/sp.Derived.StepSamples)))
 }
 
 // MSecToSamples converts milliseconds to samples, in terms of sample_rate
@@ -233,26 +243,26 @@ func Trim(signal []float32, rate int, threshold float32, duration int, maxSilenc
 }
 
 // Pad pads the signal so that the length of signal divided by segment has no remainder
-func (sp *Params) Pad(signal []float32) (padded []float32) {
+func (sp *Process) Pad(signal []float32) (padded []float32) {
 	siglen := len(signal)
-	tail := siglen % sp.SegmentSamples
+	tail := siglen % sp.Derived.SegmentSamples
 
 	padLen := 0
-	if tail < sp.WinSamples { // less than one window remaining - cut it off
+	if tail < sp.Derived.WinSamples { // less than one window remaining - cut it off
 		padLen = 0
 	} else {
-		padLen = sp.SegmentStepsPlus*sp.StepSamples - tail // more than one window remaining - keep and pad
+		padLen = sp.Derived.SegmentStepsPlus*sp.Derived.StepSamples - tail // more than one window remaining - keep and pad
 	}
 
-	padLen = padLen + sp.WinSamples
+	padLen = padLen + sp.Derived.WinSamples
 	pad := make([]float32, padLen)
 	for i := range pad {
-		pad[i] = sp.PadValue
+		pad[i] = sp.Params.PadValue
 	}
 	padded = append(signal, pad...)
-	sp.Steps = make([]int, sp.SegmentStepsPlus)
-	for i := 0; i < sp.SegmentStepsPlus; i++ {
-		sp.Steps[i] = sp.StepSamples * i
+	sp.Derived.Steps = make([]int, sp.Derived.SegmentStepsPlus)
+	for i := 0; i < sp.Derived.SegmentStepsPlus; i++ {
+		sp.Derived.Steps[i] = sp.Derived.StepSamples * i
 	}
 	return padded
 }

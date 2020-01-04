@@ -34,7 +34,7 @@ func main() {
 // use in a given case -- can add / modify this as needed
 type Aud struct {
 	Sound           sound.Wave
-	SoundParams     sound.Params
+	SndProcess      sound.Process     `desc:"specifications set and derived for processing the raw auditory input"`
 	Signal          etensor.Float32   `inactive:"+" desc:" the full sound input obtained from the sound input - plus any added padding"`
 	Samples         etensor.Float32   `inactive:"+" desc:" a window's worth of raw sound input, one channel at a time"`
 	Dft             dft.Params        `view:"no-inline"`
@@ -80,27 +80,26 @@ func (aud *Aud) SetPath() {
 }
 
 func (aud *Aud) Config() {
-	//aud.Signal.Values = aud.SoundParams.Config(aud.Signal.Values, aud.Sound.SampleRate())
-	aud.SoundParams.Config(aud.Sound.SampleRate())
-	aud.Dft.Initialize(aud.SoundParams.WinSamples)
+	aud.SndProcess.Config(aud.Sound.SampleRate())
+	aud.Dft.Initialize(aud.SndProcess.Derived.WinSamples)
 	aud.Mel.Defaults()
 	// override any default Mel values here - then call InitFilters
-	aud.Mel.InitFilters(aud.SoundParams.WinSamples/2+1, aud.Sound.SampleRate(), &aud.MelFilters)
-	aud.Samples.SetShape([]int{aud.SoundParams.WinSamples}, nil, nil)
-	aud.Power.SetShape([]int{aud.SoundParams.WinSamples/2 + 1}, nil, nil)
-	aud.LogPower.SetShape([]int{aud.SoundParams.WinSamples/2 + 1}, nil, nil)
-	aud.PowerSegment.SetShape([]int{aud.SoundParams.SegmentStepsPlus, aud.SoundParams.WinSamples/2 + 1, aud.Sound.Channels()}, nil, nil)
+	aud.Mel.InitFilters(aud.SndProcess.Derived.WinSamples/2+1, aud.Sound.SampleRate(), &aud.MelFilters)
+	aud.Samples.SetShape([]int{aud.SndProcess.Derived.WinSamples}, nil, nil)
+	aud.Power.SetShape([]int{aud.SndProcess.Derived.WinSamples/2 + 1}, nil, nil)
+	aud.LogPower.SetShape([]int{aud.SndProcess.Derived.WinSamples/2 + 1}, nil, nil)
+	aud.PowerSegment.SetShape([]int{aud.SndProcess.Derived.SegmentStepsPlus, aud.SndProcess.Derived.WinSamples/2 + 1, aud.Sound.Channels()}, nil, nil)
 	if aud.Dft.CompLogPow {
-		aud.LogPowerSegment.SetShape([]int{aud.SoundParams.SegmentStepsPlus, aud.SoundParams.WinSamples/2 + 1, aud.Sound.Channels()}, nil, nil)
+		aud.LogPowerSegment.SetShape([]int{aud.SndProcess.Derived.SegmentStepsPlus, aud.SndProcess.Derived.WinSamples/2 + 1, aud.Sound.Channels()}, nil, nil)
 	}
 
-	aud.FftCoefs = make([]complex128, aud.SoundParams.WinSamples)
+	aud.FftCoefs = make([]complex128, aud.SndProcess.Derived.WinSamples)
 	aud.Fft = fourier.NewCmplxFFT(len(aud.FftCoefs))
 
 	aud.MelFBank.SetShape([]int{aud.Mel.FBank.NFilters}, nil, nil)
-	aud.MelFBankSegment.SetShape([]int{aud.SoundParams.SegmentStepsPlus, aud.Mel.FBank.NFilters, aud.Sound.Channels()}, nil, nil)
+	aud.MelFBankSegment.SetShape([]int{aud.SndProcess.Derived.SegmentStepsPlus, aud.Mel.FBank.NFilters, aud.Sound.Channels()}, nil, nil)
 	if aud.Mel.CompMfcc {
-		aud.MfccDctSegment.SetShape([]int{aud.SoundParams.SegmentStepsPlus, aud.Mel.FBank.NFilters, aud.Sound.Channels()}, nil, nil)
+		aud.MfccDctSegment.SetShape([]int{aud.SndProcess.Derived.SegmentStepsPlus, aud.Mel.FBank.NFilters, aud.Sound.Channels()}, nil, nil)
 		aud.MfccDct.SetShape([]int{aud.Mel.FBank.NFilters}, nil, nil)
 	}
 
@@ -110,7 +109,7 @@ func (aud *Aud) Config() {
 
 	aud.Gabor.On = true
 	if aud.Gabor.On {
-		aud.Gabor.Defaults(aud.SoundParams.SegmentSteps, aud.Mel.FBank.NFilters)
+		aud.Gabor.Defaults(aud.SndProcess.Derived.SegmentSteps, aud.Mel.FBank.NFilters)
 		aud.GaborFilters.SetShape([]int{aud.Gabor.NFilters, aud.Gabor.SizeFreq, aud.Gabor.SizeTime}, nil, nil)
 		aud.Gabor.RenderFilters(&aud.GaborFilters)
 		aud.GaborTsr.SetShape([]int{aud.Sound.Channels(), aud.Gabor.Geom.Y, aud.Gabor.Geom.X, 2, aud.Gabor.NFilters}, nil, nil)
@@ -127,7 +126,7 @@ func (aud *Aud) Initialize() {
 	aud.LogPowerSegment.SetZeros()
 	aud.MelFBankSegment.SetZeros()
 	aud.MfccDctSegment.SetZeros()
-	aud.Fft.Reset(aud.SoundParams.WinSamples)
+	aud.Fft.Reset(aud.SndProcess.Derived.WinSamples)
 }
 
 // LoadSound initializes the AuditoryProc with the sound loaded from file by "Sound"
@@ -135,7 +134,7 @@ func (aud *Aud) LoadSound(snd *sound.Wave) {
 	if aud.Sound.Channels() > 1 {
 		snd.SoundToTensor(&aud.Signal, -1)
 	} else {
-		snd.SoundToTensor(&aud.Signal, aud.SoundParams.Channel)
+		snd.SoundToTensor(&aud.Signal, aud.SndProcess.Params.Channel)
 	}
 }
 
@@ -151,7 +150,7 @@ func (aud *Aud) ProcessSoundFile(fn string) {
 	aud.LoadSound(&aud.Sound)
 	aud.Config()
 	aud.Signal.Values = sound.Trim(aud.Signal.Values, aud.Sound.SampleRate(), 1.0, 100, 300)
-	aud.SoundParams.Pad(aud.Signal.Values)
+	aud.SndProcess.Pad(aud.Signal.Values)
 	aud.ProcessSegment()
 	aud.ApplyGabor()
 	aud.ToolBar.UpdateActions()
@@ -168,7 +167,7 @@ func (aud *Aud) ProcessSegment() {
 		moreSamples := true
 		aud.Segment++
 		for ch := int(0); ch < aud.Sound.Channels(); ch++ {
-			for s := 0; s < int(aud.SoundParams.SegmentStepsPlus); s++ {
+			for s := 0; s < int(aud.SndProcess.Derived.SegmentStepsPlus); s++ {
 				moreSamples = aud.ProcessStep(ch, s)
 				if !moreSamples {
 					aud.MoreSegments = false
@@ -176,8 +175,8 @@ func (aud *Aud) ProcessSegment() {
 				}
 			}
 		}
-		remaining := len(aud.Signal.Values) - aud.SoundParams.SegmentSamples*(aud.Segment+1)
-		if remaining < aud.SoundParams.SegmentSamples {
+		remaining := len(aud.Signal.Values) - aud.SndProcess.Derived.SegmentSamples*(aud.Segment+1)
+		if remaining < aud.SndProcess.Derived.SegmentSamples {
 			aud.MoreSegments = false
 		}
 	}
@@ -187,8 +186,8 @@ func (aud *Aud) ProcessSegment() {
 // Process the data by doing a fourier transform and computing the power spectrum, then apply mel filters to get the frequency
 // bands that mimic the non-linear human perception of sound
 func (aud *Aud) ProcessStep(ch, step int) bool {
-	available := aud.SoundToWindow(aud.Segment, aud.SoundParams.Steps[step], ch)
-	aud.Dft.Filter(int(ch), int(step), &aud.Samples, aud.FirstStep, aud.SoundParams.WinSamples, aud.FftCoefs, aud.Fft, &aud.Power, &aud.LogPower, &aud.PowerSegment, &aud.LogPowerSegment)
+	available := aud.SoundToWindow(aud.Segment, aud.SndProcess.Derived.Steps[step], ch)
+	aud.Dft.Filter(int(ch), int(step), &aud.Samples, aud.FirstStep, aud.SndProcess.Derived.WinSamples, aud.FftCoefs, aud.Fft, &aud.Power, &aud.LogPower, &aud.PowerSegment, &aud.LogPowerSegment)
 	aud.Mel.Filter(int(ch), int(step), &aud.Samples, &aud.MelFilters, &aud.Power, &aud.MelFBankSegment, &aud.MelFBank, &aud.MfccDctSegment, &aud.MfccDct)
 	aud.FirstStep = false
 	return available
@@ -198,7 +197,7 @@ func (aud *Aud) ProcessStep(ch, step int) bool {
 func (aud *Aud) ApplyGabor() {
 	if aud.Gabor.On {
 		for ch := int(0); ch < aud.Sound.Channels(); ch++ {
-			agabor.Conv(ch, aud.Gabor, aud.SoundParams, &aud.GaborTsr, aud.Mel.FBank.NFilters, &aud.GaborFilters, &aud.MelFBankSegment)
+			agabor.Conv(ch, aud.Gabor, aud.SndProcess.Derived.SegmentStepsPlus, &aud.GaborTsr, aud.Mel.FBank.NFilters, &aud.GaborFilters, &aud.MelFBankSegment)
 		}
 	}
 }
@@ -206,8 +205,8 @@ func (aud *Aud) ApplyGabor() {
 // SoundToWindow gets sound from SignalRaw at given position and channel
 func (aud *Aud) SoundToWindow(segment, stepOffset, ch int) bool {
 	if aud.Signal.NumDims() == 1 {
-		start := segment*aud.SoundParams.SegmentSamples + stepOffset // segment zero based
-		end := start + aud.SoundParams.WinSamples
+		start := segment*aud.SndProcess.Derived.SegmentSamples + stepOffset // segment zero based
+		end := start + aud.SndProcess.Derived.WinSamples
 		aud.Samples.Values = aud.Signal.Values[start:end]
 	} else {
 		// ToDo: implement
@@ -278,7 +277,7 @@ var TheSP Aud
 
 func mainrun() {
 	TheSP.SetPath()
-	TheSP.SoundParams.Defaults()
+	TheSP.SndProcess.Defaults()
 	TheSP.CurSndFile = gi.FileName(TheSP.SndPath + "bug.wav")
 	TheSP.ProcessSoundFile(string(TheSP.CurSndFile))
 
