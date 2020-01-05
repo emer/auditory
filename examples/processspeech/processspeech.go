@@ -80,7 +80,7 @@ func (aud *Aud) SetPath() {
 }
 
 func (aud *Aud) Config() {
-	aud.SndProcess.Params.SegmentMs = 200 // set param overrides before calling config
+	aud.SndProcess.Params.SegmentMs = 100 // set param overrides here before calling config
 	aud.SndProcess.Config(aud.Sound.SampleRate())
 	aud.Dft.Initialize(aud.SndProcess.Derived.WinSamples)
 	aud.Mel.Defaults()
@@ -113,8 +113,9 @@ func (aud *Aud) Config() {
 		aud.Gabor.Defaults(aud.SndProcess.Derived.SegmentSteps, aud.Mel.FBank.NFilters)
 		aud.GaborFilters.SetShape([]int{aud.Gabor.NFilters, aud.Gabor.SizeFreq, aud.Gabor.SizeTime}, nil, nil)
 		aud.Gabor.RenderFilters(&aud.GaborFilters)
-		aud.Gabor.SetGeom(aud.SndProcess.Derived.SegmentSteps, aud.Mel.FBank.NFilters)
-		aud.GaborTsr.SetShape([]int{aud.Sound.Channels(), aud.Gabor.Geom.Y, aud.Gabor.Geom.X, 2, aud.Gabor.NFilters}, nil, nil)
+		tsrX := ((aud.SndProcess.Derived.SegmentSteps - 1) / aud.Gabor.SpaceTime) + 1
+		tsrY := ((aud.Mel.FBank.NFilters - aud.Gabor.SizeFreq - 1) / aud.Gabor.SpaceFreq) + 1
+		aud.GaborTsr.SetShape([]int{aud.Sound.Channels(), tsrY, tsrX, 2, aud.Gabor.NFilters}, nil, nil)
 		aud.GaborTsr.SetMetaData("odd-row", "true")
 		aud.GaborTsr.SetMetaData("grid-fill", ".9")
 	}
