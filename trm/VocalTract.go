@@ -42,14 +42,15 @@ package trm
 
 import (
 	"fmt"
+	"math"
+	"strings"
+
 	"github.com/chewxy/math32"
 	"github.com/emer/auditory/sound"
 	"github.com/emer/etable/etable"
 	"github.com/emer/etable/etensor"
 	"github.com/go-audio/audio"
 	"github.com/goki/gi/gi"
-	"math"
-	"strings"
 )
 
 /*  COMPILE SO THAT INTERPOLATION NOT DONE FOR SOME CONTROL RATE PARAMETERS  */
@@ -69,9 +70,9 @@ const Top = 0
 const Bottom = 1
 
 /////////////////////////////////////////////////////
-//              VocalTractConfig
+//              TractParams
 
-type VocalTractConfig struct {
+type TractParams struct {
 	Temp         float32
 	Loss         float32
 	MouthCoef    float32
@@ -84,13 +85,8 @@ type VocalTractConfig struct {
 	NoiseMod     bool
 }
 
-// Init calls Defaults to set the initial values
-func (vtc *VocalTractConfig) Init() {
-	vtc.Defaults()
-}
-
 // Defaults sets the default values for the vocal tract
-func (vtc *VocalTractConfig) Defaults() {
+func (vtc *TractParams) Defaults() {
 	vtc.Temp = 32.0
 	vtc.Loss = 0.8
 	vtc.MouthCoef = 5000.0
@@ -106,7 +102,7 @@ func (vtc *VocalTractConfig) Defaults() {
 /////////////////////////////////////////////////////
 //              VoiceParams
 
-type Voices int32
+type AgeGender int32
 
 const (
 	Male = iota
@@ -117,11 +113,6 @@ const (
 )
 
 //go:generate stringer -type=Voices
-
-// Init sets the voice to female
-func (vp *VoiceParams) Init() {
-	vp.Female()
-}
 
 // VoiceParams are the parameters that control the quality of the voice
 type VoiceParams struct {
@@ -139,7 +130,7 @@ type VoiceParams struct {
 }
 
 // DefaultParams are the defaults, some of which don't change
-func (vp *VoiceParams) DefaultParams() {
+func (vp *VoiceParams) Defaults() {
 	vp.GlotPulseRise = 40.0
 	vp.ApertureRadius = 3.05
 	vp.NoseRadii[0] = 1.35
@@ -150,11 +141,10 @@ func (vp *VoiceParams) DefaultParams() {
 	vp.Radius1 = 0.8
 	vp.NoseRadiusCoef = 1.0
 	vp.RadiusCoef = 1.0
-
+	vp.Female() // need to call some AgeGender in case caller doesn't!
 }
 
 func (vp *VoiceParams) Male() {
-	vp.DefaultParams()
 	vp.TractLength = 17.5
 	vp.GlotPulseFallMin = 24.0
 	vp.GlotPulseFallMax = 24.0
@@ -163,7 +153,6 @@ func (vp *VoiceParams) Male() {
 }
 
 func (vp *VoiceParams) Female() {
-	vp.DefaultParams()
 	vp.TractLength = 15.0
 	vp.GlotPulseFallMin = 32.0
 	vp.GlotPulseFallMax = 32.0
@@ -172,7 +161,6 @@ func (vp *VoiceParams) Female() {
 }
 
 func (vp *VoiceParams) ChildLg() {
-	vp.DefaultParams()
 	vp.TractLength = 12.5
 	vp.GlotPulseFallMin = 24.0
 	vp.GlotPulseFallMax = 24.0
@@ -181,7 +169,6 @@ func (vp *VoiceParams) ChildLg() {
 }
 
 func (vp *VoiceParams) ChildSm() {
-	vp.DefaultParams()
 	vp.TractLength = 10.0
 	vp.GlotPulseFallMin = 24.0
 	vp.GlotPulseFallMax = 24.0
@@ -190,7 +177,6 @@ func (vp *VoiceParams) ChildSm() {
 }
 
 func (vp *VoiceParams) Baby() {
-	vp.DefaultParams()
 	vp.TractLength = 7.5
 	vp.GlotPulseFallMin = 24.0
 	vp.GlotPulseFallMax = 24.0
@@ -198,7 +184,7 @@ func (vp *VoiceParams) Baby() {
 	vp.Breathiness = 1.5
 }
 
-func (vp *VoiceParams) SetDefault(voice Voices) {
+func (vp *VoiceParams) SetAgeGender(voice AgeGender) {
 	switch voice {
 	case Male:
 		vp.Male()
@@ -475,11 +461,11 @@ const (
 //go:generate stringer -type=FricationInjCoefs
 
 type VocalTract struct {
-	AudioBuf     sound.Wave
+	Buf          sound.Wave
 	Volume       float32
 	Balance      float32
 	Duration     float32 // duration of synthesized sound
-	Config       VocalTractConfig
+	Tract        TractParams
 	Voice        VoiceParams
 	CurControl   VocalTractCtrl
 	PrevControl  VocalTractCtrl
@@ -529,9 +515,16 @@ type VocalTract struct {
 
 // Init gets us going - this is the first function to call
 func (vt *VocalTract) Init() {
+	vt.Volume = 60.0
+	vt.Balance = 0.0
+	vt.Duration = 25.0
+	vt.ControlRate = 0.0
+
+	vt.Voice.Defaults()
+	vt.Voice.SetAgeGender(Male) // Defaults() sets female -- call this to set another voice
+	vt.Tract.Defaults()
 	vt.SampleRate = 44100
 	vt.Duration = 25
-	vt.Voice.SetDefault(Male)
 	vt.InitBuffer()
 	vt.Reset()
 	ctrlRate := 1.0 / (vt.Duration / 1000.0)
@@ -539,6 +532,10 @@ func (vt *VocalTract) Init() {
 	vt.InitializeSynthesizer()
 	vt.PrevControl.SetFromParams(&vt.CurControl) // no deltas if reset
 	vt.CurrentData.SetFromParams(&vt.CurControl)
+
+	vt.DeltaMax.DefaultMaxDeltas()
+	// outputData_.reserve(OUTPUT_VECTOR_RESERVE);
+
 }
 
 func (vt *VocalTract) ControlFromDataTable(col etensor.Tensor, row int, normalized bool) {
@@ -736,16 +733,6 @@ func (vt *VocalTract) SynthWords(ws string, resetFirst bool, play bool) bool {
 	return rval
 }
 
-// Initialize
-func (vt *VocalTract) Initialize() {
-	vt.Volume = 60.0
-	vt.Balance = 0.0
-	vt.Duration = 25.0
-	vt.ControlRate = 0.0
-	vt.DeltaMax.DefaultMaxDeltas()
-	// outputData_.reserve(OUTPUT_VECTOR_RESERVE);
-}
-
 // Reset reset all vocal tract values
 func (vt *VocalTract) Reset() {
 	vt.ControlPeriod = 0
@@ -808,7 +795,7 @@ func (vt *VocalTract) InitializeSynthesizer() {
 
 	// calculate the sample rate, based on nominal tube length and speed of sound
 	if vt.Voice.TractLength > 0.0 {
-		c := SpeedOfSound(vt.Config.Temp)
+		c := SpeedOfSound(vt.Tract.Temp)
 		vt.ControlPeriod = int(math.Round(float64(c*OroPharynxSectCount*100.0) / float64(vt.Voice.TractLength*vt.ControlRate)))
 		vt.SampleRate = int(vt.ControlRate * float32(vt.ControlPeriod))
 		vt.ActualTubeLength = float32(c*OroPharynxSectCount*100.0) / float32(vt.SampleRate)
@@ -820,30 +807,30 @@ func (vt *VocalTract) InitializeSynthesizer() {
 	}
 
 	vt.BreathinessFactor = vt.Voice.Breathiness / 100.0
-	vt.CrossmixFactor = 1.0 / Amplitude(vt.Config.MixOff)
-	vt.DampingFactor = (1.0 - (vt.Config.Loss / 100.0))
+	vt.CrossmixFactor = 1.0 / Amplitude(vt.Tract.MixOff)
+	vt.DampingFactor = (1.0 - (vt.Tract.Loss / 100.0))
 
 	// initialize the wave table
-	vt.Voice.SetDefault(Female)
+	vt.Voice.SetAgeGender(Female)
 	gs := WavetableGlottalSource{}
 	vt.GlottalSource = gs
 	vt.GlottalSource.Init(GlottalSourcePulse, float32(vt.SampleRate), vt.Voice.GlotPulseRise, vt.Voice.GlotPulseFallMin, vt.Voice.GlotPulseFallMax)
 	vt.GlottalSource.Reset()
 
-	mouthApertureCoef := (nyquist - vt.Config.MouthCoef) / nyquist
+	mouthApertureCoef := (nyquist - vt.Tract.MouthCoef) / nyquist
 	vt.MouthRadiationFilter.Init(mouthApertureCoef)
 	vt.MouthRadiationFilter.Reset()
 	vt.MouthReflectionFilter.Init(mouthApertureCoef)
 	vt.MouthReflectionFilter.Reset()
 
-	nasalApertureCoef := (nyquist - vt.Config.NoseCoef) / nyquist
+	nasalApertureCoef := (nyquist - vt.Tract.NoseCoef) / nyquist
 	vt.NasalRadiationFilter.Init(nasalApertureCoef)
 	vt.NasalRadiationFilter.Reset()
 	vt.NasalReflectionFilter.Init(nasalApertureCoef)
 	vt.NasalReflectionFilter.Reset()
 
 	vt.InitializeNasalCavity()
-	vt.Throat.Init(float32(vt.SampleRate), vt.Config.ThroatCutoff, Amplitude(vt.Config.ThroatVol))
+	vt.Throat.Init(float32(vt.SampleRate), vt.Tract.ThroatCutoff, Amplitude(vt.Tract.ThroatVol))
 	vt.Throat.Reset()
 
 	vt.SampleRateConverter.Init(vt.SampleRate, OutputRate, &vt.OutputData)
@@ -871,7 +858,7 @@ func (vt *VocalTract) InitBuffer() {
 		NumChannels: 1,
 		SampleRate:  vt.SampleRate,
 	}
-	vt.AudioBuf.Buf = &audio.IntBuffer{Data: make([]int, int(frames)), Format: format, SourceBitDepth: 16}
+	vt.Buf.Buf = &audio.IntBuffer{Data: make([]int, int(frames)), Format: format, SourceBitDepth: 16}
 }
 
 // SynthReset
@@ -885,9 +872,7 @@ func (vt *VocalTract) SynthReset(initBuffer bool) {
 // Synthesize
 func (vt *VocalTract) Synthesize(resetFirst bool) {
 	ctrlRate := 1.0 / (vt.Duration / 1000.0)
-	if ctrlRate != vt.ControlRate {
-		// todo:
-		//if ctrlRate != vt.ControlRate || !IsValid() {
+	if ctrlRate != vt.ControlRate { // todo: if ctrlRate != vt.ControlRate || !IsValid()
 		vt.InitSynth()
 	} else if resetFirst {
 		vt.SynthReset(true)
@@ -901,28 +886,28 @@ func (vt *VocalTract) Synthesize(resetFirst bool) {
 	for j := 0; j < vt.ControlPeriod; j++ {
 		vt.SynthesizeImpl()
 		vt.CurrentData.UpdateFromDeltas(&vt.DeltaControl)
-		vt.PrevControl.SetFromParams(&vt.CurrentData) // prev is where we actually got, not where we wanted to get..
-		// todo:
-		//sampleSize = SampleSize()
-		//sType := SampleType()
-
-		// todo:
-		// nFrames := len(vt.OutputData
-		//if FrameCount() < nFrames {
-		//	InitBuffer(nFrames, SampleRate(), ChannelCount(), sampleSize, sType)
-		//}
-
-		// todo:
-		// scale := vt.CalculateMonoScale()
-
-		//#if (QT_VERSION >= 0x050000)
-		// void* buf = q_buf.data();
-		// for(int i=0; i < n_frm; i++) {
-		//   WriteFloatAtIdx(outputData_[i] * scale, buf, i, stype, samp_size);
-		// }
-		//#endif
-		// SigEmitUpdated();
 	}
+	vt.PrevControl.SetFromParams(&vt.CurrentData) // prev is where we actually got, not where we wanted to get..
+
+	//ss := vt.Buf.SampleSize()
+	//st := vt.Buf.SampleType()
+	//
+	// todo:
+	// nFrames := len(vt.OutputData
+	// if FrameCount() < nFrames {
+	//	InitBuffer(nFrames, SampleRate(), ChannelCount(), sampleSize, sType)
+	// }
+
+	// todo:
+	// scale := vt.CalculateMonoScale()
+
+	// #if (QT_VERSION >= 0x050000)
+	// void* buf = q_buf.data();
+	// for(int i=0; i < n_frm; i++) {
+	//   WriteFloatAtIdx(outputData_[i] * scale, buf, i, stype, samp_size);
+	// }
+	// #endif
+	// SigEmitUpdated();
 }
 
 // SynthesizeImpl
@@ -938,9 +923,10 @@ func (vt *VocalTract) SynthesizeImpl() {
 	// do synthesis here
 	// create low-pass filtered noise
 	lpNoise := vt.NoiseFilter.Filter(vt.NoiseSource.GetSample())
+	fmt.Printf("%f\n", lpNoise)
 
 	// update the shape of the glottal pulse, if necessary
-	if vt.Config.WaveForm == Pulse {
+	if vt.Tract.WaveForm == Pulse {
 		if ax != vt.PrevGlotAmplitude {
 			vt.GlottalSource.Update(ax)
 		}
@@ -956,26 +942,27 @@ func (vt *VocalTract) SynthesizeImpl() {
 
 	var signal float32
 	// cross-mix pure noise with pulsed noise
-	if vt.Config.NoiseMod {
+	if vt.Tract.NoiseMod {
 		crossmix := ax * vt.CrossmixFactor
 		if crossmix >= 1.0 {
 			crossmix = 1.0
-			signal = (pulsedNoise * crossmix) + (lpNoise * (1.0 - crossmix))
-		} else {
-			signal = lpNoise
 		}
-
-		// put signal through vocal tract
-		signal = vt.VocalTractUpdate(((pulse + (ah1 * signal)) * VtScale), vt.BandpassFilter.Filter(signal))
-
-		// put pulse through throat
-		signal += vt.Throat.Process(pulse * VtScale)
-
-		// output sample here
-		vt.SampleRateConverter.DataFill(signal)
-
-		vt.PrevGlotAmplitude = ax
+		signal = (pulsedNoise * crossmix) + (lpNoise * (1.0 - crossmix))
+	} else {
+		signal = lpNoise
 	}
+
+	// put signal through vocal tract
+	signal = vt.VocalTractUpdate(((pulse + (ah1 * signal)) * VtScale), vt.BandpassFilter.Filter(signal))
+
+	// put pulse through throat
+	signal += vt.Throat.Process(pulse * VtScale)
+	//fmt.Printf("%f\n", signal);
+
+	// output sample here
+	vt.SampleRateConverter.DataFill(signal)
+
+	vt.PrevGlotAmplitude = ax
 }
 
 // InitializeNasalCavity
