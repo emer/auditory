@@ -49,6 +49,6 @@ func (ns *NoiseSource) Reset() {
 func (ns *NoiseSource) GetSample() float32 {
 	product := ns.seed * Factor
 	// C++ code was "seed_ = product - static_cast<int>(product);"
-	ns.seed = product - math32.Trunc(product+.5)
+	ns.seed = product - math32.Trunc(product)
 	return ns.seed - 0.5
 }
