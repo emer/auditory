@@ -306,18 +306,18 @@ func (vtc *VocalTractCtrl) DefaultMaxDeltas() {
 }
 
 // SetFromParams
-func (vtc *VocalTractCtrl) SetFromParams(vtcOther *VocalTractCtrl) {
-	vtc.GlotPitch = vtcOther.GlotPitch
-	vtc.GlotVol = vtcOther.GlotVol
-	vtc.AspVol = vtcOther.AspVol
-	vtc.FricVol = vtcOther.FricVol
-	vtc.FricPos = vtcOther.FricPos
-	vtc.FricCf = vtcOther.FricCf
-	vtc.FricBw = vtcOther.FricBw
+func (vtc *VocalTractCtrl) SetFromParams(vtcSrc *VocalTractCtrl) {
+	vtc.GlotPitch = vtcSrc.GlotPitch
+	vtc.GlotVol = vtcSrc.GlotVol
+	vtc.AspVol = vtcSrc.AspVol
+	vtc.FricVol = vtcSrc.FricVol
+	vtc.FricPos = vtcSrc.FricPos
+	vtc.FricCf = vtcSrc.FricCf
+	vtc.FricBw = vtcSrc.FricBw
 	for i, _ := range vtc.Radii {
-		vtc.Radii[i] = vtc.Radii[i]
+		vtc.Radii[i] = vtcSrc.Radii[i]
 	}
-	vtc.Velum = vtcOther.Velum
+	vtc.Velum = vtcSrc.Velum
 }
 
 // SetFromValues - order must be preserved!
@@ -538,16 +538,16 @@ func (vt *VocalTract) Init() {
 
 }
 
-func (vt *VocalTract) ControlFromDataTable(col etensor.Tensor, row int, normalized bool) {
+func (vt *VocalTract) ControlFromTable(col etensor.Tensor, row int, normalized bool) {
 	params := col.SubSpace([]int{row}).(*etensor.Float32)
 	vt.CurControl.SetFromValues(params.Values)
 }
 
-//void VocalTract::SynthFromDataTable(const DataTable& table, const Variant& col, int row,
+//void VocalTract::SynthFromTable(const Table& table, const Variant& col, int row,
 //                                   bool normalized, bool reset_first) {
 // float_MatrixPtr mtx;
 // mtx = (float_Matrix*)table.GetValAsMatrix(col, row);
-// if(TestError(!(bool)mtx, "SynthFromDataTable", "matrix column not found")) {
+// if(TestError(!(bool)mtx, "SynthFromTable", "matrix column not found")) {
 //   return;
 // }
 // if(mtx->dims() == 2 && mtx->dim(0) == VocalTractCtrl::N_PARAMS) {
@@ -562,7 +562,7 @@ func (vt *VocalTract) ControlFromDataTable(col etensor.Tensor, row int, normaliz
 // }
 // else {
 //   // one-shot
-//   cur_ctrl.SetFromDataTable(table, col, row, normalized);
+//   cur_ctrl.SetFromTable(table, col, row, normalized);
 //   Synthesize(reset_first);
 // }
 //}
@@ -617,7 +617,7 @@ func (vt *VocalTract) SynthPhone(phon string, stress, doubleStress, syllable, re
 	nReps := math.Ceil(totalTime / float64(vt.Duration))
 	nReps = math.Max(nReps, 1.0)
 
-	vt.ControlFromDataTable(vt.PhoneTable.ColByName("phone_data"), idx, false)
+	vt.ControlFromTable(vt.PhoneTable.ColByName("phone_data"), idx, false)
 	// todo: syllable, double_stress, qsss other params??
 	// fmt.Println("saying:", phon, "dur:", String(tot_time), "n_reps:", String(n_reps),
 	//              "start pos:", String(outputData_.size()));
@@ -878,7 +878,7 @@ func (vt *VocalTract) Synthesize(resetFirst bool) {
 		vt.SynthReset(true)
 	}
 
-	controlFreq := 1.0 / vt.ControlPeriod
+	controlFreq := 1.0 / float32(vt.ControlPeriod)
 	fmt.Printf("control period: %v, freq: %v", vt.ControlPeriod, controlFreq)
 
 	vt.DeltaControl.ComputeDeltas(&vt.CurControl, &vt.PrevControl, &vt.DeltaMax, float32(controlFreq))
@@ -1025,7 +1025,7 @@ func (vt *VocalTract) CalculateTubeCoefficients() {
 func (vt *VocalTract) SetFricationTaps() {
 	fricationAmplitude := Amplitude(vt.CurrentData.FricVol)
 
-	integerPart := vt.CurrentData.FricVol
+	integerPart := int(vt.CurrentData.FricPos)
 	complement := vt.CurrentData.FricPos - float32(integerPart)
 	remainder := 1.0 - complement
 
