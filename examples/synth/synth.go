@@ -81,9 +81,7 @@ var TheSyn Synth
 
 func mainrun() {
 	TheSyn.Defaults()
-	TheSyn.vc.Voice.Init()
 	TheSyn.vc.Init()
-	TheSyn.vc.Initialize()
 	TheSyn.vc.LoadEnglishPhones()
 	TheSyn.vc.InitSynth()
 	TheSyn.vc.SynthPhones("ee", true, true)
