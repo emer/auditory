@@ -351,21 +351,21 @@ const (
 
 //go:generate stringer -type=OroPharynxRegions
 
-// NasalTractSections are different sections of the nasal tract
-type NasalTractSections int32
+// NasalSections are different sections of the nasal tract
+type NasalSections int32
 
 const (
-	NasalTractSect1 = iota
-	NasalTractSect2
-	NasalTractSect3
-	NasalTractSect4
-	NasalTractSect5
-	NasalTractSect6
-	NasalTractSectCount
-	Velum = NasalTractSect1
+	NasalSect1 = iota
+	NasalSect2
+	NasalSect3
+	NasalSect4
+	NasalSect5
+	NasalSect6
+	NasalSectCount
+	Velum = NasalSect1
 )
 
-//go:generate stringer -type=NasalTractSections
+//go:generate stringer -type=NasalSections
 
 // OroPharynxCoefs are the oropharynx scattering junction coefficients (between each region)
 type OroPharynxCoefs int32
@@ -403,20 +403,20 @@ const (
 
 //go:generate stringer -type=OroPharynxSects
 
-// NasalTractCoefs
-type NasalTractCoefs int32
+// NasalCoefs
+type NasalCoefs int32
 
 const (
-	NasalTractCoef1     = NasalTractSect1 // N1-N2
-	NasalTractCoef2     = NasalTractSect2 // N2-N3
-	NasalTractCoef3     = NasalTractSect3 // N3-N4
-	NasalTractCoef4     = NasalTractSect4 // N4-N5
-	NasalTractCoef5     = NasalTractSect5 // N5-N6
-	NasalTractCoef6     = NasalTractSect6 // N6-Air
-	NasalTractCoefCount = NasalTractSectCount
+	NasalCoef1     = NasalSect1 // N1-N2
+	NasalCoef2     = NasalSect2 // N2-N3
+	NasalCoef3     = NasalSect3 // N3-N4
+	NasalCoef4     = NasalSect4 // N4-N5
+	NasalCoef5     = NasalSect5 // N5-N6
+	NasalCoef6     = NasalSect6 // N6-Air
+	NasalCoefCount = NasalSectCount
 )
 
-//go:generate stringer -type=NasalTractCoefs
+//go:generate stringer -type=NasalCoefs
 
 // ThreeWayJunction for the three-way junction alpha coefficients
 type ThreeWayJunction int32
@@ -472,8 +472,8 @@ type VocalTract struct {
 	// tube and tube coefficients
 	Oropharynx      [OroPharynxSectCount][2][2]float32
 	OropharynxCoefs [OroPharynxCoefCount]float32
-	Nasal           [NasalTractSectCount][2][2]float32
-	NasalCoefs      [NasalTractCoefCount]float32
+	Nasal           [NasalSectCount][2][2]float32
+	NasalCoefs      [NasalCoefCount]float32
 	Alpha           [ThreeWayCount]float32
 	CurPtr          int
 	PrevPtr         int
@@ -735,14 +735,14 @@ func (vt *VocalTract) Reset() {
 		vt.OropharynxCoefs[i] = 0.0
 	}
 
-	for i := 0; i < NasalTractSectCount; i++ {
+	for i := 0; i < NasalSectCount; i++ {
 		for j := 0; j < 2; j++ {
 			for k := 0; k < 2; k++ {
 				vt.Nasal[i][j][k] = 0.0
 			}
 		}
 	}
-	for i := 0; i < NasalTractCoefCount; i++ {
+	for i := 0; i < NasalCoefCount; i++ {
 		vt.NasalCoefs[i] = 0.0
 	}
 	for i := 0; i < ThreeWayCount; i++ {
@@ -956,8 +956,8 @@ func (vt *VocalTract) InitializeNasalCavity() {
 	var radA2, radB2 float32
 
 	// calculate coefficients for internal fixed sections of nasal cavity
-	for i, j := NasalTractSect2, NasalTractCoef2; i < NasalTractSect6; i, j = i+1, j+1 {
-		radA2 = vt.Voice.NoseRadii[i]
+	for i, j := NasalSect2, NasalCoef2; i < NasalSect6; i, j = i+1, j+1 {
+		radA2 = vt.Voice.NoseRadii[i-1]
 		radA2 *= radA2
 		radB2 = vt.Voice.NoseRadii[i]
 		radB2 *= radB2
@@ -965,10 +965,10 @@ func (vt *VocalTract) InitializeNasalCavity() {
 	}
 
 	// calculate the fixed coefficient for the nose aperture
-	radA2 = vt.Voice.NoseRadii[NasalTractSect6-1] // zero based
+	radA2 = vt.Voice.NoseRadii[NasalSect6-1] // zero based
 	radA2 *= radA2
 	radB2 = vt.Voice.ApertureRadius * vt.Voice.ApertureRadius
-	vt.NasalCoefs[NasalTractCoef6] = (radA2 - radB2) / (radA2 + radB2)
+	vt.NasalCoefs[NasalCoef6] = (radA2 - radB2) / (radA2 + radB2)
 }
 
 // TubeCoefficients
@@ -1002,9 +1002,9 @@ func (vt *VocalTract) TubeCoefficients() {
 
 	// and 1st nasal passage coefficient
 	radA2 = vt.CurrentData.Velum * vt.CurrentData.Velum
-	radB2 = vt.Voice.NoseRadii[NasalTractSect2]
+	radB2 = vt.Voice.NoseRadii[NasalSect2]
 	radB2 *= radB2
-	vt.NasalCoefs[NasalTractCoef1] = (radA2 - radB2) / (radA2 + radB2)
+	vt.NasalCoefs[NasalCoef1] = (radA2 - radB2) / (radA2 + radB2)
 }
 
 // SetFricationTaps Sets frication taps according to the current position and amplitude of frication
@@ -1119,7 +1119,7 @@ func (vt *VocalTract) Update(input, frication float32) float32 {
 		vt.Oropharynx[OroPharynxSect10][Top][vt.PrevPtr])
 
 	//  update nasal cavity
-	for i, j := Velum, NasalTractCoef1; i < NasalTractCoef6; i, j = i+1, j+1 {
+	for i, j := Velum, NasalCoef1; i < NasalCoef6; i, j = i+1, j+1 {
 		delta = vt.NasalCoefs[j] *
 			(vt.Nasal[i][Top][vt.PrevPtr] - vt.Nasal[i+1][Bottom][vt.PrevPtr])
 		vt.Nasal[i+1][Top][vt.CurPtr] =
@@ -1129,12 +1129,12 @@ func (vt *VocalTract) Update(input, frication float32) float32 {
 	}
 
 	// reflected signal at nose goes through a lowpass filter
-	vt.Nasal[NasalTractSect6][Bottom][vt.CurPtr] = vt.DampingFactor *
-		vt.NasalReflectionFilter.Filter(vt.NasalCoefs[NasalTractCoef6]*vt.Nasal[NasalTractCoef6][Top][vt.PrevPtr])
+	vt.Nasal[NasalSect6][Bottom][vt.CurPtr] = vt.DampingFactor *
+		vt.NasalReflectionFilter.Filter(vt.NasalCoefs[NasalCoef6]*vt.Nasal[NasalCoef6][Top][vt.PrevPtr])
 
 	// output from nose goes through a highpass filter
-	output += vt.MouthRadiationFilter.Filter((1.0 + vt.NasalCoefs[NasalTractCoef6]) *
-		vt.Nasal[NasalTractSect6][Top][vt.PrevPtr])
+	output += vt.MouthRadiationFilter.Filter((1.0 + vt.NasalCoefs[NasalCoef6]) *
+		vt.Nasal[NasalSect6][Top][vt.PrevPtr])
 
 	// return summed output from mouth and nose
 	return output
