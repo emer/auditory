@@ -34,18 +34,22 @@ import (
 const Factor = 377.0
 const InitialSeed = 0.7892347
 
+// NoiseSource
 type NoiseSource struct {
 	seed float32
 }
 
+// Init
 func (ns *NoiseSource) Init() {
 	ns.Reset()
 }
 
+// Reset
 func (ns *NoiseSource) Reset() {
 	ns.seed = InitialSeed
 }
 
+// GetSample
 func (ns *NoiseSource) GetSample() float32 {
 	product := ns.seed * Factor
 	// C++ code was "seed_ = product - static_cast<int>(product);"

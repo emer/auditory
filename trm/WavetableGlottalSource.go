@@ -71,6 +71,7 @@ func (wgs *WavetableGlottalSource) Init(wType WaveForm, sampleRate, tp, tnMin, t
 	wgs.TnLength = float32(wgs.TableDiv2 - wgs.TableDiv1)
 	wgs.TnDelta = float32(math.Round(float64(TableLength * (tnMax - tnMin) / 100.0)))
 	wgs.BasicIncrement = float32(TableLength) / sampleRate
+	wgs.CurrentPosition = 0
 
 	// initialize the wavetable with either a glottal pulse or sine tone
 	if wType == Pulse {
@@ -131,7 +132,6 @@ func (wgs *WavetableGlottalSource) Update(amplitude float32) {
 	for i := int(newDiv2); i < wgs.TableDiv2; i++ {
 		wgs.Wavetable[i] = 0.0
 	}
-
 }
 
 // IncrementTablePosition increments the position in the wavetable according to the desired frequency
@@ -178,7 +178,7 @@ func (wgs *WavetableGlottalSource) IncrementTablePos(frequency float32) {
 //#else
 // #endif
 
-// Get sample from plain oscillator
+// GetSample returns sample value from plain oscillator
 func (wgs *WavetableGlottalSource) GetSample(frequency float32) float32 {
 	// first increment the table position, depending on frequency
 	wgs.IncrementTablePos(frequency)
@@ -194,7 +194,7 @@ func (wgs *WavetableGlottalSource) GetSample(frequency float32) float32 {
 	return value
 }
 
-// Mod0 eturns the modulus of 'value', keeping it in the range 0 -> TableModulus
+// Mod0 returns the modulus of 'value', keeping it in the range 0 -> TableModulus
 func Mod0(value float32) float32 {
 	if value > TableModulus {
 		value -= TableLength

@@ -35,7 +35,7 @@ import (
 
 // kaiser window params
 const Beta = float32(5.658)
-const IZeroEpsilon = 1E-21
+const IZeroEpsilon = 1e-21
 
 // Sample rate conversion constants
 const ZeroCrossings = 13              // SRC CUTOFF FRQ
@@ -58,7 +58,8 @@ const FractionMask uint32 = 0x0000FFFF
 const BufferSize = 1024  // ring buffer size
 const OutputRate = 44100 // output sample rate (22.05, 44.1 KHz)
 
-type SampleRateConverter struct {
+// RateConverter converts the sample rate
+type RateConverter struct {
 	SampleRateRatio       float32
 	FillPtr               uint32
 	EmptyPtr              uint32
@@ -71,22 +72,22 @@ type SampleRateConverter struct {
 	FillCounter           uint32
 	MaximumSampleValue    float32
 	NumberSamples         int64
-
-	H      [FilterLength]float32
-	DeltaH [FilterLength]float32
-	Buffer [BufferSize]float32
+	H                     [FilterLength]float32
+	DeltaH                [FilterLength]float32
+	Buffer                [BufferSize]float32
 	// ToDo - is this correct?
 	OutputData []float32
 	//std::vector<float>& outputData_;
 }
 
-func (src *SampleRateConverter) Init(sampleRate int, outputRate int, outputData *[]float32) {
+// Init
+func (src *RateConverter) Init(sampleRate int, outputRate int, outputData *[]float32) {
 	src.OutputData = append(src.OutputData, *outputData...)
 	src.InitConversion(sampleRate, float32(outputRate))
 }
 
-// SampleRateConverter resets various values of the converter
-func (src *SampleRateConverter) Reset() {
+// Reset resets some values of the converter
+func (src *RateConverter) Reset() {
 	src.EmptyPtr = 0
 	src.TimeRegister = 0
 	src.FillCounter = 0
@@ -96,7 +97,7 @@ func (src *SampleRateConverter) Reset() {
 }
 
 // InitConversion initializes all the sample rate conversion functions
-func (src *SampleRateConverter) InitConversion(sampleRate int, outputRate float32) {
+func (src *RateConverter) InitConversion(sampleRate int, outputRate float32) {
 	src.InitFilter() // initialize filter impulse response
 
 	src.SampleRateRatio = outputRate / float32(sampleRate)
@@ -117,12 +118,11 @@ func (src *SampleRateConverter) InitConversion(sampleRate int, outputRate float3
 	} else {
 		src.PadSize = uint32(float32(ZeroCrossings)/roundedSampleRateRatio) + 1
 	}
-
 	src.InitBuffer() // initialize the ring buffer
 }
 
-// IZero Returns the value for the modified Bessel function of the first kind, order 0, as a float
-func (src *SampleRateConverter) IZero(x float32) float32 {
+// IZero returns the value for the modified Bessel function of the first kind, order 0, as a float
+func (src *RateConverter) IZero(x float32) float32 {
 	var sum float32 = 1.0
 	var u float32 = 1.0
 	var halfx float32 = x / 2.0
@@ -142,18 +142,17 @@ func (src *SampleRateConverter) IZero(x float32) float32 {
 	return sum
 }
 
-// InitBuffer Initializes the ring buffer used for sample rate conversion
-func (src *SampleRateConverter) InitBuffer() {
+// InitBuffer initializes the ring buffer used for sample rate conversion
+func (src *RateConverter) InitBuffer() {
 	for i := 0; i < BufferSize; i++ {
 		src.Buffer[i] = 0.0
 	}
-
 	src.FillPtr = src.PadSize
 	src.FillSize = BufferSize - (2 * src.PadSize)
 }
 
-// InitFilter Initializes filter impulse response and impulse delta values
-func (src *SampleRateConverter) InitFilter() {
+// InitFilter initializes filter impulse response and impulse delta values
+func (src *RateConverter) InitFilter() {
 	src.H[0] = LpCutoff
 	x := math32.Pi / float32(LRange)
 
@@ -178,7 +177,7 @@ func (src *SampleRateConverter) InitFilter() {
 
 // DataFill fills the ring buffer with a single sample, increments the counters and pointers,
 // and empties the buffer when full
-func (src *SampleRateConverter) DataFill(data float32) {
+func (src *RateConverter) DataFill(data float32) {
 	src.Buffer[src.FillPtr] = data
 	SrIncrement(&src.FillPtr, BufferSize)
 	src.FillCounter += 1
@@ -190,7 +189,7 @@ func (src *SampleRateConverter) DataFill(data float32) {
 
 // DataEmpty converts available portion of the input signal to the new sampling rate,
 // and outputs the samples to the sound struct.
-func (src *SampleRateConverter) DataEmpty() {
+func (src *RateConverter) DataEmpty() {
 	endPtr := src.FillPtr - src.PadSize
 
 	if endPtr < 0 {
@@ -251,7 +250,8 @@ func (src *SampleRateConverter) DataEmpty() {
 	}
 }
 
-func (src *SampleRateConverter) MaxSampleVal() float32 {
+// MaxSampleVal
+func (src *RateConverter) MaxSampleVal() float32 {
 	return src.MaximumSampleValue
 }
 
@@ -272,13 +272,14 @@ func SrDecrement(pos *uint32, modulus uint32) {
 }
 
 // FlushBuffer pads the buffer with zero samples, and flushes it by converting the remaining samples
-func (src *SampleRateConverter) FlushBuffer() {
+func (src *RateConverter) FlushBuffer() {
 	for i := 0; i < int(src.PadSize*2); i++ {
 		src.DataFill(0.0)
 	}
 	src.DataEmpty()
 }
 
+// NValue
 func NValue(x uint32) uint32 {
 	y := x
 	y &= NMask
@@ -286,6 +287,7 @@ func NValue(x uint32) uint32 {
 	return y
 }
 
+// LValue
 func LValue(x uint32) uint32 {
 	y := x
 	y &= LMask
@@ -293,12 +295,14 @@ func LValue(x uint32) uint32 {
 	return y
 }
 
+// MValue
 func MValue(x uint32) uint32 {
 	y := x
 	y &= MMask
 	return y
 }
 
+// FractionValue
 func FractionValue(x uint32) uint32 {
 	y := x
 	y &= FractionMask

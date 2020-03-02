@@ -199,13 +199,6 @@ func (vp *VoiceParams) SetAgeGender(voice AgeGender) {
 	}
 }
 
-// NoseRadiusVal gets nose radius value, using *zero-based* index value
-func (vp *VoiceParams) NoseRadiusVal(idx int) float32 {
-	return vp.NoseRadii[idx]
-}
-
-// get nose radius value, using *zero-based* index value (= radius_1, etc)
-
 /////////////////////////////////////////////////////
 //              VocalTractCtrl
 
@@ -284,25 +277,19 @@ func (vtc *VocalTractCtrl) UpdateFromDeltas(deltas *VocalTractCtrl) {
 
 // DefaultMaxDeltas
 func (vtc *VocalTractCtrl) DefaultMaxDeltas() {
-	// todo:
-	//  float ctrl_freq = 1.0f / 501.0f; // default
-	//  // default to entire range ok here for now.. fix when glitches encountered..
-	//  glot_pitch = 10.0f * ctrl_freq;
-	//  glot_vol = 60.0f * ctrl_freq;
-	//  asp_vol = 10.0f * ctrl_freq;
-	//  fric_vol = 24.0f * ctrl_freq;
-	//  fric_pos = 7.0f * ctrl_freq;
-	//  fric_cf = 3000.0f * ctrl_freq;
-	//  fric_bw = 4000.0f * ctrl_freq;
-	//  radius_2 = 3.0f * ctrl_freq;
-	//  radius_3 = 3.0f * ctrl_freq;
-	//  radius_4 = 3.0f * ctrl_freq;
-	//  radius_5 = 3.0f * ctrl_freq;
-	//  radius_6 = 3.0f * ctrl_freq;
-	//  radius_7 = 3.0f * ctrl_freq;
-	//  radius_8 = 3.0f * ctrl_freq;
-	//  velum = 1.5f * ctrl_freq;
-
+	cf := float32(1.0 / 501.0) // default control frequency
+	// default to entire range ok for now.. fix when glitches encountered.. (comment from c++ code)
+	vtc.GlotPitch = 10 * cf
+	vtc.GlotVol = 60.0 * cf
+	vtc.AspVol = 10.0 * cf
+	vtc.FricVol = 24.0 * cf
+	vtc.FricPos = 7.0 * cf
+	vtc.FricCf = 3000.0 * cf
+	vtc.FricBw = 4000.0 * cf
+	for i, _ := range vtc.Radii {
+		vtc.Radii[i] = 3.0 * cf
+	}
+	vtc.Velum = 1.5 * cf
 }
 
 // SetFromParams
@@ -501,7 +488,7 @@ type VocalTract struct {
 
 	OutputData []float32
 
-	SampleRateConverter   SampleRateConverter
+	SampleRateConverter   RateConverter
 	MouthRadiationFilter  RadiationFilter
 	MouthReflectionFilter ReflectionFilter
 	NasalRadiationFilter  RadiationFilter
@@ -800,7 +787,6 @@ func (vt *VocalTract) InitializeSynthesizer() {
 		vt.SampleRate = int(vt.ControlRate * float32(vt.ControlPeriod))
 		vt.ActualTubeLength = float32(c*OroPharynxSectCount*100.0) / float32(vt.SampleRate)
 		nyquist = float32(vt.SampleRate) / 2.0
-		return
 	} else {
 		nyquist = 1.0
 		fmt.Println("Illegal tube length")
@@ -811,7 +797,7 @@ func (vt *VocalTract) InitializeSynthesizer() {
 	vt.DampingFactor = (1.0 - (vt.Tract.Loss / 100.0))
 
 	// initialize the wave table
-	vt.Voice.SetAgeGender(Female)
+	//vt.Voice.SetAgeGender(Female)
 	gs := WavetableGlottalSource{}
 	vt.GlottalSource = gs
 	vt.GlottalSource.Init(GlottalSourcePulse, float32(vt.SampleRate), vt.Voice.GlotPulseRise, vt.Voice.GlotPulseFallMin, vt.Voice.GlotPulseFallMax)
@@ -916,7 +902,7 @@ func (vt *VocalTract) SynthesizeImpl() {
 	f0 := Frequency(vt.CurrentData.GlotPitch)
 	ax := Amplitude(vt.CurrentData.GlotVol)
 	ah1 := Amplitude(vt.CurrentData.AspVol)
-	vt.CalculateTubeCoefficients()
+	vt.TubeCoefficients()
 	vt.SetFricationTaps()
 	vt.BandpassFilter.Update(float32(vt.SampleRate), vt.CurrentData.FricBw, vt.CurrentData.FricCf)
 
@@ -953,7 +939,7 @@ func (vt *VocalTract) SynthesizeImpl() {
 	}
 
 	// put signal through vocal tract
-	signal = vt.VocalTractUpdate(((pulse + (ah1 * signal)) * VtScale), vt.BandpassFilter.Filter(signal))
+	signal = vt.Update(((pulse + (ah1 * signal)) * VtScale), vt.BandpassFilter.Filter(signal))
 
 	// put pulse through throat
 	signal += vt.Throat.Process(pulse * VtScale)
@@ -971,22 +957,22 @@ func (vt *VocalTract) InitializeNasalCavity() {
 
 	// calculate coefficients for internal fixed sections of nasal cavity
 	for i, j := NasalTractSect2, NasalTractCoef2; i < NasalTractSect6; i, j = i+1, j+1 {
-		radA2 = vt.Voice.NoseRadiusVal(i)
+		radA2 = vt.Voice.NoseRadii[i]
 		radA2 *= radA2
-		radB2 = vt.Voice.NoseRadiusVal(i)
+		radB2 = vt.Voice.NoseRadii[i]
 		radB2 *= radB2
 		vt.NasalCoefs[j] = (radA2 - radB2) / (radA2 + radB2)
 	}
 
 	// calculate the fixed coefficient for the nose aperture
-	radA2 = vt.Voice.NoseRadiusVal(NasalTractSect6 - 1) // zero based
+	radA2 = vt.Voice.NoseRadii[NasalTractSect6-1] // zero based
 	radA2 *= radA2
 	radB2 = vt.Voice.ApertureRadius * vt.Voice.ApertureRadius
 	vt.NasalCoefs[NasalTractCoef6] = (radA2 - radB2) / (radA2 + radB2)
 }
 
-// CalculateTubeCoefficients
-func (vt *VocalTract) CalculateTubeCoefficients() {
+// TubeCoefficients
+func (vt *VocalTract) TubeCoefficients() {
 	var radA2, radB2 float32
 	// calculate coefficients for the oropharynx
 	for i := 0; i < OroPharynxRegCount-1; i++ {
@@ -1016,12 +1002,12 @@ func (vt *VocalTract) CalculateTubeCoefficients() {
 
 	// and 1st nasal passage coefficient
 	radA2 = vt.CurrentData.Velum * vt.CurrentData.Velum
-	radB2 = vt.Voice.NoseRadiusVal(NasalTractSect2)
+	radB2 = vt.Voice.NoseRadii[NasalTractSect2]
 	radB2 *= radB2
 	vt.NasalCoefs[NasalTractCoef1] = (radA2 - radB2) / (radA2 + radB2)
 }
 
-// SetFricationTaps Sets tfrication taps according to the current position and amplitude of frication
+// SetFricationTaps Sets frication taps according to the current position and amplitude of frication
 func (vt *VocalTract) SetFricationTaps() {
 	fricationAmplitude := Amplitude(vt.CurrentData.FricVol)
 
@@ -1050,9 +1036,9 @@ func (vt *VocalTract) SetFricationTaps() {
 	//}
 }
 
-// VocalTract updates the pressure wave throughout the vocal tract, and returns
+// Update updates the pressure wave throughout the vocal tract, and returns
 // the summed output of the oral and nasal cavities.  Also injects frication appropriately
-func (vt *VocalTract) VocalTractUpdate(input, frication float32) float32 {
+func (vt *VocalTract) Update(input, frication float32) float32 {
 	vt.CurPtr += 1
 	if vt.CurPtr > 1 {
 		vt.CurPtr = 0
@@ -1154,13 +1140,13 @@ func (vt *VocalTract) VocalTractUpdate(input, frication float32) float32 {
 	return output
 }
 
-// CalculateMonoScale
-func (vt *VocalTract) CalculateMonoScale() float32 {
+// MonoScale
+func (vt *VocalTract) MonoScale() float32 {
 	return (OutputScale / (vt.SampleRateConverter.MaxSampleVal()) * Amplitude(vt.Volume))
 }
 
-// CalculateStereoScale
-func (vt *VocalTract) CalculateStereoScale(leftScale,
+// StereoScale
+func (vt *VocalTract) StereoScale(leftScale,
 	rightScale *float32) {
 	*leftScale = (-((vt.Balance / 2.0) - 0.5))
 	*rightScale = (-((vt.Balance / 2.0) + 0.5))

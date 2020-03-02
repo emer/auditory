@@ -27,6 +27,7 @@
 
 package trm
 
+// Throat
 type Throat struct {
 	Gain float32
 	tb1  float32
@@ -34,7 +35,7 @@ type Throat struct {
 	Y    float32
 }
 
-// Init Initializes the throat lowpass filter coefficients according to the throatCutoff value,
+// Init initializes the throat lowpass filter coefficients according to the throatCutoff value,
 // and also the throatGain, according to the throatVol value.
 func (thr *Throat) Init(sampleRate, cutoff, gain float32) {
 	thr.Gain = gain
@@ -47,7 +48,7 @@ func (thr *Throat) Reset() {
 	thr.Y = 0.0
 }
 
-// Process Simulates the radiation of sound through the walls of the throat.
+// Process simulates the radiation of sound through the walls of the throat.
 // Note that this form of the filter uses addition instead of subtraction for the econd term, since tb1 has reversed sign.
 func (thr *Throat) Process(input float32) float32 {
 	output := (thr.ta0 * input) + (thr.tb1 * thr.Y)

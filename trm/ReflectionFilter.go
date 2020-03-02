@@ -31,6 +31,7 @@ import (
 	"github.com/chewxy/math32"
 )
 
+// ReflectionFilter
 type ReflectionFilter struct {
 	A10         float32
 	B11         float32

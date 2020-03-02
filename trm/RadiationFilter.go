@@ -27,6 +27,7 @@
 
 package trm
 
+// RadiationFilter
 type RadiationFilter struct {
 	A20        float32
 	A21        float32
@@ -35,6 +36,7 @@ type RadiationFilter struct {
 	RadiationY float32
 }
 
+// Init
 func (rf *RadiationFilter) Init(apertureCoef float32) {
 	rf.RadiationX = 0.0
 	rf.RadiationY = 0.0
@@ -43,11 +45,13 @@ func (rf *RadiationFilter) Init(apertureCoef float32) {
 	rf.B21 = rf.A20
 }
 
+// Reset
 func (rf *RadiationFilter) Reset() {
 	rf.RadiationX = 0.0
 	rf.RadiationY = 0.0
 }
 
+// Filter
 func (rf *RadiationFilter) Filter(input float32) float32 {
 	output := (rf.A20 * input) + (rf.A21 * rf.RadiationX) - (rf.B21 * rf.RadiationY)
 	rf.RadiationX = input

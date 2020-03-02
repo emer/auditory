@@ -27,14 +27,17 @@
 
 package trm
 
+// NoiseFilter
 type NoiseFilter struct {
 	NoiseX float32
 }
 
+// Reset
 func (nf *NoiseFilter) Reset() {
 	nf.NoiseX = 0.0
 }
 
+// Filter
 func (nf *NoiseFilter) Filter(input float32) float32 {
 	return input + nf.NoiseX
 }

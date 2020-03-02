@@ -40,6 +40,7 @@ type FirFilter struct {
 	Coef  []float32
 }
 
+// Init
 func (ff *FirFilter) Init(beta, gamma, cutoff float32) {
 	coefficients := make([]float32, Limit+1)
 
@@ -68,7 +69,7 @@ func (ff *FirFilter) Init(beta, gamma, cutoff float32) {
 	ff.Ptr = 0
 }
 
-//Reset resets the data and sets the pointer to first element
+// Reset resets the data and sets the pointer to first element
 func (ff *FirFilter) Reset() {
 	for i := 0; i < len(ff.Data); i++ {
 		ff.Data[i] = 0.0
@@ -76,7 +77,7 @@ func (ff *FirFilter) Reset() {
 	ff.Ptr = 0
 }
 
-// MaximallyFlat Calculates coefficients for a linear phase lowpass FIR
+// MaximallyFlat calculates coefficients for a linear phase lowpass FIR
 // filter, with beta being the center frequency of the transition band (as a fraction
 // of the sampling frequency), and gamme the width of the transition band
 func (ff *FirFilter) MaximallyFlat(beta, gamma float32, np *int, coefficients []float32) int {
@@ -114,7 +115,7 @@ func (ff *FirFilter) MaximallyFlat(beta, gamma float32, np *int, coefficients []
 	// calculate the rational approximation to the cut-off point
 	ac := 1.0 + math32.Cos((2.0*math32.Pi)*beta)/2.0
 	var numerator int
-	RationalApproximation(ac, &nt, &numerator, np)
+	Approximate(ac, &nt, &numerator, np)
 
 	// calculate filter order
 	n := (2 * (*np)) - 1
@@ -165,7 +166,7 @@ func (ff *FirFilter) MaximallyFlat(beta, gamma float32, np *int, coefficients []
 	return 0
 }
 
-// Trims the higher order coefficients of the FIR filter which fall below the cutoff value
+// Trim trims the higher order coefficients of the FIR filter which fall below the cutoff value
 func (ff *FirFilter) Trim(cutoff float32, nCoefficients *int, coefficients []float32) {
 	for i := *nCoefficients; i > 0; i-- {
 		if math32.Abs(ff.Coef[i]) >= math32.Abs(cutoff) {
@@ -173,9 +174,9 @@ func (ff *FirFilter) Trim(cutoff float32, nCoefficients *int, coefficients []flo
 			return
 		}
 	}
-
 }
 
+// Filter
 func (ff *FirFilter) Filter(input float32, needOutput bool) float32 {
 	if needOutput {
 		var output float32 = 0.0
@@ -197,12 +198,11 @@ func (ff *FirFilter) Filter(input float32, needOutput bool) float32 {
 
 		// adjust the data pointer, ready for next call
 		ff.Ptr = Decrement(ff.Ptr, ff.NTaps)
-
 		return 0.0
 	}
 }
 
-// Increment Increments the pointer to the circular FIR filter buffer, keeping it in the range 0 -> modulus-1
+// Increment increments the pointer to the circular FIR filter buffer, keeping it in the range 0 -> modulus-1
 func Increment(ptr, modulus int) int {
 	ptr += 1
 	if ptr >= modulus {
@@ -222,8 +222,8 @@ func Decrement(ptr, modulus int) int {
 	}
 }
 
-// RationalApproximation  calculates the best rational approximation to 'number', given the maximum 'order'.
-func RationalApproximation(number float32, order, numerator, denominator *int) {
+// Approximate calculates the best rational approximation to 'number', given the maximum 'order'.
+func Approximate(number float32, order, numerator, denominator *int) {
 	var minimumError float32 = 1.0
 	var modulus int = 0
 
