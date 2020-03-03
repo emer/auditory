@@ -123,10 +123,10 @@ type VoiceParams struct {
 	Breathiness      float32
 	GlotPulseRise    float32
 	ApertureRadius   float32
-	NoseRadii        [5]float32
-	Radius1          float32
-	NoseRadiusCoef   float32
-	RadiusCoef       float32
+	NoseRadii        [6]float32 `desc:"fixed nose radii (0 - 3 cm)"`
+	//Radius           float32
+	NoseRadiusCoef float32 `desc:"global nose radius coefficient"`
+	RadiusCoef     float32
 }
 
 // DefaultParams are the defaults, some of which don't change
@@ -138,7 +138,8 @@ func (vp *VoiceParams) Defaults() {
 	vp.NoseRadii[2] = 1.91
 	vp.NoseRadii[3] = 1.3
 	vp.NoseRadii[4] = 0.73
-	vp.Radius1 = 0.8
+	vp.NoseRadii[5] = 0.8 // called Radius_1 in c++ code
+	//vp.Radius = 0.8
 	vp.NoseRadiusCoef = 1.0
 	vp.RadiusCoef = 1.0
 	vp.Female() // need to call some AgeGender in case caller doesn't!
@@ -351,22 +352,6 @@ const (
 
 //go:generate stringer -type=OroPharynxRegions
 
-// NasalSections are different sections of the nasal tract
-type NasalSections int32
-
-const (
-	NasalSect1 = iota
-	NasalSect2
-	NasalSect3
-	NasalSect4
-	NasalSect5
-	NasalSect6
-	NasalSectCount
-	Velum = NasalSect1
-)
-
-//go:generate stringer -type=NasalSections
-
 // OroPharynxCoefs are the oropharynx scattering junction coefficients (between each region)
 type OroPharynxCoefs int32
 
@@ -402,6 +387,22 @@ const (
 )
 
 //go:generate stringer -type=OroPharynxSects
+
+// NasalSections are different sections of the nasal tract
+type NasalSections int32
+
+const (
+	NasalSect1 = iota
+	NasalSect2
+	NasalSect3
+	NasalSect4
+	NasalSect5
+	NasalSect6
+	NasalSectCount
+	Velum = NasalSect1
+)
+
+//go:generate stringer -type=NasalSections
 
 // NasalCoefs
 type NasalCoefs int32
@@ -815,7 +816,7 @@ func (vt *VocalTract) InitializeSynthesizer() {
 	vt.NasalReflectionFilter.Init(nasalApertureCoef)
 	vt.NasalReflectionFilter.Reset()
 
-	vt.InitializeNasalCavity()
+	vt.InitNasalCavity()
 	vt.Throat.Init(float32(vt.SampleRate), vt.Tract.ThroatCutoff, Amplitude(vt.Tract.ThroatVol))
 	vt.Throat.Reset()
 
@@ -937,6 +938,9 @@ func (vt *VocalTract) SynthesizeImpl() {
 	} else {
 		signal = lpNoise
 	}
+	fmt.Printf("%f\n", signal)
+
+	return
 
 	// put signal through vocal tract
 	signal = vt.Update(((pulse + (ah1 * signal)) * VtScale), vt.BandpassFilter.Filter(signal))
@@ -951,21 +955,21 @@ func (vt *VocalTract) SynthesizeImpl() {
 	vt.PrevGlotAmplitude = ax
 }
 
-// InitializeNasalCavity
-func (vt *VocalTract) InitializeNasalCavity() {
+// InitNasalCavity
+func (vt *VocalTract) InitNasalCavity() {
 	var radA2, radB2 float32
 
 	// calculate coefficients for internal fixed sections of nasal cavity
 	for i, j := NasalSect2, NasalCoef2; i < NasalSect6; i, j = i+1, j+1 {
-		radA2 = vt.Voice.NoseRadii[i-1]
+		radA2 = vt.Voice.NoseRadii[i]
 		radA2 *= radA2
-		radB2 = vt.Voice.NoseRadii[i]
+		radB2 = vt.Voice.NoseRadii[i+1]
 		radB2 *= radB2
 		vt.NasalCoefs[j] = (radA2 - radB2) / (radA2 + radB2)
 	}
 
 	// calculate the fixed coefficient for the nose aperture
-	radA2 = vt.Voice.NoseRadii[NasalSect6-1] // zero based
+	radA2 = vt.Voice.NoseRadii[NasalSect6] // zero based
 	radA2 *= radA2
 	radB2 = vt.Voice.ApertureRadius * vt.Voice.ApertureRadius
 	vt.NasalCoefs[NasalCoef6] = (radA2 - radB2) / (radA2 + radB2)
