@@ -28,6 +28,8 @@
 package trm
 
 import (
+	"fmt"
+
 	"github.com/chewxy/math32"
 )
 
@@ -44,7 +46,8 @@ type FirFilter struct {
 func (ff *FirFilter) Init(beta, gamma, cutoff float32) {
 	coefficients := make([]float32, Limit+1)
 
-	var nCoefficients int
+	fmt.Println("foo")
+	nCoefficients := len(coefficients)
 
 	// determine ideal low pass filter coefficients
 	ff.MaximallyFlat(beta, gamma, &nCoefficients, coefficients)
@@ -53,20 +56,22 @@ func (ff *FirFilter) Init(beta, gamma, cutoff float32) {
 	ff.Trim(cutoff, &nCoefficients, coefficients)
 
 	// determine the number of taps in the filter
-	nTaps := (nCoefficients * 2) - 1
+	ff.NTaps = (nCoefficients * 2) - 1
+	ff.Data = make([]float32, ff.NTaps)
+	ff.Coef = make([]float32, ff.NTaps)
 
 	// initialize the coefficients
 	increment := -1
-	pointer := nCoefficients
-	for i := 0; i < nTaps; i++ {
-		ff.Coef[i] = coefficients[pointer]
-		pointer += increment
-		if pointer <= 0 {
-			pointer = 2
+	p := nCoefficients
+	for i := 0; i < ff.NTaps; i++ {
+		ff.Coef[i] = coefficients[p]
+		p += increment
+		if p <= 0 {
+			p = 2
 			increment = 1
 		}
 	}
-	ff.Ptr = 0
+	ff.Ptr = p
 }
 
 // Reset resets the data and sets the pointer to first element
@@ -113,7 +118,7 @@ func (ff *FirFilter) MaximallyFlat(beta, gamma float32, np *int, coefficients []
 	}
 
 	// calculate the rational approximation to the cut-off point
-	ac := 1.0 + math32.Cos((2.0*math32.Pi)*beta)/2.0
+	ac := (1.0 + math32.Cos((2.0*math32.Pi)*beta)) / 2.0
 	var numerator int
 	Approximate(ac, &nt, &numerator, np)
 
@@ -130,7 +135,7 @@ func (ff *FirFilter) MaximallyFlat(beta, gamma float32, np *int, coefficients []
 
 	for i := 2; i <= *np; i++ {
 		var sum float32 = 1.0
-		c[i] = math32.Cos(2.0 * math32.Pi * float32(i-1) / float32(n))
+		c[i] = math32.Cos((2.0 * math32.Pi) * (float32(i-1) / float32(n)))
 		x := (1.0 - c[i]) / 2.0
 		y := x
 
@@ -153,15 +158,15 @@ func (ff *FirFilter) MaximallyFlat(beta, gamma float32, np *int, coefficients []
 
 	// Calculate weighting coefficients by an n-point idft
 	for i := 1; i <= *np; i++ {
-		ff.Coef[i] = a[1] / 2.0
+		coefficients[i] = a[1] / 2.0
 		for j := 2; j <= *np; j++ {
 			m := ((i - 1) * (j - 1)) % n
 			if m > nt {
 				m = n - m
 			}
-			ff.Coef[i] += c[m+1] * a[j]
+			coefficients[i] += c[m+1] * a[j]
 		}
-		ff.Coef[i] *= 2.0 / float32(n)
+		coefficients[i] *= 2.0 / float32(n)
 	}
 	return 0
 }
@@ -169,7 +174,7 @@ func (ff *FirFilter) MaximallyFlat(beta, gamma float32, np *int, coefficients []
 // Trim trims the higher order coefficients of the FIR filter which fall below the cutoff value
 func (ff *FirFilter) Trim(cutoff float32, nCoefficients *int, coefficients []float32) {
 	for i := *nCoefficients; i > 0; i-- {
-		if math32.Abs(ff.Coef[i]) >= math32.Abs(cutoff) {
+		if math32.Abs(coefficients[i]) >= math32.Abs(cutoff) {
 			*nCoefficients = i
 			return
 		}

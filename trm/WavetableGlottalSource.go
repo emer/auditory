@@ -28,21 +28,22 @@
 package trm
 
 import (
-	"github.com/chewxy/math32"
 	"math"
+
+	"github.com/chewxy/math32"
 )
 
 // compile with oversampling or plain oscillator
-// const OversamplingOscillator = 1
+const OversamplingOscillator = true
 
 // glottal source oscillator table variables
 const TableLength = 512
 const TableModulus = TableLength - 1
 
 //  oversampling fir filter characteristics
-//const FirBeta = .2
-//const FirGamma = .1
-//const FirCutoff = .00000001
+const FirBeta = .2
+const FirGamma = .1
+const FirCutoff = .00000001
 
 type WaveForm int32
 
@@ -72,6 +73,10 @@ func (wgs *WavetableGlottalSource) Init(wType WaveForm, sampleRate, tp, tnMin, t
 	wgs.TnDelta = float32(math.Round(float64(TableLength * (tnMax - tnMin) / 100.0)))
 	wgs.BasicIncrement = float32(TableLength) / sampleRate
 	wgs.CurrentPosition = 0
+
+	if OversamplingOscillator {
+		wgs.FirFilter.Init(FirBeta, FirGamma, FirCutoff)
+	}
 
 	// initialize the wavetable with either a glottal pulse or sine tone
 	if wType == Pulse {
@@ -103,15 +108,10 @@ func (wgs *WavetableGlottalSource) Init(wType WaveForm, sampleRate, tp, tnMin, t
 	}
 }
 
-// ToDo:
-//#if OVERSAMPLING_OSCILLATOR
-// firFilter_.reset(new FIRFilter(FIR_BETA, FIR_GAMMA, FIR_CUTOFF));
-// #endif
-
 // Reset resets the current position and the Fir Filter
 func (wgs *WavetableGlottalSource) Reset() {
 	wgs.CurrentPosition = 0
-	wgs.FirFilter.Reset()
+	wgs.FirFilter.Init(FirBeta, FirGamma, FirCutoff)
 }
 
 // Update rewrites the changeable part of the glottal pulse according to the amplitude
@@ -134,64 +134,49 @@ func (wgs *WavetableGlottalSource) Update(amplitude float32) {
 	}
 }
 
-// IncrementTablePosition increments the position in the wavetable according to the desired frequency
-func (wgs *WavetableGlottalSource) IncrementTablePos(frequency float32) {
+// IncrementPosition increments the position in the wavetable according to the specified frequency
+func (wgs *WavetableGlottalSource) IncrementPosition(frequency float32) {
 	wgs.CurrentPosition = Mod0(wgs.CurrentPosition + (frequency * wgs.BasicIncrement))
 }
 
-// ToDo:
-/******************************************************************************
- *
- *  function:  oscillator
- *
- *  purpose:   Is a 2X oversampling interpolating wavetable
- *             oscillator.
- *
- ******************************************************************************/
-//#if OVERSAMPLING_OSCILLATOR
-//float
-//WavetableGlottalSource::getSample(float frequency)  /*  2X OVERSAMPLING OSCILLATOR  */
-//{
-//  int lowerPosition, upperPosition;
-//  float interpolatedValue, output;
-//
-//  for (int i = 0; i < 2; i++) {
-//    /*  FIRST INCREMENT THE TABLE POSITION, DEPENDING ON FREQUENCY  */
-//    incrementTablePosition(frequency / 2.0);
-//
-//    /*  FIND SURROUNDING INTEGER TABLE POSITIONS  */
-//    lowerPosition = static_cast<int>(currentPosition_);
-//    upperPosition = static_cast<int>(mod0(lowerPosition + 1));
-//
-//    /*  CALCULATE INTERPOLATED TABLE VALUE  */
-//    interpolatedValue = wavetable_[lowerPosition] +
-//      ((currentPosition_ - lowerPosition) *
-//       (wavetable_[upperPosition] - wavetable_[lowerPosition]));
-//
-//    /*  PUT VALUE THROUGH FIR FILTER  */
-//    output = firFilter_->filter(interpolatedValue, i);
-//  }
-//
-//  /*  SINCE WE DECIMATE, TAKE ONLY THE SECOND OUTPUT VALUE  */
-//  return output;
-//}
-//#else
-// #endif
+// GetSample returns sample value from plain oscillator or 2x oversampling oscillator.
+func (wgs *WavetableGlottalSource) GetSample(frequency float32) (output float32) {
 
-// GetSample returns sample value from plain oscillator
-func (wgs *WavetableGlottalSource) GetSample(frequency float32) float32 {
-	// first increment the table position, depending on frequency
-	wgs.IncrementTablePos(frequency)
+	if OversamplingOscillator {
+		for i := 0; i < 2; i++ {
+			// first increment the table position, depending on frequency
+			wgs.IncrementPosition(frequency / 2.0)
 
-	// Find surrounding integer table positions
-	lowerPosition := int(wgs.CurrentPosition)
-	upperPosition := int(Mod0(float32(lowerPosition + 1)))
+			// find surrounding integer table positions
+			lowerPosition := int(wgs.CurrentPosition)
+			upperPosition := int(Mod0(float32(lowerPosition + 1)))
 
-	// return interpolated table value
-	value := wgs.Wavetable[lowerPosition] +
-		((wgs.CurrentPosition - float32(lowerPosition)) * (wgs.Wavetable[upperPosition] - wgs.Wavetable[lowerPosition]))
+			// calculate interpolated table value
+			iv := wgs.Wavetable[lowerPosition] +
+				((wgs.CurrentPosition - float32(lowerPosition)) *
+					(wgs.Wavetable[upperPosition] - wgs.Wavetable[lowerPosition]))
 
-	return value
+			// put value through fir filter
+			output = wgs.FirFilter.Filter(iv, i == 1)
+		}
+		// since we decimate, take only the second output value
+		return output
+	} else { // plain oscillator
+		// first increment the table position, depending on frequency
+		wgs.IncrementPosition(frequency)
+
+		// Find surrounding integer table positions
+		lowerPosition := int(wgs.CurrentPosition)
+		upperPosition := int(Mod0(float32(lowerPosition + 1)))
+
+		// return interpolated table value
+		output = wgs.Wavetable[lowerPosition] +
+			((wgs.CurrentPosition - float32(lowerPosition)) *
+				(wgs.Wavetable[upperPosition] - wgs.Wavetable[lowerPosition]))
+
+		return output
+	}
+
 }
 
 // Mod0 returns the modulus of 'value', keeping it in the range 0 -> TableModulus

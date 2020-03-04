@@ -226,19 +226,20 @@ const (
 
 //go:generate stringer -type=CtrlParamIdxs
 
+// ToDo: desc for all Radii
 type VocalTractCtrl struct {
-	GlotPitch float32
-	GlotVol   float32
-	AspVol    float32
-	FricVol   float32
-	FricPos   float32
-	FricCf    float32
-	FricBw    float32
-	Radii     [7]float32 // Radii 2-8
-	Velum     float32
+	GlotPitch float32    `desc:"ranges from -10 for phoneme k to 0 for most, with some being -2 or -1 -- called microInt in gnuspeech data files"`
+	GlotVol   float32    `desc:"glottal volume (DB?) typically 60 when present and 0 when not, and sometimes 54, 43.5, 42, "`
+	AspVol    float32    `desc:"aspiration volume -- typically 0 when not present and 10 when present"`
+	FricVol   float32    `desc:"fricative volume -- typically 0 or .25 .4, .5, .8 but 24 for ph"`
+	FricPos   float32    `desc:"ficative position -- varies continuously between 1-7"`
+	FricCf    float32    `desc:"fricative center frequency ranges between 864 to 5500 with values around 1770, 2000, 2500, 4500 being common"`
+	FricBw    float32    `desc:"fricative bw seems like a frequency -- common intermediate values are 600, 900, 2000, 2600"`
+	Radii     [7]float32 `desc:"Radii 2-8 radius of pharynx vocal tract segment as determined by tongue etc -- typically around 1, ranging .5 - 1.7"`
+	Velum     float32    `desc:"velum opening -- 1.5 when fully open, .1 when closed, and .25, .5 intermediates used"`
 }
 
-func (vtc *VocalTractCtrl) Init() {
+func (vtc *VocalTractCtrl) Defaults() {
 	vtc.GlotPitch = 0.0
 	vtc.GlotVol = 0.0
 	vtc.AspVol = 0.0
@@ -252,7 +253,7 @@ func (vtc *VocalTractCtrl) Init() {
 	vtc.Velum = 0.1
 }
 
-// ComputeDeltas
+// ComputeDeltas computes values in this set of params as deltas from (cur - prv) * ctrl_freq
 func (vtc *VocalTractCtrl) ComputeDeltas(curCtrl *VocalTractCtrl, prvCtrl *VocalTractCtrl, deltaMax *VocalTractCtrl, ctrlFreq float32) {
 	// todo:
 	// for(int i=0; i< N_PARAMS; i++) {
@@ -266,7 +267,7 @@ func (vtc *VocalTractCtrl) ComputeDeltas(curCtrl *VocalTractCtrl, prvCtrl *Vocal
 	// }
 }
 
-// UpdateFromDeltas
+// UpdateFromDeltas updates values in this set of params from deltas
 func (vtc *VocalTractCtrl) UpdateFromDeltas(deltas *VocalTractCtrl) {
 	// todo:
 	//  for(int i=0; i< N_PARAMS; i++) {
@@ -276,7 +277,7 @@ func (vtc *VocalTractCtrl) UpdateFromDeltas(deltas *VocalTractCtrl) {
 	//  }
 }
 
-// DefaultMaxDeltas
+// DefaultMaxDeltas updates the default max delta values in this object (for DeltaMax field in VocalTract)
 func (vtc *VocalTractCtrl) DefaultMaxDeltas() {
 	cf := float32(1.0 / 501.0) // default control frequency
 	// default to entire range ok for now.. fix when glitches encountered.. (comment from c++ code)
@@ -293,7 +294,7 @@ func (vtc *VocalTractCtrl) DefaultMaxDeltas() {
 	vtc.Velum = 1.5 * cf
 }
 
-// SetFromParams
+// SetFromParams fast copy of parameters from other control params
 func (vtc *VocalTractCtrl) SetFromParams(vtcSrc *VocalTractCtrl) {
 	vtc.GlotPitch = vtcSrc.GlotPitch
 	vtc.GlotVol = vtcSrc.GlotVol
@@ -453,7 +454,7 @@ type VocalTract struct {
 	Volume       float32
 	Balance      float32
 	Duration     float32 // duration of synthesized sound
-	Tract        TractParams
+	Params       TractParams
 	Voice        VoiceParams
 	CurControl   VocalTractCtrl
 	PrevControl  VocalTractCtrl
@@ -482,8 +483,8 @@ type VocalTract struct {
 	// memory for frication taps
 	FricationTap [FricationInjCoefCount]float32
 
-	DampingFactor     float32 /*  calculated damping factor  */
-	CrossmixFactor    float32 /*  calculated crossmix factor  */
+	DampingFactor     float32 // calculated
+	CrossmixFactor    float32 //  calculated
 	BreathinessFactor float32
 	PrevGlotAmplitude float32
 
@@ -507,12 +508,14 @@ func (vt *VocalTract) Init() {
 	vt.Balance = 0.0
 	vt.Duration = 25.0
 	vt.ControlRate = 0.0
-
-	vt.Voice.Defaults()
-	vt.Voice.SetAgeGender(Male) // Defaults() sets female -- call this to set another voice
-	vt.Tract.Defaults()
 	vt.SampleRate = 44100
 	vt.Duration = 25
+	// todo	del_max.DefaultMaxDeltas();
+
+	vt.CurrentData.Defaults()
+	vt.CurControl.SetFromParams(&vt.CurrentData)
+	vt.Voice.Defaults()
+	vt.Params.Defaults()
 	vt.InitBuffer()
 	vt.Reset()
 	ctrlRate := 1.0 / (vt.Duration / 1000.0)
@@ -783,7 +786,7 @@ func (vt *VocalTract) InitializeSynthesizer() {
 
 	// calculate the sample rate, based on nominal tube length and speed of sound
 	if vt.Voice.TractLength > 0.0 {
-		c := SpeedOfSound(vt.Tract.Temp)
+		c := SpeedOfSound(vt.Params.Temp)
 		vt.ControlPeriod = int(math.Round(float64(c*OroPharynxSectCount*100.0) / float64(vt.Voice.TractLength*vt.ControlRate)))
 		vt.SampleRate = int(vt.ControlRate * float32(vt.ControlPeriod))
 		vt.ActualTubeLength = float32(c*OroPharynxSectCount*100.0) / float32(vt.SampleRate)
@@ -794,8 +797,8 @@ func (vt *VocalTract) InitializeSynthesizer() {
 	}
 
 	vt.BreathinessFactor = vt.Voice.Breathiness / 100.0
-	vt.CrossmixFactor = 1.0 / Amplitude(vt.Tract.MixOff)
-	vt.DampingFactor = (1.0 - (vt.Tract.Loss / 100.0))
+	vt.CrossmixFactor = 1.0 / Amplitude(vt.Params.MixOff)
+	vt.DampingFactor = (1.0 - (vt.Params.Loss / 100.0))
 
 	// initialize the wave table
 	//vt.Voice.SetAgeGender(Female)
@@ -804,20 +807,20 @@ func (vt *VocalTract) InitializeSynthesizer() {
 	vt.GlottalSource.Init(GlottalSourcePulse, float32(vt.SampleRate), vt.Voice.GlotPulseRise, vt.Voice.GlotPulseFallMin, vt.Voice.GlotPulseFallMax)
 	vt.GlottalSource.Reset()
 
-	mouthApertureCoef := (nyquist - vt.Tract.MouthCoef) / nyquist
+	mouthApertureCoef := (nyquist - vt.Params.MouthCoef) / nyquist
 	vt.MouthRadiationFilter.Init(mouthApertureCoef)
 	vt.MouthRadiationFilter.Reset()
 	vt.MouthReflectionFilter.Init(mouthApertureCoef)
 	vt.MouthReflectionFilter.Reset()
 
-	nasalApertureCoef := (nyquist - vt.Tract.NoseCoef) / nyquist
+	nasalApertureCoef := (nyquist - vt.Params.NoseCoef) / nyquist
 	vt.NasalRadiationFilter.Init(nasalApertureCoef)
 	vt.NasalRadiationFilter.Reset()
 	vt.NasalReflectionFilter.Init(nasalApertureCoef)
 	vt.NasalReflectionFilter.Reset()
 
-	vt.InitNasalCavity()
-	vt.Throat.Init(float32(vt.SampleRate), vt.Tract.ThroatCutoff, Amplitude(vt.Tract.ThroatVol))
+	vt.InitNasal()
+	vt.Throat.Init(float32(vt.SampleRate), vt.Params.ThroatCutoff, Amplitude(vt.Params.ThroatVol))
 	vt.Throat.Reset()
 
 	vt.SampleRateConverter.Init(vt.SampleRate, OutputRate, &vt.OutputData)
@@ -913,7 +916,7 @@ func (vt *VocalTract) SynthesizeImpl() {
 	fmt.Printf("%f\n", lpNoise)
 
 	// update the shape of the glottal pulse, if necessary
-	if vt.Tract.WaveForm == Pulse {
+	if vt.Params.WaveForm == Pulse {
 		if ax != vt.PrevGlotAmplitude {
 			vt.GlottalSource.Update(ax)
 		}
@@ -929,7 +932,7 @@ func (vt *VocalTract) SynthesizeImpl() {
 
 	var signal float32
 	// cross-mix pure noise with pulsed noise
-	if vt.Tract.NoiseMod {
+	if vt.Params.NoiseMod {
 		crossmix := ax * vt.CrossmixFactor
 		if crossmix >= 1.0 {
 			crossmix = 1.0
@@ -956,7 +959,7 @@ func (vt *VocalTract) SynthesizeImpl() {
 }
 
 // InitNasalCavity
-func (vt *VocalTract) InitNasalCavity() {
+func (vt *VocalTract) InitNasal() {
 	var radA2, radB2 float32
 
 	// calculate coefficients for internal fixed sections of nasal cavity
