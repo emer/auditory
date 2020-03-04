@@ -28,8 +28,6 @@
 package trm
 
 import (
-	"fmt"
-
 	"github.com/chewxy/math32"
 )
 
@@ -45,8 +43,6 @@ type FirFilter struct {
 // Init
 func (ff *FirFilter) Init(beta, gamma, cutoff float32) {
 	coefficients := make([]float32, Limit+1)
-
-	fmt.Println("foo")
 	nCoefficients := len(coefficients)
 
 	// determine ideal low pass filter coefficients

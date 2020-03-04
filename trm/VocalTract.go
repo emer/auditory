@@ -869,7 +869,7 @@ func (vt *VocalTract) Synthesize(resetFirst bool) {
 	}
 
 	controlFreq := 1.0 / float32(vt.ControlPeriod)
-	fmt.Printf("control period: %v, freq: %v", vt.ControlPeriod, controlFreq)
+	//fmt.Printf("control period: %v, freq: %v", vt.ControlPeriod, controlFreq)
 
 	vt.DeltaControl.ComputeDeltas(&vt.CurControl, &vt.PrevControl, &vt.DeltaMax, float32(controlFreq))
 
@@ -913,7 +913,6 @@ func (vt *VocalTract) SynthesizeImpl() {
 	// do synthesis here
 	// create low-pass filtered noise
 	lpNoise := vt.NoiseFilter.Filter(vt.NoiseSource.GetSample())
-	fmt.Printf("%f\n", lpNoise)
 
 	// update the shape of the glottal pulse, if necessary
 	if vt.Params.WaveForm == Pulse {
@@ -941,16 +940,13 @@ func (vt *VocalTract) SynthesizeImpl() {
 	} else {
 		signal = lpNoise
 	}
-	fmt.Printf("%f\n", signal)
-
-	return
+	//fmt.Printf("%f\n", signal)
 
 	// put signal through vocal tract
 	signal = vt.Update(((pulse + (ah1 * signal)) * VtScale), vt.BandpassFilter.Filter(signal))
 
 	// put pulse through throat
 	signal += vt.Throat.Process(pulse * VtScale)
-	//fmt.Printf("%f\n", signal);
 
 	// output sample here
 	vt.SampleRateConverter.DataFill(signal)
