@@ -61,22 +61,21 @@ const OutputRate = 44100 // output sample rate (22.05, 44.1 KHz)
 // RateConverter converts the sample rate
 type RateConverter struct {
 	SampleRateRatio       float32
-	FillPtr               uint32
-	EmptyPtr              uint32
-	PadSize               uint32
-	FillSize              uint32
-	TimeRegisterIncrement uint
-	FilterIncrement       uint
-	PhaseIncrement        uint
+	FillPtr               int
+	EmptyPtr              int
+	PadSize               int
+	FillSize              int
+	FillCounter           int
+	TimeRegisterIncrement uint32
+	FilterIncrement       uint32
+	PhaseIncrement        uint32
 	TimeRegister          uint32
-	FillCounter           uint32
 	MaxSampleValue        float32
 	NumberSamples         int64
 	H                     [FilterLength]float32
 	DeltaH                [FilterLength]float32
 	Buffer                [BufferSize]float32
-	// ToDo - is this correct?
-	OutputData []float32
+	OutputData            []float32
 	//std::vector<float>& outputData_;
 }
 
@@ -103,20 +102,20 @@ func (src *RateConverter) InitConversion(sampleRate int, outputRate float32) {
 	src.SampleRateRatio = outputRate / float32(sampleRate)
 
 	// math32 missing Round
-	src.TimeRegisterIncrement = uint(math.Round(math.Pow(2.0, float64(FractionBits)) / float64(src.SampleRateRatio)))
+	src.TimeRegisterIncrement = uint32(math.Round(math.Pow(2.0, float64(FractionBits)) / float64(src.SampleRateRatio)))
 
 	roundedSampleRateRatio := math32.Pow(2.0, FractionBits) / float32(src.TimeRegisterIncrement)
 
 	if src.SampleRateRatio >= 1.0 {
 		src.FilterIncrement = LRange
 	} else {
-		src.PhaseIncrement = uint(math.Round(float64(src.SampleRateRatio) * FractionRange))
+		src.PhaseIncrement = uint32(math.Round(float64(src.SampleRateRatio) * FractionRange))
 	}
 
 	if src.SampleRateRatio >= 1.0 {
 		src.PadSize = ZeroCrossings
 	} else {
-		src.PadSize = uint32(float32(ZeroCrossings)/roundedSampleRateRatio) + 1
+		src.PadSize = int(float32(ZeroCrossings)/roundedSampleRateRatio) + 1
 	}
 	src.InitBuffer() // initialize the ring buffer
 }
@@ -238,7 +237,7 @@ func (src *RateConverter) DataEmpty() {
 			src.TimeRegister ^= src.TimeRegister
 
 			// increment the empty pointer, adjusting it and end pointer
-			src.EmptyPtr += NValue(src.TimeRegister)
+			src.EmptyPtr += int(NValue(src.TimeRegister))
 			if src.EmptyPtr >= BufferSize {
 				src.EmptyPtr -= BufferSize
 				endPtr -= BufferSize
@@ -256,7 +255,7 @@ func (src *RateConverter) MaxSampleVal() float32 {
 }
 
 // SrIncrement increments the buffer position keeping it within the range 0 to (modulus - 1)
-func SrIncrement(pos *uint32, modulus uint32) {
+func SrIncrement(pos *int, modulus int) {
 	*pos += 1
 	if *pos >= modulus {
 		*pos -= modulus
@@ -264,7 +263,7 @@ func SrIncrement(pos *uint32, modulus uint32) {
 }
 
 // SrDecrement decrements the buffer position keeping it within the range 0 to (modulus - 1)
-func SrDecrement(pos *uint32, modulus uint32) {
+func SrDecrement(pos *int, modulus int) {
 	*pos -= 1
 	if *pos < 0 {
 		*pos += modulus
