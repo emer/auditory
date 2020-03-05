@@ -70,7 +70,7 @@ type RateConverter struct {
 	PhaseIncrement        uint
 	TimeRegister          uint32
 	FillCounter           uint32
-	MaximumSampleValue    float32
+	MaxSampleValue        float32
 	NumberSamples         int64
 	H                     [FilterLength]float32
 	DeltaH                [FilterLength]float32
@@ -91,7 +91,7 @@ func (src *RateConverter) Reset() {
 	src.EmptyPtr = 0
 	src.TimeRegister = 0
 	src.FillCounter = 0
-	src.MaximumSampleValue = 0.0
+	src.MaxSampleValue = 0.0
 	src.NumberSamples = 0
 	src.InitBuffer()
 }
@@ -225,8 +225,8 @@ func (src *RateConverter) DataEmpty() {
 
 			// record maximum sample value
 			absoluteSampleValue := math32.Abs(float32(output))
-			if absoluteSampleValue > src.MaximumSampleValue {
-				src.MaximumSampleValue = absoluteSampleValue
+			if absoluteSampleValue > src.MaxSampleValue {
+				src.MaxSampleValue = absoluteSampleValue
 			}
 
 			src.NumberSamples += 1
@@ -252,7 +252,7 @@ func (src *RateConverter) DataEmpty() {
 
 // MaxSampleVal
 func (src *RateConverter) MaxSampleVal() float32 {
-	return src.MaximumSampleValue
+	return src.MaxSampleValue
 }
 
 // SrIncrement increments the buffer position keeping it within the range 0 to (modulus - 1)
