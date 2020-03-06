@@ -28,7 +28,6 @@
 package trm
 
 import (
-	"fmt"
 	"math"
 
 	"github.com/chewxy/math32"

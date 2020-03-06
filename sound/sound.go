@@ -35,10 +35,10 @@ type Wave struct {
 }
 
 // Load loads the sound file and decodes it
-func (snd *Wave) Load(filename string) error {
-	f, err := os.Open(filename)
+func (snd *Wave) Load(fn string) error {
+	f, err := os.Open(fn)
 	if err != nil {
-		log.Printf("sound.Load: couldn't open %s %v", filename, err)
+		log.Printf("sound.Load: couldn't open %s %v", fn, err)
 		return err
 	}
 	defer f.Close()
@@ -51,6 +51,22 @@ func (snd *Wave) Load(filename string) error {
 	return err
 }
 
+// Unload encodes the signal data and writes to file
+func (snd *Wave) Unload(fn string, sampleRate int, bitDepth int, numChannels int, format int) error {
+	out, err := os.Create(fn)
+	if err != nil {
+		log.Printf("couldn't create %s %v", out, err)
+		return err
+	}
+
+	e := wav.NewEncoder(out, sampleRate, bitDepth, numChannels, format)
+	if err = e.Write(snd.Buf); err != nil {
+		log.Printf("couldn't write %v: %v", fn, err)
+		return err
+	}
+	return nil
+}
+
 // SampleRate returns the sample rate of the sound or 0 is snd is nil
 func (snd *Wave) SampleRate() int {
 	if snd == nil {
@@ -58,6 +74,15 @@ func (snd *Wave) SampleRate() int {
 		return 0
 	}
 	return int(snd.Buf.Format.SampleRate)
+}
+
+// SampleSize returns the sample rate of the sound or 0 is snd is nil
+func (snd *Wave) SampleSize() int {
+	if snd == nil {
+		log.Printf("sound.SampleSize: Sound is nil")
+		return 0
+	}
+	return 16
 }
 
 // Channels returns the number of channels in the wav data or 0 is snd is nil
