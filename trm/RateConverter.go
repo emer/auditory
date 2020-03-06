@@ -28,6 +28,7 @@
 package trm
 
 import (
+	"fmt"
 	"math"
 
 	"github.com/chewxy/math32"
@@ -60,23 +61,22 @@ const OutputRate = 44100 // output sample rate (22.05, 44.1 KHz)
 
 // RateConverter converts the sample rate
 type RateConverter struct {
-	SampleRateRatio       float32
-	FillPtr               int
-	EmptyPtr              int
-	PadSize               int
-	FillSize              int
-	FillCounter           int
-	TimeRegisterIncrement uint32
-	FilterIncrement       uint32
-	PhaseIncrement        uint32
-	TimeRegister          uint32
-	MaxSampleValue        float32
-	NumberSamples         int64
-	H                     [FilterLength]float32
-	DeltaH                [FilterLength]float32
-	Buffer                [BufferSize]float32
-	OutputData            []float32
-	//std::vector<float>& outputData_;
+	SampleRateRatio  float32
+	FillPtr          int32
+	EmptyPtr         int32
+	PadSize          int32
+	FillSize         int32
+	FillCounter      int32
+	FilterIncrement  uint32
+	PhaseIncrement   uint32
+	TimeRegIncrement uint32
+	TimeReg          uint32
+	MaxSampleValue   float32
+	NSamples         int64
+	H                [FilterLength]float32
+	DeltaH           [FilterLength]float32
+	Buffer           [BufferSize]float32
+	OutputData       []float32
 }
 
 // Init
@@ -88,10 +88,10 @@ func (src *RateConverter) Init(sampleRate int, outputRate int, outputData *[]flo
 // Reset resets some values of the converter
 func (src *RateConverter) Reset() {
 	src.EmptyPtr = 0
-	src.TimeRegister = 0
+	src.TimeReg = 0
 	src.FillCounter = 0
 	src.MaxSampleValue = 0.0
-	src.NumberSamples = 0
+	src.NSamples = 0
 	src.InitBuffer()
 }
 
@@ -102,9 +102,9 @@ func (src *RateConverter) InitConversion(sampleRate int, outputRate float32) {
 	src.SampleRateRatio = outputRate / float32(sampleRate)
 
 	// math32 missing Round
-	src.TimeRegisterIncrement = uint32(math.Round(math.Pow(2.0, float64(FractionBits)) / float64(src.SampleRateRatio)))
+	src.TimeRegIncrement = uint32(math.Round(math.Pow(2.0, float64(FractionBits)) / float64(src.SampleRateRatio)))
 
-	roundedSampleRateRatio := math32.Pow(2.0, FractionBits) / float32(src.TimeRegisterIncrement)
+	roundedSampleRateRatio := math32.Pow(2.0, FractionBits) / float32(src.TimeRegIncrement)
 
 	if src.SampleRateRatio >= 1.0 {
 		src.FilterIncrement = LRange
@@ -115,7 +115,7 @@ func (src *RateConverter) InitConversion(sampleRate int, outputRate float32) {
 	if src.SampleRateRatio >= 1.0 {
 		src.PadSize = ZeroCrossings
 	} else {
-		src.PadSize = int(float32(ZeroCrossings)/roundedSampleRateRatio) + 1
+		src.PadSize = int32(float32(ZeroCrossings)/roundedSampleRateRatio) + 1
 	}
 	src.InitBuffer() // initialize the ring buffer
 }
@@ -201,23 +201,23 @@ func (src *RateConverter) DataEmpty() {
 	if src.SampleRateRatio >= 1.0 {
 		for src.EmptyPtr < endPtr {
 			output := float32(0.0)
-			interpolation := float32(MValue(src.TimeRegister)) / float32(MRange)
+			interpolation := float32(MValue(src.TimeReg)) / float32(MRange)
 
 			// compute the left side of the filter convolution
 			index := src.EmptyPtr
-			for fidx := LValue(src.TimeRegister); fidx < FilterLength; fidx += uint32(src.FilterIncrement) {
+			for fidx := LValue(src.TimeReg); fidx < FilterLength; fidx += uint32(src.FilterIncrement) {
 				SrDecrement(&index, BufferSize)
 				output += (src.Buffer[index]*src.H[fidx] + (src.DeltaH[fidx] * interpolation))
 			}
 
 			// adjust values for right side calculation
-			src.TimeRegister ^= src.TimeRegister // inverse of each bit
-			interpolation = float32(MValue(src.TimeRegister)) / float32(MRange)
+			src.TimeReg = ^src.TimeReg // inverse of each bit
+			interpolation = float32(MValue(src.TimeReg)) / float32(MRange)
 
 			// compute the right side of the filter convolution
 			index = src.EmptyPtr
 			SrIncrement(&index, BufferSize)
-			for fidx := LValue(src.TimeRegister); fidx < FilterLength; fidx += uint32(src.FilterIncrement) {
+			for fidx := LValue(src.TimeReg); fidx < FilterLength; fidx += uint32(src.FilterIncrement) {
 				SrDecrement(&index, BufferSize)
 				output += (src.Buffer[index]*src.H[fidx] + (src.DeltaH[fidx] * interpolation))
 			}
@@ -228,23 +228,25 @@ func (src *RateConverter) DataEmpty() {
 				src.MaxSampleValue = absoluteSampleValue
 			}
 
-			src.NumberSamples += 1
+			src.NSamples += 1
 
 			// save the sample
 			src.OutputData = append(src.OutputData, output)
 
+			src.TimeReg += src.TimeRegIncrement
+
 			// change time register back to original form
-			src.TimeRegister ^= src.TimeRegister
+			src.TimeReg = ^src.TimeReg
 
 			// increment the empty pointer, adjusting it and end pointer
-			src.EmptyPtr += int(NValue(src.TimeRegister))
+			src.EmptyPtr += int32(NValue(src.TimeReg))
 			if src.EmptyPtr >= BufferSize {
 				src.EmptyPtr -= BufferSize
 				endPtr -= BufferSize
 			}
 
 			// clear n part of time register
-			src.TimeRegister &= ^NMask
+			src.TimeReg &= ^NMask
 		}
 	}
 }
@@ -255,18 +257,18 @@ func (src *RateConverter) MaxSampleVal() float32 {
 }
 
 // SrIncrement increments the buffer position keeping it within the range 0 to (modulus - 1)
-func SrIncrement(pos *int, modulus int) {
+func SrIncrement(pos *int32, modulus int) {
 	*pos += 1
-	if *pos >= modulus {
-		*pos -= modulus
+	if *pos >= int32(modulus) {
+		*pos -= int32(modulus)
 	}
 }
 
 // SrDecrement decrements the buffer position keeping it within the range 0 to (modulus - 1)
-func SrDecrement(pos *int, modulus int) {
+func SrDecrement(pos *int32, modulus int) {
 	*pos -= 1
 	if *pos < 0 {
-		*pos += modulus
+		*pos += int32(modulus)
 	}
 }
 
