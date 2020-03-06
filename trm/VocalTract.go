@@ -884,6 +884,11 @@ func (vt *VocalTract) Synth(resetFirst bool) {
 		vt.Buf.Buf.Data = make([]int, nFrames)
 	}
 
+	for f := 0; f < nFrames; f++ {
+		fmt.Printf("%f\n", vt.OutputData[f])
+		vt.Buf.Buf.Data[f] = int(vt.OutputData[f])
+	}
+
 	PCM := 1
 	fn := "foo.wav"
 	err := vt.Buf.Unload(fn, vt.Buf.SampleRate(), vt.Buf.Buf.SourceBitDepth, 1, PCM)
@@ -891,13 +896,6 @@ func (vt *VocalTract) Synth(resetFirst bool) {
 		fmt.Printf("File not found or error opengin file: %s (%s)", fn, err)
 		return
 	}
-	// #if (QT_VERSION >= 0x050000)
-	// void* buf = q_buf.data();
-	// for(int i=0; i < n_frm; i++) {
-	//   WriteFloatAtIdx(outputData_[i] * scale, buf, i, stype, samp_size);
-	// }
-	// #endif
-	// SigEmitUpdated();
 }
 
 // SynthSignal
