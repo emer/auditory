@@ -57,8 +57,7 @@ import (
 //#define MATCH_DSP                 1
 
 const GsTrmTubeMinRadius = 0.001
-const InputVectorReserve = 128
-const OutputVectorReserve = 1024
+const OutputSize = 1024
 const GlottalSourcePulse = 0
 const GlottalSourceSine = 1
 const PitchBase = 220.0
@@ -124,9 +123,8 @@ type VoiceParams struct {
 	GlotPulseRise    float32    `desc:"XX"`
 	ApertureRadius   float32    `desc:"XX"`
 	NoseRadii        [6]float32 `desc:"fixed nose radii (0 - 3 cm)"`
-	//Radius           float32
-	NoseRadiusCoef float32 `desc:"global nose radius coefficient"`
-	RadiusCoef     float32 `desc:"XX"`
+	NoseRadiusCoef   float32    `desc:"global nose radius coefficient"`
+	RadiusCoef       float32    `desc:"XX"`
 }
 
 // DefaultParams are the defaults, some of which don't change
@@ -255,27 +253,33 @@ func (vtc *VocalTractCtrl) Defaults() {
 }
 
 // ComputeDeltas computes values in this set of params as deltas from (cur - prv) * ctrl_freq
-func (vtc *VocalTractCtrl) ComputeDeltas(curCtrl *VocalTractCtrl, prvCtrl *VocalTractCtrl, deltaMax *VocalTractCtrl, ctrlFreq float32) {
-	// todo:
-	// for(int i=0; i< N_PARAMS; i++) {
-	//  float cval = cur.ParamVal(i);
-	//  float pval = prv.ParamVal(i);
-	//  float dmax = del_max.ParamVal(i);
-	//  float& nval = ParamVal(i);
-	//  nval = (cval - pval) * ctrl_freq;
-	//  // if(nval > dmax) nval = dmax;
-	//  // else if (nval < -dmax) nval = -dmax;
-	// }
+func (vtc *VocalTractCtrl) ComputeDeltas(cur, prv *VocalTractCtrl, ctrlFreq float32) {
+	vtc.GlotPitch = (cur.GlotPitch - prv.GlotPitch) * ctrlFreq
+	vtc.GlotVol = (cur.GlotVol - prv.GlotVol) * ctrlFreq
+	vtc.AspVol = (cur.AspVol - prv.AspVol) * ctrlFreq
+	vtc.FricVol = (cur.FricVol - prv.FricVol) * ctrlFreq
+	vtc.FricPos = (cur.FricPos - prv.FricPos) * ctrlFreq
+	vtc.FricCf = (cur.FricCf - prv.FricCf) * ctrlFreq
+	vtc.FricBw = (cur.FricBw - prv.FricBw) * ctrlFreq
+	for i, _ := range vtc.Radii {
+		vtc.Radii[i] = cur.Radii[i] - prv.Radii[i]*ctrlFreq
+	}
+	vtc.Velum = (cur.Velum - prv.Velum) * ctrlFreq
 }
 
 // UpdateFromDeltas updates values in this set of params from deltas
 func (vtc *VocalTractCtrl) UpdateFromDeltas(deltas *VocalTractCtrl) {
-	// todo:
-	//  for(int i=0; i< N_PARAMS; i++) {
-	//    float dval = del.ParamVal(i);
-	//    float& nval = ParamVal(i);
-	//    nval += dval;
-	//  }
+	vtc.GlotPitch += deltas.GlotPitch
+	vtc.GlotVol += deltas.GlotVol
+	vtc.AspVol += deltas.AspVol
+	vtc.FricVol += deltas.FricVol
+	vtc.FricPos += deltas.FricPos
+	vtc.FricCf += deltas.FricCf
+	vtc.FricBw += deltas.FricBw
+	for i, _ := range vtc.Radii {
+		vtc.Radii[i] += deltas.Radii[i]
+	}
+	vtc.Velum += deltas.Velum
 }
 
 // DefaultMaxDeltas updates the default max delta values in this object (for DeltaMax field in VocalTract)
@@ -462,7 +466,7 @@ type VocalTract struct {
 	DeltaControl VocalTractCtrl `desc:"XX"`
 	DeltaMax     VocalTractCtrl `desc:"XX"`
 	PhoneTable   etable.Table   `desc:"XX"`
-	DictTable    etable.Table   `desc:"XX"`
+	Dictionary   etable.Table   `desc:"XX"`
 
 	// derived values
 	ControlRate      float32 `desc:"XX"` // 1.0-1000.0 input tables/second (Hz)
@@ -525,41 +529,14 @@ func (vt *VocalTract) Init() {
 	vt.InitializeSynthesizer()
 	vt.PrevControl.SetFromParams(&vt.CurControl) // no deltas if reset
 	vt.CurrentData.SetFromParams(&vt.CurControl)
-
 	vt.DeltaMax.DefaultMaxDeltas()
-	// outputData_.reserve(OUTPUT_VECTOR_RESERVE);
-
+	vt.OutputData = make([]float32, OutputSize)
 }
 
 func (vt *VocalTract) ControlFromTable(col etensor.Tensor, row int, normalized bool) {
 	params := col.SubSpace([]int{row}).(*etensor.Float32)
 	vt.CurControl.SetFromValues(params.Values)
 }
-
-//void VocalTract::SynthFromTable(const Table& table, const Variant& col, int row,
-//                                   bool normalized, bool reset_first) {
-// float_MatrixPtr mtx;
-// mtx = (float_Matrix*)table.GetValAsMatrix(col, row);
-// if(TestError(!(bool)mtx, "SynthFromTable", "matrix column not found")) {
-//   return;
-// }
-// if(mtx->dims() == 2 && mtx->dim(0) == VocalTractCtrl::N_PARAMS) {
-//   // multi-dim case..
-//   int n_outer = mtx->dim(1);
-//   for(int i=0; i< n_outer; i++) {
-//     float_MatrixPtr frm;
-//     frm = (float_Matrix*)mtx->GetFrameSlice(i);
-//     CtrlFromMatrix(*frm, normalized);
-//     Synthesize(reset_first && (i == 0));
-//   }
-// }
-// else {
-//   // one-shot
-//   cur_ctrl.SetFromTable(table, col, row, normalized);
-//   Synthesize(reset_first);
-// }
-//}
-//
 
 // LoadEnglishPhones loads the file of English phones
 func (vt *VocalTract) LoadEnglishPhones() {
@@ -571,10 +548,10 @@ func (vt *VocalTract) LoadEnglishPhones() {
 	}
 }
 
-// LoadEnglishDict loads the English dictionary of words composed of phones and transitions
-func (vt *VocalTract) LoadEnglishDict() {
+//  LoadDictionary loads the English dictionary of words composed of phones and transitions
+func (vt *VocalTract) LoadDictionary() {
 	fn := gi.FileName("VocalTractEnglishDict.dtbl")
-	err := vt.DictTable.OpenCSV(fn, '\t')
+	err := vt.Dictionary.OpenCSV(fn, '\t')
 	if err != nil {
 		fmt.Printf("File not found or error open file: %s (%s)", fn, err)
 		return
@@ -601,13 +578,13 @@ func (vt *VocalTract) SynthPhone(phon string, stress, doubleStress, syllable, re
 		return false
 	}
 
-	dcol := vt.PhoneTable.ColByName("duration")
-	dur := dcol.FloatVal1D(idx)
-	tcol := vt.PhoneTable.ColByName("transition")
-	trans := tcol.FloatVal1D(idx)
-	totalTime := (dur + trans) * 1.5
+	dc := vt.PhoneTable.ColByName("duration")
+	dv := dc.FloatVal1D(idx)
+	tc := vt.PhoneTable.ColByName("transition")
+	tv := tc.FloatVal1D(idx)
+	tt := (dv + tv) * 1.5
 
-	nReps := math.Ceil(totalTime / float64(vt.Duration))
+	nReps := math.Ceil(tt / float64(vt.Duration))
 	nReps = math.Max(nReps, 1.0)
 
 	vt.ControlFromTable(vt.PhoneTable.ColByName("phone_data"), idx, false)
@@ -680,10 +657,10 @@ func (vt *VocalTract) SynthPhones(phones string, resetFirst, play bool) bool {
 
 // SynthWord
 func (vt *VocalTract) SynthWord(word string, resetFirst bool, play bool) bool {
-	if vt.DictTable.Rows == 0 {
-		vt.LoadEnglishDict()
+	if vt.Dictionary.Rows == 0 {
+		vt.LoadDictionary()
 	}
-	col := vt.DictTable.ColByName("word")
+	col := vt.Dictionary.ColByName("word")
 	if col == nil {
 		fmt.Printf("Column name 'word' not found")
 		return false
@@ -698,7 +675,7 @@ func (vt *VocalTract) SynthWord(word string, resetFirst bool, play bool) bool {
 	if idx == -1 {
 		return false
 	}
-	col = vt.DictTable.ColByName("phones")
+	col = vt.Dictionary.ColByName("phones")
 	if col == nil {
 		fmt.Printf("Column name 'phones' not found")
 		return false
@@ -763,7 +740,9 @@ func (vt *VocalTract) Reset() {
 	vt.CrossmixFactor = 0.0
 	vt.BreathinessFactor = 0.0
 	vt.PrevGlotAmplitude = -1.0
-	vt.OutputData = vt.OutputData[:0]
+	for i := 0; i < len(vt.OutputData); i++ {
+		vt.OutputData[i] = 0
+	}
 
 	vt.SampleRateConverter.Reset()
 	vt.MouthRadiationFilter.Reset()
@@ -825,7 +804,9 @@ func (vt *VocalTract) InitializeSynthesizer() {
 
 	vt.SampleRateConverter.Init(vt.SampleRate, OutputRate, &vt.OutputData)
 	vt.SampleRateConverter.Reset()
-	vt.OutputData = vt.OutputData[:0]
+	for i := 0; i < len(vt.OutputData); i++ {
+		vt.OutputData[i] = 0
+	}
 
 	vt.BandpassFilter.Reset()
 	vt.NoiseFilter.Reset()
@@ -860,18 +841,18 @@ func (vt *VocalTract) SynthReset(initBuffer bool) {
 }
 
 // Synth set params before making a call to synthesize the signal and then outputs the signal
-func (vt *VocalTract) Synth(resetFirst bool) {
+func (vt *VocalTract) Synth(reset bool) {
 	ctrlRate := 1.0 / (vt.Duration / 1000.0)
 	if ctrlRate != vt.ControlRate { // todo: if ctrlRate != vt.ControlRate || !IsValid()
 		vt.InitSynth()
-	} else if resetFirst {
+	} else if reset {
 		vt.SynthReset(true)
 	}
 
 	controlFreq := 1.0 / float32(vt.ControlPeriod)
 	//fmt.Printf("control period: %v, freq: %v", vt.ControlPeriod, controlFreq)
 
-	vt.DeltaControl.ComputeDeltas(&vt.CurControl, &vt.PrevControl, &vt.DeltaMax, float32(controlFreq))
+	vt.DeltaControl.ComputeDeltas(&vt.CurControl, &vt.PrevControl, float32(controlFreq))
 
 	for j := 0; j < vt.ControlPeriod; j++ {
 		vt.SynthSignal()
@@ -885,7 +866,7 @@ func (vt *VocalTract) Synth(resetFirst bool) {
 	}
 
 	for f := 0; f < nFrames; f++ {
-		fmt.Printf("%f\n", vt.OutputData[f])
+		//fmt.Printf("%f\n", vt.OutputData[f])
 		vt.Buf.Buf.Data[f] = int(vt.OutputData[f])
 	}
 
@@ -941,9 +922,11 @@ func (vt *VocalTract) SynthSignal() {
 
 	// put signal through vocal tract
 	signal = vt.Update(((pulse + (ah1 * signal)) * VtScale), vt.BandpassFilter.Filter(signal))
+	fmt.Printf("%f\n", signal)
 
 	// put pulse through throat
 	signal += vt.Throat.Process(pulse * VtScale)
+	fmt.Printf("%f\n", signal)
 
 	// output sample here
 	vt.SampleRateConverter.DataFill(signal)
@@ -1026,14 +1009,6 @@ func (vt *VocalTract) SetFricationTaps() {
 			vt.FricationTap[i] = 0.0
 		}
 	}
-	//#if 0
-	// /*  PRINT OUT  */
-	// printf("fricationTaps:  ");
-	// for (i = FC1; i < TOTAL_FRIC_COEFFICIENTS; i++)
-	//   printf("%.6f  ", fricationTap[i]);
-	// printf("\n");
-	//#endif
-	//}
 }
 
 // Update updates the pressure wave throughout the vocal tract, and returns
