@@ -140,7 +140,6 @@ func (vp *VoiceParams) Defaults() {
 	//vp.Radius = 0.8
 	vp.NoseRadiusCoef = 1.0
 	vp.RadiusCoef = 1.0
-	vp.Female() // need to call some AgeGender in case caller doesn't!
 }
 
 func (vp *VoiceParams) Male() {
@@ -509,27 +508,26 @@ type VocalTract struct {
 
 // Init gets us going - this is the first function to call
 func (vt *VocalTract) Init() {
+	vt.Defaults()
+	vt.Voice.Defaults()
+	vt.Voice.SetAgeGender(Male)
+	vt.Voice.Breathiness = 1.5 // ToDo: how is it getting set in C++ version and why isn't the male value!!
+	vt.Params.Defaults()
+	vt.InitSynth()
+	vt.CurrentData.Defaults()
+	vt.CurControl.SetFromParams(&vt.CurrentData)
+	// do we need the next 2 set here?
+	vt.PrevControl.SetFromParams(&vt.CurControl) // no deltas if reset
+	vt.CurrentData.SetFromParams(&vt.CurControl)
+}
+
+func (vt *VocalTract) Defaults() {
 	vt.Volume = 60.0
 	vt.Balance = 0.0
 	vt.Duration = 25.0
 	vt.ControlRate = 0.0
-	vt.SampleRate = 44100
-	vt.Duration = 25
-	// todo	del_max.DefaultMaxDeltas();
-
-	vt.CurrentData.Defaults()
-	vt.CurControl.SetFromParams(&vt.CurrentData)
-	vt.Voice.Defaults()
-	//vt.Voice.SetAgeGender(Male)
-	vt.Params.Defaults()
-	vt.InitBuffer()
-	vt.Reset()
-	ctrlRate := 1.0 / (vt.Duration / 1000.0)
-	vt.ControlRate = ctrlRate
-	vt.InitializeSynthesizer()
-	vt.PrevControl.SetFromParams(&vt.CurControl) // no deltas if reset
-	vt.CurrentData.SetFromParams(&vt.CurControl)
 	vt.DeltaMax.DefaultMaxDeltas()
+	vt.Reset()
 	vt.OutputData = make([]float32, OutputSize)
 }
 
@@ -814,6 +812,7 @@ func (vt *VocalTract) InitializeSynthesizer() {
 }
 
 func (vt *VocalTract) InitSynth() {
+	vt.SampleRate = 44100
 	vt.InitBuffer()
 	vt.Reset()
 	vt.ControlRate = 1.0 / (vt.Duration / 1000.0)

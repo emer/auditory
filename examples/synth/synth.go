@@ -83,7 +83,6 @@ func mainrun() {
 	TheSyn.Defaults()
 	TheSyn.vc.Init()
 	TheSyn.vc.LoadEnglishPhones()
-	TheSyn.vc.InitSynth()
 	TheSyn.vc.SynthPhones("ee", true, true)
 
 	win := TheSyn.ConfigGui()
