@@ -492,7 +492,7 @@ type VocalTract struct {
 	BreathinessFactor float32
 	PrevGlotAmplitude float32
 
-	OutputData []float32
+	SynthOutput []float32
 
 	SampleRateConverter   RateConverter
 	MouthRadiationFilter  RadiationFilter
@@ -528,7 +528,7 @@ func (vt *VocalTract) Defaults() {
 	vt.ControlRate = 0.0
 	vt.DeltaMax.DefaultMaxDeltas()
 	vt.Reset()
-	vt.OutputData = make([]float32, OutputSize)
+	vt.SynthOutput = make([]float32, 0)
 }
 
 func (vt *VocalTract) ControlFromTable(col etensor.Tensor, row int, normalized bool) {
@@ -594,6 +594,12 @@ func (vt *VocalTract) SynthPhone(phon string, stress, doubleStress, syllable, re
 	}
 	for i := 0; i < int(nReps); i++ {
 		vt.Synth(false)
+	}
+	PCM := 1
+	fn := "foo.wav"
+	err := vt.Buf.Unload(fn, vt.Buf.SampleRate(), vt.Buf.Buf.SourceBitDepth, 1, PCM)
+	if err != nil {
+		fmt.Printf("File not found or error opengin file: %s (%s)", fn, err)
 	}
 	return true
 }
@@ -738,8 +744,8 @@ func (vt *VocalTract) Reset() {
 	vt.CrossmixFactor = 0.0
 	vt.BreathinessFactor = 0.0
 	vt.PrevGlotAmplitude = -1.0
-	for i := 0; i < len(vt.OutputData); i++ {
-		vt.OutputData[i] = 0
+	for i := 0; i < len(vt.SynthOutput); i++ {
+		vt.SynthOutput[i] = 0
 	}
 
 	vt.SampleRateConverter.Reset()
@@ -800,10 +806,10 @@ func (vt *VocalTract) InitializeSynthesizer() {
 	vt.Throat.Init(float32(vt.SampleRate), vt.Params.ThroatCutoff, Amplitude(vt.Params.ThroatVol))
 	vt.Throat.Reset()
 
-	vt.SampleRateConverter.Init(vt.SampleRate, OutputRate, &vt.OutputData)
+	vt.SampleRateConverter.Init(vt.SampleRate, OutputRate, &vt.SynthOutput)
 	vt.SampleRateConverter.Reset()
-	for i := 0; i < len(vt.OutputData); i++ {
-		vt.OutputData[i] = 0
+	for i := 0; i < len(vt.SynthOutput); i++ {
+		vt.SynthOutput[i] = 0
 	}
 
 	vt.BandpassFilter.Reset()
@@ -813,7 +819,7 @@ func (vt *VocalTract) InitializeSynthesizer() {
 
 func (vt *VocalTract) InitSynth() {
 	vt.SampleRate = 44100
-	vt.InitBuffer()
+	vt.InitSndBuf(0, 1, vt.SampleRate, 16)
 	vt.Reset()
 	vt.ControlRate = 1.0 / (vt.Duration / 1000.0)
 	vt.InitializeSynthesizer()
@@ -822,11 +828,11 @@ func (vt *VocalTract) InitSynth() {
 }
 
 // InitBuffer
-func (vt *VocalTract) InitBuffer() {
-	frames := (vt.Duration / 1000.0) * float32(vt.SampleRate)
+func (vt *VocalTract) InitSndBuf(frames int, channels, rate, bitDepth int) {
+	//frames := (vt.Duration / 1000.0) * float32(vt.SampleRate)
 	format := &audio.Format{
-		NumChannels: 1,
-		SampleRate:  vt.SampleRate,
+		NumChannels: channels,
+		SampleRate:  rate,
 	}
 	vt.Buf.Buf = &audio.IntBuffer{Data: make([]int, int(frames)), Format: format, SourceBitDepth: 16}
 }
@@ -835,7 +841,7 @@ func (vt *VocalTract) InitBuffer() {
 func (vt *VocalTract) SynthReset(initBuffer bool) {
 	vt.InitSynth()
 	if initBuffer {
-		vt.InitBuffer()
+		vt.InitSndBuf(0, 1, vt.SampleRate, 16)
 	}
 }
 
@@ -859,23 +865,28 @@ func (vt *VocalTract) Synth(reset bool) {
 	}
 	vt.PrevControl.SetFromParams(&vt.CurrentData) // prev is where we actually got, not where we wanted to get..
 
-	nFrames := len(vt.OutputData)
-	if vt.Buf.Buf.NumFrames() < nFrames {
-		vt.Buf.Buf.Data = make([]int, nFrames)
+	//sz := vt.Buf.SampleSize()
+	//type := vt.Buf.SampleType()
+	curBufFrames := vt.Buf.Buf.NumFrames()
+	needBufFrames := len(vt.SynthOutput)
+	if curBufFrames < needBufFrames {
+		vt.InitSndBuf(needBufFrames, 1, vt.SampleRate, 16)
 	}
 
-	for f := 0; f < nFrames; f++ {
-		//fmt.Printf("%f\n", vt.OutputData[f])
-		vt.Buf.Buf.Data[f] = int(vt.OutputData[f])
+	//scale := vt.MonoScale()
+
+	for f := 0; f < needBufFrames; f++ {
+		fmt.Printf("%f\n", vt.SynthOutput[f])
+		//vt.Buf.Buf.Data[f] = int(vt.SynthOutput[f])
 	}
 
-	PCM := 1
-	fn := "foo.wav"
-	err := vt.Buf.Unload(fn, vt.Buf.SampleRate(), vt.Buf.Buf.SourceBitDepth, 1, PCM)
-	if err != nil {
-		fmt.Printf("File not found or error opengin file: %s (%s)", fn, err)
-		return
-	}
+	//PCM := 1
+	//fn := "foo.wav"
+	//err := vt.Buf.Unload(fn, vt.Buf.SampleRate(), vt.Buf.Buf.SourceBitDepth, 1, PCM)
+	//if err != nil {
+	//	fmt.Printf("File not found or error opengin file: %s (%s)", fn, err)
+	//	return
+	//}
 }
 
 // SynthSignal
@@ -905,7 +916,9 @@ func (vt *VocalTract) SynthSignal() {
 
 	// create noisy glottal pulse
 	pulse = ax * ((pulse * (1.0 - vt.BreathinessFactor)) + (pulsedNoise * vt.BreathinessFactor))
+	//fmt.Printf("%f\n", pulse)
 
+	// Pulse is GOOD  - What about pulsedNoise???
 	var signal float32
 	// cross-mix pure noise with pulsed noise
 	if vt.Params.NoiseMod {
@@ -917,19 +930,18 @@ func (vt *VocalTract) SynthSignal() {
 	} else {
 		signal = lpNoise
 	}
-	fmt.Printf("%f\n", signal)
+	//fmt.Printf("%f\n", signal)
 
 	// put signal through vocal tract
 	signal = vt.Update(((pulse + (ah1 * signal)) * VtScale), vt.BandpassFilter.Filter(signal))
-	fmt.Printf("%f\n", signal)
+	//fmt.Printf("%f\n", signal)
 
 	// put pulse through throat
 	signal += vt.Throat.Process(pulse * VtScale)
-	fmt.Printf("%f\n", signal)
+	//fmt.Printf("%f\n", signal)
 
 	// output sample here
 	vt.SampleRateConverter.DataFill(signal)
-
 	vt.PrevGlotAmplitude = ax
 }
 

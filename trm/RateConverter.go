@@ -58,6 +58,22 @@ const FractionMask uint32 = 0x0000FFFF
 const BufferSize = 1024  // ring buffer size
 const OutputRate = 44100 // output sample rate (22.05, 44.1 KHz)
 
+func nValue(x uint32) uint32 {
+	return ((x) & NMask) >> FractionBits
+}
+
+func lValue(x uint32) uint32 {
+	return ((x) & LMask) >> MBits
+}
+
+func mValue(x uint32) uint32 {
+	return (x) & MMask
+}
+
+func fractionValue(x uint32) uint32 {
+	return (x) & FractionMask
+}
+
 // RateConverter converts the sample rate
 type RateConverter struct {
 	SampleRateRatio  float32
@@ -75,12 +91,13 @@ type RateConverter struct {
 	H                [FilterLength]float32
 	DeltaH           [FilterLength]float32
 	Buffer           [BufferSize]float32
-	OutputData       []float32
+	OutputData       *[]float32
 }
 
 // Init
 func (src *RateConverter) Init(sampleRate int, outputRate int, outputData *[]float32) {
-	src.OutputData = append(src.OutputData, *outputData...)
+	//src.OutputData = append(src.OutputData, *outputData...)
+	src.OutputData = outputData
 	src.InitConversion(sampleRate, float32(outputRate))
 }
 
@@ -200,23 +217,23 @@ func (src *RateConverter) DataEmpty() {
 	if src.SampleRateRatio >= 1.0 {
 		for src.EmptyPtr < endPtr {
 			output := float32(0.0)
-			interpolation := float32(MValue(src.TimeReg)) / float32(MRange)
+			interpolation := float32(mValue(src.TimeReg)) / float32(MRange)
 
 			// compute the left side of the filter convolution
 			index := src.EmptyPtr
-			for fidx := LValue(src.TimeReg); fidx < FilterLength; fidx += uint32(src.FilterIncrement) {
+			for fidx := lValue(src.TimeReg); fidx < FilterLength; fidx += uint32(src.FilterIncrement) {
 				SrDecrement(&index, BufferSize)
 				output += (src.Buffer[index]*src.H[fidx] + (src.DeltaH[fidx] * interpolation))
 			}
 
 			// adjust values for right side calculation
 			src.TimeReg = ^src.TimeReg // inverse of each bit
-			interpolation = float32(MValue(src.TimeReg)) / float32(MRange)
+			interpolation = float32(mValue(src.TimeReg)) / float32(MRange)
 
 			// compute the right side of the filter convolution
 			index = src.EmptyPtr
 			SrIncrement(&index, BufferSize)
-			for fidx := LValue(src.TimeReg); fidx < FilterLength; fidx += uint32(src.FilterIncrement) {
+			for fidx := lValue(src.TimeReg); fidx < FilterLength; fidx += uint32(src.FilterIncrement) {
 				SrDecrement(&index, BufferSize)
 				output += (src.Buffer[index]*src.H[fidx] + (src.DeltaH[fidx] * interpolation))
 			}
@@ -230,15 +247,14 @@ func (src *RateConverter) DataEmpty() {
 			src.NSamples += 1
 
 			// save the sample
-			src.OutputData = append(src.OutputData, output)
-
-			src.TimeReg += src.TimeRegIncrement
+			*src.OutputData = append(*src.OutputData, output)
 
 			// change time register back to original form
 			src.TimeReg = ^src.TimeReg
+			src.TimeReg += src.TimeRegIncrement
 
 			// increment the empty pointer, adjusting it and end pointer
-			src.EmptyPtr += int32(NValue(src.TimeReg))
+			src.EmptyPtr += int32(nValue(src.TimeReg))
 			if src.EmptyPtr >= BufferSize {
 				src.EmptyPtr -= BufferSize
 				endPtr -= BufferSize
@@ -247,6 +263,69 @@ func (src *RateConverter) DataEmpty() {
 			// clear n part of time register
 			src.TimeReg &= ^NMask
 		}
+	} else {
+		///*  DOWNSAMPLING CONVERSION LOOP  */
+		//
+		//while (emptyPtr_ < endPtr) {
+		//
+		//	/*  RESET ACCUMULATOR TO ZERO  */
+		//	float output = 0.0;
+		//
+		//	/*  COMPUTE P PRIME  */
+		//	unsigned int phaseIndex = (unsigned int) rint(
+		//		((float) fractionValue(timeRegister_)) * sampleRateRatio_);
+		//
+		//	/*  COMPUTE THE LEFT SIDE OF THE FILTER CONVOLUTION  */
+		//	int index = emptyPtr_;
+		//	unsigned int impulseIndex;
+		//	while ((impulseIndex = (phaseIndex >> M_BITS)) < FILTER_LENGTH) {
+		//		float impulse = h_[impulseIndex] + (deltaH_[impulseIndex] *
+		//			(((float) mValue(phaseIndex)) / (float) M_RANGE));
+		//		output += (buffer_[index] * impulse);
+		//		srDecrement(&index, BUFFER_SIZE);
+		//		phaseIndex += phaseIncrement_;
+		//	}
+		//
+		//	/*  COMPUTE P PRIME, ADJUSTED FOR RIGHT SIDE  */
+		//	phaseIndex = (unsigned int) rint(
+		//		((float) fractionValue(~timeRegister_)) * sampleRateRatio_);
+		//
+		//	/*  COMPUTE THE RIGHT SIDE OF THE FILTER CONVOLUTION  */
+		//	index = emptyPtr_;
+		//	srIncrement(&index, BUFFER_SIZE);
+		//	while ((impulseIndex = (phaseIndex >> M_BITS)) < FILTER_LENGTH) {
+		//		float impulse = h_[impulseIndex] + (deltaH_[impulseIndex] *
+		//			(((float) mValue(phaseIndex)) / (float) M_RANGE));
+		//		output += (buffer_[index] * impulse);
+		//		srIncrement(&index, BUFFER_SIZE);
+		//		phaseIndex += phaseIncrement_;
+		//	}
+		//
+		//	/*  RECORD MAXIMUM SAMPLE VALUE  */
+		//	float absoluteSampleValue = fabs(output);
+		//	if (absoluteSampleValue > maximumSampleValue_) {
+		//		maximumSampleValue_ = absoluteSampleValue;
+		//	}
+		//
+		//	/*  INCREMENT SAMPLE NUMBER  */
+		//	numberSamples_++;
+		//
+		//	/*  SAVE THE SAMPLE  */
+		//	outputData_.push_back(static_cast<float>(output));
+		//
+		//	/*  INCREMENT THE TIME REGISTER  */
+		//	timeRegister_ += timeRegisterIncrement_;
+		//
+		//	/*  INCREMENT THE EMPTY POINTER, ADJUSTING IT AND END POINTER  */
+		//	emptyPtr_ += nValue(timeRegister_);
+		//	if (emptyPtr_ >= BUFFER_SIZE) {
+		//		emptyPtr_ -= BUFFER_SIZE;
+		//		endPtr -= BUFFER_SIZE;
+		//	}
+		//
+		//	/*  CLEAR N PART OF TIME REGISTER  */
+		//	timeRegister_ &= (~N_MASK);
+		//}
 	}
 }
 
@@ -277,34 +356,4 @@ func (src *RateConverter) FlushBuffer() {
 		src.DataFill(0.0)
 	}
 	src.DataEmpty()
-}
-
-// NValue
-func NValue(x uint32) uint32 {
-	y := x
-	y &= NMask
-	y = y >> FractionBits
-	return y
-}
-
-// LValue
-func LValue(x uint32) uint32 {
-	y := x
-	y &= LMask
-	y = y >> MBits
-	return y
-}
-
-// MValue
-func MValue(x uint32) uint32 {
-	y := x
-	y &= MMask
-	return y
-}
-
-// FractionValue
-func FractionValue(x uint32) uint32 {
-	y := x
-	y &= FractionMask
-	return y
 }
