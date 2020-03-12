@@ -19,7 +19,7 @@ import (
 	"github.com/goki/gi/gimain"
 	"github.com/goki/gi/giv"
 	"github.com/goki/ki/ki"
-	"gonum.org/v1/gonum/fourier"
+	"gonum.org/v1/gonum/dsp/fourier"
 )
 
 // this is the stub main for gogi that calls our actual

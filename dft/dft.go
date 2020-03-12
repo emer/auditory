@@ -8,7 +8,7 @@ import (
 	"math"
 
 	"github.com/emer/etable/etensor"
-	"gonum.org/v1/gonum/fourier"
+	"gonum.org/v1/gonum/dsp/fourier"
 )
 
 // Dft struct holds the variables for doing a fourier transform

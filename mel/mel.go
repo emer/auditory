@@ -10,7 +10,7 @@ import (
 
 	"github.com/chewxy/math32"
 	"github.com/emer/etable/etensor"
-	"gonum.org/v1/gonum/fourier"
+	"gonum.org/v1/gonum/dsp/fourier"
 )
 
 // FilterBank contains mel frequency feature bank sampling parameters
