@@ -27,17 +27,19 @@
 
 package trm
 
-import "github.com/chewxy/math32"
+import (
+	"math"
+)
 
 // BandPassFilter
 type BandpassFilter struct {
-	bpAlpha float32
-	bpBeta  float32
-	bpGamma float32
-	xn1     float32
-	xn2     float32
-	yn1     float32
-	yn2     float32
+	bpAlpha float64
+	bpBeta  float64
+	bpGamma float64
+	xn1     float64
+	xn2     float64
+	yn1     float64
+	yn2     float64
 }
 
 // Reset sets the filter values to zero
@@ -49,16 +51,16 @@ func (bf *BandpassFilter) Reset() {
 }
 
 // Update sets the filter values based on sample rate, bandwidth and center frequency
-func (bf *BandpassFilter) Update(sampleRate, bandwidth, centerFreq float32) {
-	tanValue := math32.Tan((math32.Pi * bandwidth) / sampleRate)
-	cosValue := math32.Cos((2.0 * math32.Pi * centerFreq) / sampleRate)
+func (bf *BandpassFilter) Update(sampleRate, bandwidth, centerFreq float64) {
+	tanValue := math.Tan((math.Pi * bandwidth) / sampleRate)
+	cosValue := math.Cos((2.0 * math.Pi * centerFreq) / sampleRate)
 	bf.bpBeta = (1.0 - tanValue) / (2.0 * (1.0 + tanValue))
 	bf.bpGamma = (0.5 + bf.bpBeta) * cosValue
 	bf.bpAlpha = (0.5 - bf.bpBeta) / 2.0
 }
 
 // BandpassFilter is a Frication bandpass filter, with variable center frequency and bandwidth
-func (bf *BandpassFilter) Filter(input float32) float32 {
+func (bf *BandpassFilter) Filter(input float64) float64 {
 	output := 2.0 * ((bf.bpAlpha * (input - bf.xn2)) + (bf.bpGamma * bf.yn1) - (bf.bpBeta * bf.yn2))
 
 	bf.xn2 = bf.xn1
