@@ -27,7 +27,8 @@
 
 package trm
 
-// RadiationFilter
+// RadiationFilter is a variable, one-zero, one-pole, highpass filter, whose cutoff point
+// is determined by the aperture coefficient.
 type RadiationFilter struct {
 	A20        float32
 	A21        float32

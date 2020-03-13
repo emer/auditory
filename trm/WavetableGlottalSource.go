@@ -176,7 +176,6 @@ func (wgs *WavetableGlottalSource) GetSample(frequency float32) (output float32)
 
 		return output
 	}
-
 }
 
 // Mod0 returns the modulus of 'value', keeping it in the range 0 -> TableModulus

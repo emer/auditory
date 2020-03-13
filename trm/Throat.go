@@ -49,7 +49,8 @@ func (thr *Throat) Reset() {
 }
 
 // Process simulates the radiation of sound through the walls of the throat.
-// Note that this form of the filter uses addition instead of subtraction for the econd term, since tb1 has reversed sign.
+// Note that this form of the filter uses addition instead of subtraction for the econd term,
+// since tb1 has reversed sign.
 func (thr *Throat) Process(input float32) float32 {
 	output := (thr.ta0 * input) + (thr.tb1 * thr.Y)
 	thr.Y = output

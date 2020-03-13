@@ -67,7 +67,7 @@ func (ff *FirFilter) Init(beta, gamma, cutoff float32) {
 			increment = 1
 		}
 	}
-	ff.Ptr = p
+	ff.Ptr = 0
 }
 
 // Reset resets the data and sets the pointer to first element

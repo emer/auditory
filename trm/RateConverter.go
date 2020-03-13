@@ -34,15 +34,15 @@ import (
 )
 
 // kaiser window params
-const Beta = float32(5.658)
+const Beta = float32(5.658) // kaiser window parameters
 const IZeroEpsilon = 1e-21
 
 // Sample rate conversion constants
-const ZeroCrossings = 13              // SRC CUTOFF FRQ
-const LpCutoff = float32(11.0 / 13.0) // 0.846 OF NYQUIST
+const ZeroCrossings = 13              // source cutoff frequency
+const LpCutoff = float32(11.0 / 13.0) // 0.846 of nyquist
 const FilterLength = ZeroCrossings * LRange
 
-//const N_BITS                    16
+// const NBits = 16
 const LBits = 8
 const LRange = 256 // must be 2^L_BITS
 const MBits = 8
