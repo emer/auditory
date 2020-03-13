@@ -879,14 +879,6 @@ func (vt *VocalTract) Synth(reset bool) {
 		fmt.Printf("%f\n", vt.SynthOutput[f])
 		//vt.Buf.Buf.Data[f] = int(vt.SynthOutput[f])
 	}
-
-	//PCM := 1
-	//fn := "foo.wav"
-	//err := vt.Buf.Unload(fn, vt.Buf.SampleRate(), vt.Buf.Buf.SourceBitDepth, 1, PCM)
-	//if err != nil {
-	//	fmt.Printf("File not found or error opengin file: %s (%s)", fn, err)
-	//	return
-	//}
 }
 
 // SynthSignal
@@ -897,7 +889,7 @@ func (vt *VocalTract) SynthSignal() {
 	ah1 := Amplitude(vt.CurrentData.AspVol)
 	vt.TubeCoefficients()
 	vt.SetFricationTaps()
-	vt.BandpassFilter.Update(float32(vt.SampleRate), vt.CurrentData.FricBw, vt.CurrentData.FricCf)
+	vt.BandpassFilter.Update(float64(vt.SampleRate), float64(vt.CurrentData.FricBw), float64(vt.CurrentData.FricCf))
 
 	// do synthesis here
 	// create low-pass filtered noise
@@ -933,8 +925,8 @@ func (vt *VocalTract) SynthSignal() {
 	//fmt.Printf("%f\n", signal)
 
 	// put signal through vocal tract
-	signal = vt.Update(((pulse + (ah1 * signal)) * VtScale), vt.BandpassFilter.Filter(signal))
-	//fmt.Printf("%f\n", signal)
+	signal = vt.Update(((pulse + (ah1 * signal)) * VtScale), float32(vt.BandpassFilter.Filter(float64(signal))))
+	//fmt.Printf("%f\n", signal
 
 	// put pulse through throat
 	signal += vt.Throat.Process(pulse * VtScale)
