@@ -5,6 +5,7 @@
 package main
 
 import (
+	"math/rand"
 	"strconv"
 
 	"github.com/emer/auditory/trm"
@@ -15,7 +16,6 @@ import (
 	"github.com/goki/gi/gi"
 	"github.com/goki/gi/gimain"
 	"github.com/goki/gi/giv"
-	"github.com/goki/gi/mat32"
 )
 
 // this is the stub main for gogi that calls our actual
@@ -30,13 +30,18 @@ func main() {
 type Synth struct {
 	vt         trm.VocalTract
 	ToolBar    *gi.ToolBar   `view:"-" desc:"the master toolbar"`
-	SignalData *etable.Table `view:"no-inline" desc:"waveform data"`
+	SignalData *etable.Table `desc:"waveform data"`
 	WavePlot   *eplot.Plot2D `view:"-" desc:"waveform plot"`
 }
 
 func (syn *Synth) Defaults() {
 	syn.SignalData = &etable.Table{}
 	syn.ConfigSignalData(syn.SignalData)
+	for i := 0; i < 100; i++ {
+		syn.SignalData.AddRows(1)
+		syn.SignalData.SetCellFloat("Time", i, float64(i))
+		syn.SignalData.SetCellFloat("Amplitude", i, rand.Float64())
+	}
 }
 
 // ConfigSignalData
@@ -47,6 +52,7 @@ func (syn *Synth) ConfigSignalData(dt *etable.Table) {
 	dt.SetMetaData("precision", strconv.Itoa(4))
 
 	sch := etable.Schema{
+		{"Time", etensor.FLOAT64, nil, nil},
 		{"Amplitude", etensor.FLOAT64, nil, nil},
 	}
 	dt.SetFromSchema(sch, 0)
@@ -58,7 +64,7 @@ func (syn *Synth) ConfigWavePlot(plt *eplot.Plot2D, dt *etable.Table) *eplot.Plo
 	plt.SetTable(dt)
 
 	// order of params: on, fixMin, min, fixMax, max
-	plt.SetColParams("Run", eplot.Off, eplot.FixMin, 0, eplot.FloatMax, 0)
+	plt.SetColParams("Amplitude", eplot.On, eplot.FixMin, -1, eplot.FloatMax, 1)
 
 	return plt
 }
@@ -86,7 +92,7 @@ func (syn *Synth) ConfigGui() *gi.Window {
 	syn.ToolBar = tbar
 
 	split := gi.AddNewSplitView(mfr, "split")
-	split.Dim = mat32.X
+	split.Dim = gi.X
 	split.SetStretchMax()
 
 	sv := giv.AddNewStructView(split, "sv")
@@ -125,5 +131,6 @@ func mainrun() {
 	TheSyn.vt.SynthPhones("ee", true, true)
 
 	win := TheSyn.ConfigGui()
+	TheSyn.WavePlot.GoUpdate()
 	win.StartEventLoop()
 }
