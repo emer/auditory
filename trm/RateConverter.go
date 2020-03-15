@@ -150,7 +150,7 @@ func (src *RateConverter) IZero(x float32) float32 {
 		temp *= temp
 		u *= temp
 		sum += u
-		if u >= IZeroEpsilon*sum {
+		if u < IZeroEpsilon*sum {
 			break
 		}
 	}
@@ -181,7 +181,7 @@ func (src *RateConverter) InitFilter() {
 	iBeta := 1.0 / src.IZero(Beta)
 	for i := 0; i < FilterLength; i++ {
 		temp := float32(i / FilterLength)
-		src.H[i] = src.IZero(math32.Sqrt(float32(1.0)-(temp*temp))) * iBeta
+		src.H[i] *= src.IZero(Beta*math32.Sqrt(float32(1.0)-(temp*temp))) * iBeta
 	}
 
 	for i := 0; i < FilterLimit; i++ {
@@ -239,7 +239,7 @@ func (src *RateConverter) DataEmpty() {
 			}
 
 			// record maximum sample value
-			absoluteSampleValue := math32.Abs(float32(output))
+			absoluteSampleValue := math32.Abs(output)
 			if absoluteSampleValue > src.MaxSampleValue {
 				src.MaxSampleValue = absoluteSampleValue
 			}
