@@ -361,14 +361,14 @@ const (
 type OroPharynxCoefs int32
 
 const (
-	OroPharynxCoef1 = iota // R1-R2 (S1-S2)
-	OroPharynxCoef2        // R2-R3 (S2-S3)
-	OroPharynxCoef3        // R3-R4 (S3-S4)
-	OroPharynxCoef4        // R4-R5 (S5-S6)
-	OroPharynxCoef5        // R5-R6 (S7-S8)
-	OroPharynxCoef6        // R6-R7 (S8-S9)
-	OroPharynxCoef7        // R7-R8 (S9-S10)
-	OroPharynxCoef8        // R8-Air (S10-Air)
+	OroPharynxC1 = iota // R1-R2 (S1-S2)
+	OroPharynxC2        // R2-R3 (S2-S3)
+	OroPharynxC3        // R3-R4 (S3-S4)
+	OroPharynxC4        // R4-R5 (S5-S6)
+	OroPharynxC5        // R5-R6 (S7-S8)
+	OroPharynxC6        // R6-R7 (S8-S9)
+	OroPharynxC7        // R7-R8 (S9-S10)
+	OroPharynxC8        // R8-Air (S10-Air)
 	OroPharynxCoefCount
 )
 
@@ -378,16 +378,16 @@ const (
 type OroPharynxSects int32
 
 const (
-	OroPharynxSect1  = iota // OroPharynxReg1
-	OroPharynxSect2         // OroPharynxReg2
-	OroPharynxSect3         // OroPharynxReg3
-	OroPharynxSect4         // OroPharynxReg4
-	OroPharynxSect5         // OroPharynxReg4
-	OroPharynxSect6         // OroPharynxReg5
-	OroPharynxSect7         // OroPharynxReg5
-	OroPharynxSect8         // OroPharynxReg6
-	OroPharynxSect9         // OroPharynxReg7
-	OroPharynxSect10        // OroPharynxReg8
+	OroPharynxS1  = iota // OroPharynxReg1
+	OroPharynxS2         // OroPharynxReg2
+	OroPharynxS3         // OroPharynxReg3
+	OroPharynxS4         // OroPharynxReg4
+	OroPharynxS5         // OroPharynxReg4
+	OroPharynxS6         // OroPharynxReg5
+	OroPharynxS7         // OroPharynxReg5
+	OroPharynxS8         // OroPharynxReg6
+	OroPharynxS9         // OroPharynxReg7
+	OroPharynxS10        // OroPharynxReg8
 	OroPharynxSectCount
 )
 
@@ -397,14 +397,14 @@ const (
 type NasalSections int32
 
 const (
-	NasalSect1 = iota
-	NasalSect2
-	NasalSect3
-	NasalSect4
-	NasalSect5
-	NasalSect6
+	NasalS1 = iota
+	NasalS2
+	NasalS3
+	NasalS4
+	NasalS5
+	NasalS6
 	NasalSectCount
-	Velum = NasalSect1
+	Velum = NasalS1
 )
 
 //go:generate stringer -type=NasalSections
@@ -413,12 +413,12 @@ const (
 type NasalCoefs int32
 
 const (
-	NasalCoef1     = NasalSect1 // N1-N2
-	NasalCoef2     = NasalSect2 // N2-N3
-	NasalCoef3     = NasalSect3 // N3-N4
-	NasalCoef4     = NasalSect4 // N4-N5
-	NasalCoef5     = NasalSect5 // N5-N6
-	NasalCoef6     = NasalSect6 // N6-Air
+	NasalC1        = NasalS1 // N1-N2
+	NasalC2        = NasalS2 // N2-N3
+	NasalC3        = NasalS3 // N3-N4
+	NasalC4        = NasalS4 // N4-N5
+	NasalC5        = NasalS5 // N5-N6
+	NasalC6        = NasalS6 // N6-Air
 	NasalCoefCount = NasalSectCount
 )
 
@@ -440,14 +440,14 @@ const (
 type FricationInjCoefs int32
 
 const (
-	FricationInjCoef1 = iota // S3
-	FricationInjCoef2        // S4
-	FricationInjCoef3        // S5
-	FricationInjCoef4        // S6
-	FricationInjCoef5        // S7
-	FricationInjCoef6        // S8
-	FricationInjCoef7        // S9
-	FricationInjCoef8        // S10
+	FricationInjC1 = iota // S3
+	FricationInjC2        // S4
+	FricationInjC3        // S5
+	FricationInjC4        // S6
+	FricationInjC5        // S7
+	FricationInjC6        // S8
+	FricationInjC7        // S9
+	FricationInjC8        // S10
 	FricationInjCoefCount
 )
 
@@ -942,7 +942,7 @@ func (vt *VocalTract) InitNasal() {
 	var radA2, radB2 float32
 
 	// calculate coefficients for internal fixed sections of nasal cavity
-	for i, j := NasalSect2, NasalCoef2; i < NasalSect6; i, j = i+1, j+1 {
+	for i, j := NasalS2, NasalC2; i < NasalS6; i, j = i+1, j+1 {
 		radA2 = vt.Voice.NoseRadii[i]
 		radA2 *= radA2
 		radB2 = vt.Voice.NoseRadii[i+1]
@@ -951,10 +951,10 @@ func (vt *VocalTract) InitNasal() {
 	}
 
 	// calculate the fixed coefficient for the nose aperture
-	radA2 = vt.Voice.NoseRadii[NasalSect6] // zero based
+	radA2 = vt.Voice.NoseRadii[NasalS6] // zero based
 	radA2 *= radA2
 	radB2 = vt.Voice.ApertureRadius * vt.Voice.ApertureRadius
-	vt.NasalCoefs[NasalCoef6] = (radA2 - radB2) / (radA2 + radB2)
+	vt.NasalCoefs[NasalC6] = (radA2 - radB2) / (radA2 + radB2)
 }
 
 // TubeCoefficients
@@ -973,7 +973,7 @@ func (vt *VocalTract) TubeCoefficients() {
 	radA2 = vt.CurrentData.RadiusVal(OroPharynxReg8)
 	radA2 *= radA2
 	radB2 = vt.Voice.ApertureRadius * vt.Voice.ApertureRadius
-	vt.OropharynxCoefs[OroPharynxCoef8] = (radA2 - radB2) / (radA2 + radB2)
+	vt.OropharynxCoefs[OroPharynxC8] = (radA2 - radB2) / (radA2 + radB2)
 
 	// calculate alpha coefficients for 3-way junction
 	// note:  since junction is in middle of region 4, r0_2 = r1_2
@@ -988,9 +988,9 @@ func (vt *VocalTract) TubeCoefficients() {
 
 	// and 1st nasal passage coefficient
 	radA2 = vt.CurrentData.Velum * vt.CurrentData.Velum
-	radB2 = vt.Voice.NoseRadii[NasalSect2]
+	radB2 = vt.Voice.NoseRadii[NasalS2]
 	radB2 *= radB2
-	vt.NasalCoefs[NasalCoef1] = (radA2 - radB2) / (radA2 + radB2)
+	vt.NasalCoefs[NasalC1] = (radA2 - radB2) / (radA2 + radB2)
 }
 
 // SetFricationTaps Sets frication taps according to the current position and amplitude of frication
@@ -1001,7 +1001,7 @@ func (vt *VocalTract) SetFricationTaps() {
 	complement := vt.CurrentData.FricPos - float32(integerPart)
 	remainder := 1.0 - complement
 
-	for i := FricationInjCoef1; i < FricationInjCoefCount; i++ {
+	for i := FricationInjC1; i < FricationInjCoefCount; i++ {
 		if i == int(integerPart) {
 			vt.FricationTap[i] = remainder * fricationAmplitude
 			if (i + 1) < FricationInjCoefCount {
@@ -1027,19 +1027,19 @@ func (vt *VocalTract) Update(input, frication float32) float32 {
 		vt.PrevPtr = 0
 	}
 	// input to top of tube
-	vt.Oropharynx[OroPharynxSect1][Top][vt.CurPtr] =
-		(vt.Oropharynx[OroPharynxSect1][Bottom][vt.PrevPtr] * vt.DampingFactor) + input
+	vt.Oropharynx[OroPharynxS1][Top][vt.CurPtr] =
+		(vt.Oropharynx[OroPharynxS1][Bottom][vt.PrevPtr] * vt.DampingFactor) + input
 
 	// calculate the scattering junctions for s1-s2
-	delta := vt.OropharynxCoefs[OroPharynxCoef1] *
-		(vt.Oropharynx[OroPharynxSect1][Top][vt.PrevPtr] - vt.Oropharynx[OroPharynxSect2][Bottom][vt.PrevPtr])
-	vt.Oropharynx[OroPharynxSect2][Top][vt.CurPtr] =
-		(vt.Oropharynx[OroPharynxSect1][Top][vt.PrevPtr] + delta) * vt.DampingFactor
-	vt.Oropharynx[OroPharynxSect1][Bottom][vt.CurPtr] =
-		(vt.Oropharynx[OroPharynxSect2][Bottom][vt.PrevPtr] + delta) * vt.DampingFactor
+	delta := vt.OropharynxCoefs[OroPharynxC1] *
+		(vt.Oropharynx[OroPharynxS1][Top][vt.PrevPtr] - vt.Oropharynx[OroPharynxS2][Bottom][vt.PrevPtr])
+	vt.Oropharynx[OroPharynxS2][Top][vt.CurPtr] =
+		(vt.Oropharynx[OroPharynxS1][Top][vt.PrevPtr] + delta) * vt.DampingFactor
+	vt.Oropharynx[OroPharynxS1][Bottom][vt.CurPtr] =
+		(vt.Oropharynx[OroPharynxS2][Bottom][vt.PrevPtr] + delta) * vt.DampingFactor
 
 	// calculate the scattering junctions for s2-s3 and s3-s4
-	for i, j, k := OroPharynxSect2, OroPharynxCoef2, FricationInjCoef1; i < OroPharynxSect4; i, j, k = i+1, j+1, k+1 {
+	for i, j, k := OroPharynxS2, OroPharynxC2, FricationInjC1; i < OroPharynxS4; i, j, k = i+1, j+1, k+1 {
 		delta = vt.OropharynxCoefs[j] *
 			(vt.Oropharynx[i][Top][vt.PrevPtr] - vt.Oropharynx[i+1][Bottom][vt.PrevPtr])
 		vt.Oropharynx[i+1][Top][vt.CurPtr] =
@@ -1050,34 +1050,34 @@ func (vt *VocalTract) Update(input, frication float32) float32 {
 	}
 
 	// update 3-way junction between the middle of R4 and nasal cavity
-	junctionPressure := (vt.Alpha[ThreeWayLeft] * vt.Oropharynx[OroPharynxSect4][Top][vt.PrevPtr]) +
-		(vt.Alpha[ThreeWayRight] * vt.Oropharynx[OroPharynxSect5][Bottom][vt.PrevPtr]) +
+	junctionPressure := (vt.Alpha[ThreeWayLeft] * vt.Oropharynx[OroPharynxS4][Top][vt.PrevPtr]) +
+		(vt.Alpha[ThreeWayRight] * vt.Oropharynx[OroPharynxS5][Bottom][vt.PrevPtr]) +
 		(vt.Alpha[ThreeWayUpper] * vt.Nasal[Velum][Bottom][vt.PrevPtr])
-	vt.Oropharynx[OroPharynxSect4][Bottom][vt.CurPtr] =
-		(junctionPressure - vt.Oropharynx[OroPharynxSect4][Top][vt.PrevPtr]) * vt.DampingFactor
-	vt.Oropharynx[OroPharynxSect5][Top][vt.CurPtr] =
-		((junctionPressure - vt.Oropharynx[OroPharynxSect5][Bottom][vt.PrevPtr]) * vt.DampingFactor) + (vt.FricationTap[FricationInjCoef3] * frication)
+	vt.Oropharynx[OroPharynxS4][Bottom][vt.CurPtr] =
+		(junctionPressure - vt.Oropharynx[OroPharynxS4][Top][vt.PrevPtr]) * vt.DampingFactor
+	vt.Oropharynx[OroPharynxS5][Top][vt.CurPtr] =
+		((junctionPressure - vt.Oropharynx[OroPharynxS5][Bottom][vt.PrevPtr]) * vt.DampingFactor) + (vt.FricationTap[FricationInjC3] * frication)
 	vt.Nasal[Velum][Top][vt.CurPtr] =
 		(junctionPressure - vt.Nasal[Velum][Bottom][vt.PrevPtr]) * vt.DampingFactor
 
 	// calculate junction between R4 and R5 (S5-S6)
-	delta = vt.OropharynxCoefs[OroPharynxCoef4] *
-		(vt.Oropharynx[OroPharynxSect5][Top][vt.PrevPtr] - vt.Oropharynx[OroPharynxSect6][Bottom][vt.PrevPtr])
-	vt.Oropharynx[OroPharynxSect6][Top][vt.CurPtr] =
-		((vt.Oropharynx[OroPharynxSect5][Top][vt.PrevPtr] + delta) * vt.DampingFactor) +
-			(vt.FricationTap[FricationInjCoef4] * frication)
-	vt.Oropharynx[OroPharynxSect5][Bottom][vt.CurPtr] =
-		(vt.Oropharynx[OroPharynxSect6][Bottom][vt.PrevPtr] + delta) * vt.DampingFactor
+	delta = vt.OropharynxCoefs[OroPharynxC4] *
+		(vt.Oropharynx[OroPharynxS5][Top][vt.PrevPtr] - vt.Oropharynx[OroPharynxS6][Bottom][vt.PrevPtr])
+	vt.Oropharynx[OroPharynxS6][Top][vt.CurPtr] =
+		((vt.Oropharynx[OroPharynxS5][Top][vt.PrevPtr] + delta) * vt.DampingFactor) +
+			(vt.FricationTap[FricationInjC4] * frication)
+	vt.Oropharynx[OroPharynxS5][Bottom][vt.CurPtr] =
+		(vt.Oropharynx[OroPharynxS6][Bottom][vt.PrevPtr] + delta) * vt.DampingFactor
 
 	// Calculate junction inside R5 (S6-S7) (pure delay with damping)
-	vt.Oropharynx[OroPharynxSect7][Top][vt.CurPtr] =
-		(vt.Oropharynx[OroPharynxSect6][Top][vt.PrevPtr] * vt.DampingFactor) +
-			(vt.FricationTap[FricationInjCoef5] * frication)
-	vt.Oropharynx[OroPharynxSect6][Bottom][vt.CurPtr] =
-		vt.Oropharynx[OroPharynxSect7][Bottom][vt.PrevPtr] * vt.DampingFactor
+	vt.Oropharynx[OroPharynxS7][Top][vt.CurPtr] =
+		(vt.Oropharynx[OroPharynxS6][Top][vt.PrevPtr] * vt.DampingFactor) +
+			(vt.FricationTap[FricationInjC5] * frication)
+	vt.Oropharynx[OroPharynxS6][Bottom][vt.CurPtr] =
+		vt.Oropharynx[OroPharynxS7][Bottom][vt.PrevPtr] * vt.DampingFactor
 
 	// calculate last 3 internal junctions (S7-S8, S8-S9, S9-S10)
-	for i, j, k := OroPharynxSect7, OroPharynxCoef5, FricationInjCoef6; i < OroPharynxSect10; i, j, k = i+1, j+1, k+1 {
+	for i, j, k := OroPharynxS7, OroPharynxC5, FricationInjC6; i < OroPharynxS10; i, j, k = i+1, j+1, k+1 {
 		delta = vt.OropharynxCoefs[j] *
 			(vt.Oropharynx[i][Top][vt.PrevPtr] - vt.Oropharynx[i+1][Bottom][vt.PrevPtr])
 		vt.Oropharynx[i+1][Top][vt.CurPtr] =
@@ -1088,16 +1088,16 @@ func (vt *VocalTract) Update(input, frication float32) float32 {
 	}
 
 	// reflected signal at mouth goes through a lowpass filter
-	vt.Oropharynx[OroPharynxSect10][Bottom][vt.CurPtr] = vt.DampingFactor *
-		vt.MouthReflectionFilter.Filter(vt.OropharynxCoefs[OroPharynxCoef8]*
-			vt.Oropharynx[OroPharynxSect10][Top][vt.PrevPtr])
+	vt.Oropharynx[OroPharynxS10][Bottom][vt.CurPtr] = vt.DampingFactor *
+		vt.MouthReflectionFilter.Filter(vt.OropharynxCoefs[OroPharynxC8]*
+			vt.Oropharynx[OroPharynxS10][Top][vt.PrevPtr])
 
 	// output from mouth goes through a highpass filter
-	output := vt.MouthRadiationFilter.Filter((1.0 + vt.OropharynxCoefs[OroPharynxCoef8]) *
-		vt.Oropharynx[OroPharynxSect10][Top][vt.PrevPtr])
+	output := vt.MouthRadiationFilter.Filter((1.0 + vt.OropharynxCoefs[OroPharynxC8]) *
+		vt.Oropharynx[OroPharynxS10][Top][vt.PrevPtr])
 
 	//  update nasal cavity
-	for i, j := Velum, NasalCoef1; i < NasalCoef6; i, j = i+1, j+1 {
+	for i, j := Velum, NasalC1; i < NasalC6; i, j = i+1, j+1 {
 		delta = vt.NasalCoefs[j] *
 			(vt.Nasal[i][Top][vt.PrevPtr] - vt.Nasal[i+1][Bottom][vt.PrevPtr])
 		vt.Nasal[i+1][Top][vt.CurPtr] =
@@ -1107,12 +1107,12 @@ func (vt *VocalTract) Update(input, frication float32) float32 {
 	}
 
 	// reflected signal at nose goes through a lowpass filter
-	vt.Nasal[NasalSect6][Bottom][vt.CurPtr] = vt.DampingFactor *
-		vt.NasalReflectionFilter.Filter(vt.NasalCoefs[NasalCoef6]*vt.Nasal[NasalCoef6][Top][vt.PrevPtr])
+	vt.Nasal[NasalS6][Bottom][vt.CurPtr] = vt.DampingFactor *
+		vt.NasalReflectionFilter.Filter(vt.NasalCoefs[NasalC6]*vt.Nasal[NasalC6][Top][vt.PrevPtr])
 
 	// output from nose goes through a highpass filter
-	output += vt.MouthRadiationFilter.Filter((1.0 + vt.NasalCoefs[NasalCoef6]) *
-		vt.Nasal[NasalSect6][Top][vt.PrevPtr])
+	output += vt.NasalRadiationFilter.Filter((1.0 + vt.NasalCoefs[NasalC6]) *
+		vt.Nasal[NasalS6][Top][vt.PrevPtr])
 
 	// return summed output from mouth and nose
 	return output
