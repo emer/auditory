@@ -979,7 +979,7 @@ func (vt *VocalTract) TubeCoefficients() {
 	var radA2, radB2 float32
 	// calculate coefficients for the oropharynx
 	for i := 0; i < OroPharynxRegCount-1; i++ {
-		fmt.Printf("rad val i %f\n", vt.CurrentData.RadiusVal(i))
+		//fmt.Printf("rad val i %f\n", vt.CurrentData.RadiusVal(i))
 		radA2 = vt.CurrentData.RadiusVal(i)
 		radA2 *= radA2
 		radB2 = vt.CurrentData.RadiusVal(i + 1)
@@ -993,7 +993,7 @@ func (vt *VocalTract) TubeCoefficients() {
 	radB2 = vt.Voice.ApertureRadius * vt.Voice.ApertureRadius
 	vt.OropharynxCoefs[OroPharynxC8] = (radA2 - radB2) / (radA2 + radB2)
 
-	fmt.Printf("C8 %f\n", vt.OropharynxCoefs[OroPharynxC8])
+	//fmt.Printf("C8 %f\n", vt.OropharynxCoefs[OroPharynxC8])
 
 	// calculate alpha coefficients for 3-way junction
 	// note:  since junction is in middle of region 4, r0_2 = r1_2
