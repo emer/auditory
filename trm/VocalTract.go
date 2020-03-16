@@ -261,7 +261,7 @@ func (vtc *VocalTractCtrl) ComputeDeltas(cur, prv *VocalTractCtrl, ctrlFreq floa
 	vtc.FricCf = (cur.FricCf - prv.FricCf) * ctrlFreq
 	vtc.FricBw = (cur.FricBw - prv.FricBw) * ctrlFreq
 	for i, _ := range vtc.Radii {
-		vtc.Radii[i] = cur.Radii[i] - prv.Radii[i]*ctrlFreq
+		vtc.Radii[i] = (cur.Radii[i] - prv.Radii[i]) * ctrlFreq
 	}
 	vtc.Velum = (cur.Velum - prv.Velum) * ctrlFreq
 }
@@ -493,6 +493,7 @@ type VocalTract struct {
 	PrevGlotAmplitude float32
 
 	SynthOutput []float32
+	Wave        []float32
 
 	SampleRateConverter   RateConverter
 	MouthRadiationFilter  RadiationFilter
@@ -548,7 +549,7 @@ func (vt *VocalTract) LoadEnglishPhones() {
 
 //  LoadDictionary loads the English dictionary of words composed of phones and transitions
 func (vt *VocalTract) LoadDictionary() {
-	fn := gi.FileName("VocalTractEnglishDict.dtbl")
+	fn := gi.FileName("VocalTractEnglishDictMini.dat")
 	err := vt.Dictionary.OpenCSV(fn, '\t')
 	if err != nil {
 		fmt.Printf("File not found or error open file: %s (%s)", fn, err)
@@ -556,8 +557,8 @@ func (vt *VocalTract) LoadDictionary() {
 	}
 }
 
-// SynthPhone
-func (vt *VocalTract) SynthPhone(phon string, stress, doubleStress, syllable, reset bool) bool {
+// SynthPhone is an *internal* call - call synthphones even for a single phone
+func (vt *VocalTract) synthPhone(phon string, stress, doubleStress, syllable, reset bool) bool {
 	if vt.PhoneTable.Rows == 0 {
 		vt.LoadEnglishPhones()
 	}
@@ -595,12 +596,6 @@ func (vt *VocalTract) SynthPhone(phon string, stress, doubleStress, syllable, re
 	for i := 0; i < int(nReps); i++ {
 		vt.Synth(false)
 	}
-	PCM := 1
-	fn := "foo.wav"
-	err := vt.Buf.Unload(fn, vt.Buf.SampleRate(), vt.Buf.Buf.SourceBitDepth, 1, PCM)
-	if err != nil {
-		fmt.Printf("File not found or error opengin file: %s (%s)", fn, err)
-	}
 	return true
 }
 
@@ -623,14 +618,14 @@ func (vt *VocalTract) SynthPhones(phones string, resetFirst, play bool) bool {
 			continue
 		}
 		if c == "%" {
-			vt.SynthPhone(phone, stress, doubleStress, syllable, resetFirst && first)
+			vt.synthPhone(phone, stress, doubleStress, syllable, resetFirst && first)
 			phone = ""
 			first = false
 			break // done
 		}
 		if c == "." { // syllable
 			syllable = true
-			vt.SynthPhone(phone, stress, doubleStress, syllable, resetFirst && first)
+			vt.synthPhone(phone, stress, doubleStress, syllable, resetFirst && first)
 			stress = false
 			doubleStress = false
 			syllable = false
@@ -639,7 +634,7 @@ func (vt *VocalTract) SynthPhones(phones string, resetFirst, play bool) bool {
 			continue
 		}
 		if c == "_" { // reg separator
-			vt.SynthPhone(phone, stress, doubleStress, syllable, resetFirst && first)
+			vt.synthPhone(phone, stress, doubleStress, syllable, resetFirst && first)
 			stress = false
 			doubleStress = false
 			syllable = false
@@ -650,7 +645,7 @@ func (vt *VocalTract) SynthPhones(phones string, resetFirst, play bool) bool {
 		phone += c
 	}
 	if len(phone) > 0 {
-		vt.SynthPhone(phone, stress, doubleStress, syllable, resetFirst && first)
+		vt.synthPhone(phone, stress, doubleStress, syllable, resetFirst && first)
 	}
 
 	if play {
@@ -698,7 +693,7 @@ func (vt *VocalTract) SynthWords(ws string, resetFirst bool, play bool) bool {
 			break
 		}
 		if i < len(words)-1 {
-			vt.SynthPhone("#", false, false, false, false)
+			vt.synthPhone("#", false, false, false, false)
 		}
 	}
 	if play {
@@ -744,10 +739,10 @@ func (vt *VocalTract) Reset() {
 	vt.CrossmixFactor = 0.0
 	vt.BreathinessFactor = 0.0
 	vt.PrevGlotAmplitude = -1.0
-	for i := 0; i < len(vt.SynthOutput); i++ {
-		vt.SynthOutput[i] = 0
-	}
-
+	//for i := 0; i < len(vt.SynthOutput); i++ {
+	//	vt.SynthOutput[i] = 0
+	//}
+	vt.SynthOutput = nil
 	vt.SampleRateConverter.Reset()
 	vt.MouthRadiationFilter.Reset()
 	vt.MouthReflectionFilter.Reset()
@@ -834,7 +829,19 @@ func (vt *VocalTract) InitSndBuf(frames int, channels, rate, bitDepth int) {
 		NumChannels: channels,
 		SampleRate:  rate,
 	}
-	vt.Buf.Buf = &audio.IntBuffer{Data: make([]int, int(frames)), Format: format, SourceBitDepth: 16}
+	if vt.Buf.Buf == nil {
+		vt.Buf.Buf = &audio.IntBuffer{Data: make([]int, 0), Format: format, SourceBitDepth: 16}
+		//vt.Buf.Buf = &audio.IntBuffer{Data: make([]int, 0), Format: format, SourceBitDepth: 16}
+	}
+}
+
+// InitBuffer
+func (vt *VocalTract) ResizeSndBuf(frames int) {
+	data := make([]int, int(frames))
+	vt.Buf.Buf.Data = data
+	for i := 0; i < len(vt.SynthOutput); i++ {
+		vt.Buf.Buf.Data[i] = int(vt.SynthOutput[i])
+	}
 }
 
 // SynthReset
@@ -867,17 +874,23 @@ func (vt *VocalTract) Synth(reset bool) {
 
 	//sz := vt.Buf.SampleSize()
 	//type := vt.Buf.SampleType()
-	curBufFrames := vt.Buf.Buf.NumFrames()
-	needBufFrames := len(vt.SynthOutput)
-	if curBufFrames < needBufFrames {
-		vt.InitSndBuf(needBufFrames, 1, vt.SampleRate, 16)
-	}
+	//frames := (vt.Duration / 1000.0) * float32(vt.SampleRate)
+	//curBufFrames := vt.Buf.Buf.NumFrames()
+	//needBufFrames := len(vt.SynthOutput)
+	//if curBufFrames < needBufFrames {
+	//	vt.InitSndBuf(needBufFrames * 2, 1, vt.SampleRate, 16)
+	//}
 
-	//scale := vt.MonoScale()
-
-	for f := 0; f < needBufFrames; f++ {
-		fmt.Printf("%f\n", vt.SynthOutput[f])
-		//vt.Buf.Buf.Data[f] = int(vt.SynthOutput[f])
+	scale := vt.MonoScale()
+	//for f := 0; f < needBufFrames; f++ {
+	//	fmt.Printf("%f\n", vt.SynthOutput[f])
+	//	//vt.Buf.Buf.Data[f] = int(vt.SynthOutput[f])
+	//}
+	vt.ResizeSndBuf(len(vt.SynthOutput))
+	vt.Wave = make([]float32, len(vt.SynthOutput))
+	for i := 0; i < len(vt.SynthOutput); i++ {
+		vt.Wave[i] = vt.SynthOutput[i] * scale // THESE ARE THE VALUES FOR THE WAVE PLOT !!!!! - how to write them to snd buf is another issue!
+		//fmt.Printf("scale=%f\t wave val=%f\n", scale, vt.Wave[i])
 	}
 }
 
@@ -904,11 +917,11 @@ func (vt *VocalTract) SynthSignal() {
 
 	//  create glottal pulse (or sine tone)
 	pulse := vt.GlottalSource.GetSample(f0)
+	//fmt.Printf("%f\n", pulse)
 	pulsedNoise := lpNoise * pulse
 
 	// create noisy glottal pulse
 	pulse = ax * ((pulse * (1.0 - vt.BreathinessFactor)) + (pulsedNoise * vt.BreathinessFactor))
-	//fmt.Printf("%f\n", pulse)
 
 	// Pulse is GOOD  - What about pulsedNoise???
 	var signal float32
@@ -922,11 +935,15 @@ func (vt *VocalTract) SynthSignal() {
 	} else {
 		signal = lpNoise
 	}
-	//fmt.Printf("%f\n", signal)
+	//fmt.Printf("pre/post %f\t", signal)
 
+	//fmt.Printf("pulse %f\n", pulse)
 	// put signal through vocal tract
+	//bf := float32(vt.BandpassFilter.Filter(float64(signal)))
+	//fmt.Printf("%f\n", bf)
+	//signal = vt.Update(((pulse + (ah1 * signal)) * VtScale), float32(vt.BandpassFilter.Filter(float64(signal))))
 	signal = vt.Update(((pulse + (ah1 * signal)) * VtScale), float32(vt.BandpassFilter.Filter(float64(signal))))
-	//fmt.Printf("%f\n", signal
+	//fmt.Printf("%f\n", signal)
 
 	// put pulse through throat
 	signal += vt.Throat.Process(pulse * VtScale)
@@ -962,6 +979,7 @@ func (vt *VocalTract) TubeCoefficients() {
 	var radA2, radB2 float32
 	// calculate coefficients for the oropharynx
 	for i := 0; i < OroPharynxRegCount-1; i++ {
+		fmt.Printf("rad val i %f\n", vt.CurrentData.RadiusVal(i))
 		radA2 = vt.CurrentData.RadiusVal(i)
 		radA2 *= radA2
 		radB2 = vt.CurrentData.RadiusVal(i + 1)
@@ -974,6 +992,8 @@ func (vt *VocalTract) TubeCoefficients() {
 	radA2 *= radA2
 	radB2 = vt.Voice.ApertureRadius * vt.Voice.ApertureRadius
 	vt.OropharynxCoefs[OroPharynxC8] = (radA2 - radB2) / (radA2 + radB2)
+
+	fmt.Printf("C8 %f\n", vt.OropharynxCoefs[OroPharynxC8])
 
 	// calculate alpha coefficients for 3-way junction
 	// note:  since junction is in middle of region 4, r0_2 = r1_2
@@ -1016,7 +1036,7 @@ func (vt *VocalTract) SetFricationTaps() {
 
 // Update updates the pressure wave throughout the vocal tract, and returns
 // the summed output of the oral and nasal cavities.  Also injects frication appropriately
-func (vt *VocalTract) Update(input, frication float32) float32 {
+func (vt *VocalTract) Update(input, frication float32) (output float32) {
 	vt.CurPtr += 1
 	if vt.CurPtr > 1 {
 		vt.CurPtr = 0
@@ -1038,16 +1058,21 @@ func (vt *VocalTract) Update(input, frication float32) float32 {
 	vt.Oropharynx[OroPharynxS1][Bottom][vt.CurPtr] =
 		(vt.Oropharynx[OroPharynxS2][Bottom][vt.PrevPtr] + delta) * vt.DampingFactor
 
+	//fmt.Printf("delta %f\n", delta)
+
 	// calculate the scattering junctions for s2-s3 and s3-s4
 	for i, j, k := OroPharynxS2, OroPharynxC2, FricationInjC1; i < OroPharynxS4; i, j, k = i+1, j+1, k+1 {
 		delta = vt.OropharynxCoefs[j] *
 			(vt.Oropharynx[i][Top][vt.PrevPtr] - vt.Oropharynx[i+1][Bottom][vt.PrevPtr])
+		//fmt.Printf(" %f\n", vt.Oropharynx[i][Top][vt.PrevPtr])
 		vt.Oropharynx[i+1][Top][vt.CurPtr] =
 			((vt.Oropharynx[i][Top][vt.PrevPtr] + delta) * vt.DampingFactor) +
 				(vt.FricationTap[k] * frication)
 		vt.Oropharynx[i][Bottom][vt.CurPtr] =
 			(vt.Oropharynx[i+1][Bottom][vt.PrevPtr] + delta) * vt.DampingFactor
 	}
+
+	//fmt.Printf("delta %f\n", delta)
 
 	// update 3-way junction between the middle of R4 and nasal cavity
 	junctionPressure := (vt.Alpha[ThreeWayLeft] * vt.Oropharynx[OroPharynxS4][Top][vt.PrevPtr]) +
@@ -1093,8 +1118,10 @@ func (vt *VocalTract) Update(input, frication float32) float32 {
 			vt.Oropharynx[OroPharynxS10][Top][vt.PrevPtr])
 
 	// output from mouth goes through a highpass filter
-	output := vt.MouthRadiationFilter.Filter((1.0 + vt.OropharynxCoefs[OroPharynxC8]) *
+	output = vt.MouthRadiationFilter.Filter((1.0 + vt.OropharynxCoefs[OroPharynxC8]) *
 		vt.Oropharynx[OroPharynxS10][Top][vt.PrevPtr])
+
+	//fmt.Printf("%f\t%f\t%f\n", vt.OropharynxCoefs[OroPharynxC8], vt.MouthRadiationFilter.Filter((1.0 + vt.OropharynxCoefs[OroPharynxC8])), vt.Oropharynx[OroPharynxS10][Top][vt.PrevPtr])
 
 	//  update nasal cavity
 	for i, j := Velum, NasalC1; i < NasalC6; i, j = i+1, j+1 {
@@ -1114,6 +1141,7 @@ func (vt *VocalTract) Update(input, frication float32) float32 {
 	output += vt.NasalRadiationFilter.Filter((1.0 + vt.NasalCoefs[NasalC6]) *
 		vt.Nasal[NasalS6][Top][vt.PrevPtr])
 
+	//fmt.Printf("%f\n", output)
 	// return summed output from mouth and nose
 	return output
 }
