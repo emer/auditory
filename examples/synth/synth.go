@@ -65,13 +65,10 @@ func (syn *Synth) ConfigWavePlot(plt *eplot.Plot2D, dt *etable.Table) *eplot.Plo
 }
 
 func (syn *Synth) UpdateWave() {
-	for i := 0; i < 200; i++ {
-		//for i := 0; i < len(syn.vt.SynthOutput); i++ {
+	for i := 0; i < len(syn.vt.SynthOutput); i++ {
 		syn.SignalData.AddRows(1)
 		syn.SignalData.SetCellFloat("Time", i, float64(i))
-		//syn.SignalData.SetCellFloat("Amplitude", i, rand.Float64())
 		syn.SignalData.SetCellFloat("Amplitude", i, float64(syn.vt.Wave[i]))
-		//syn.SignalData.SetCellFloat("Amplitude", i, float64(syn.vt.Buf.Buf.Data[i]))
 	}
 }
 
@@ -139,8 +136,8 @@ func mainrun() {
 	TheSyn.Defaults()
 	TheSyn.vt.Init()
 	TheSyn.vt.LoadEnglishPhones()
-	TheSyn.vt.SynthWords("dog", true, true)
-	//TheSyn.vt.SynthPhones("a", true, false)
+	//TheSyn.vt.SynthWords("dog", true, true)
+	TheSyn.vt.SynthPhones("a", true, false)
 
 	win := TheSyn.ConfigGui()
 	TheSyn.WavePlot.GoUpdate()

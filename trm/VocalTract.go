@@ -199,33 +199,10 @@ func (vp *VoiceParams) SetAgeGender(voice AgeGender) {
 }
 
 /////////////////////////////////////////////////////
-//              VocalTractCtrl
-
-type CtrlParamIdxs int32
-
-const (
-	GlotPitchIdx = iota
-	GlotVolIdx
-	AspVolIdx
-	FricVolIdx
-	FricPosIdx
-	FricCfIdx
-	FricBwIdx
-	//Radius2Idx
-	//Radius3Idx
-	//Radius4Idx
-	//Radius5Idx
-	//Radius6Idx
-	//Radius7Idx
-	//Radius8Idx
-	VelumIdx
-	NCtrlParams
-)
-
-//go:generate stringer -type=CtrlParamIdxs
+//              TractCtrl
 
 // ToDo: desc for all Radii
-type VocalTractCtrl struct {
+type TractCtrl struct {
 	GlotPitch float32    `min:"-10" max:"0" desc:"ranges from -10 for phoneme k to 0 for most, with some being -2 or -1 -- called microInt in gnuspeech data files"`
 	GlotVol   float32    `min:"0" max:"60" desc:"glottal volume (DB?) typically 60 when present and 0 when not, and sometimes 54, 43.5, 42, "`
 	AspVol    float32    `min:"0" max:"10" desc:"aspiration volume -- typically 0 when not present and 10 when present"`
@@ -237,7 +214,7 @@ type VocalTractCtrl struct {
 	Velum     float32    `min:".1" max:"1.5" desc:"velum opening -- 1.5 when fully open, .1 when closed, and .25, .5 intermediates used"`
 }
 
-func (vtc *VocalTractCtrl) Defaults() {
+func (vtc *TractCtrl) Defaults() {
 	vtc.GlotPitch = 0.0
 	vtc.GlotVol = 0.0
 	vtc.AspVol = 0.0
@@ -252,7 +229,7 @@ func (vtc *VocalTractCtrl) Defaults() {
 }
 
 // ComputeDeltas computes values in this set of params as deltas from (cur - prv) * ctrl_freq
-func (vtc *VocalTractCtrl) ComputeDeltas(cur, prv *VocalTractCtrl, ctrlFreq float32) {
+func (vtc *TractCtrl) ComputeDeltas(cur, prv *TractCtrl, ctrlFreq float32) {
 	vtc.GlotPitch = (cur.GlotPitch - prv.GlotPitch) * ctrlFreq
 	vtc.GlotVol = (cur.GlotVol - prv.GlotVol) * ctrlFreq
 	vtc.AspVol = (cur.AspVol - prv.AspVol) * ctrlFreq
@@ -267,7 +244,7 @@ func (vtc *VocalTractCtrl) ComputeDeltas(cur, prv *VocalTractCtrl, ctrlFreq floa
 }
 
 // UpdateFromDeltas updates values in this set of params from deltas
-func (vtc *VocalTractCtrl) UpdateFromDeltas(deltas *VocalTractCtrl) {
+func (vtc *TractCtrl) UpdateFromDeltas(deltas *TractCtrl) {
 	vtc.GlotPitch += deltas.GlotPitch
 	vtc.GlotVol += deltas.GlotVol
 	vtc.AspVol += deltas.AspVol
@@ -282,7 +259,7 @@ func (vtc *VocalTractCtrl) UpdateFromDeltas(deltas *VocalTractCtrl) {
 }
 
 // DefaultMaxDeltas updates the default max delta values in this object (for DeltaMax field in VocalTract)
-func (vtc *VocalTractCtrl) DefaultMaxDeltas() {
+func (vtc *TractCtrl) DefaultMaxDeltas() {
 	cf := float32(1.0 / 501.0) // default control frequency
 	// default to entire range ok for now.. fix when glitches encountered.. (comment from c++ code)
 	vtc.GlotPitch = 10 * cf
@@ -299,7 +276,7 @@ func (vtc *VocalTractCtrl) DefaultMaxDeltas() {
 }
 
 // SetFromParams fast copy of parameters from other control params
-func (vtc *VocalTractCtrl) SetFromParams(vtcSrc *VocalTractCtrl) {
+func (vtc *TractCtrl) SetFromParams(vtcSrc *TractCtrl) {
 	vtc.GlotPitch = vtcSrc.GlotPitch
 	vtc.GlotVol = vtcSrc.GlotVol
 	vtc.AspVol = vtcSrc.AspVol
@@ -314,7 +291,7 @@ func (vtc *VocalTractCtrl) SetFromParams(vtcSrc *VocalTractCtrl) {
 }
 
 // SetFromValues - order must be preserved!
-func (vtc *VocalTractCtrl) SetFromValues(values []float32) {
+func (vtc *TractCtrl) SetFromValues(values []float32) {
 	vtc.GlotPitch = values[0]
 	vtc.GlotVol = values[1]
 	vtc.AspVol = values[2]
@@ -328,13 +305,13 @@ func (vtc *VocalTractCtrl) SetFromValues(values []float32) {
 	vtc.Velum = values[14]
 }
 
-func (vtc *VocalTractCtrl) RadiusVal(idx int) float32 {
+func (vtc *TractCtrl) RadiusVal(idx int) float32 {
 	if idx <= 0 {
 		return 0.8
 	}
-	return vtc.Radii[idx-1]
-	//return (&radius_2)[idx-1]; }
-	// get radius value using *zero-based* index value
+	v := vtc.Radii[idx-1]
+	return v
+	// C++ code was return (&radius_2)[idx-1]; }
 }
 
 /////////////////////////////////////////////////////
@@ -352,7 +329,7 @@ const (
 	OroPharynxReg6        // S8
 	OroPharynxReg7        // S9
 	OroPharynxReg8        // S10
-	OroPharynxRegCount
+	OroPharynxRegCnt
 )
 
 //go:generate stringer -type=OroPharynxRegions
@@ -369,7 +346,7 @@ const (
 	OroPharynxC6        // R6-R7 (S8-S9)
 	OroPharynxC7        // R7-R8 (S9-S10)
 	OroPharynxC8        // R8-Air (S10-Air)
-	OroPharynxCoefCount
+	OroPharynxCoefCnt
 )
 
 //go:generate stringer -type=OroPharynxCoefs
@@ -388,7 +365,7 @@ const (
 	OroPharynxS8         // OroPharynxReg6
 	OroPharynxS9         // OroPharynxReg7
 	OroPharynxS10        // OroPharynxReg8
-	OroPharynxSectCount
+	OroPharynxSectCnt
 )
 
 //go:generate stringer -type=OroPharynxSects
@@ -403,7 +380,7 @@ const (
 	NasalS4
 	NasalS5
 	NasalS6
-	NasalSectCount
+	NasalSectCnt
 	Velum = NasalS1
 )
 
@@ -413,13 +390,13 @@ const (
 type NasalCoefs int32
 
 const (
-	NasalC1        = NasalS1 // N1-N2
-	NasalC2        = NasalS2 // N2-N3
-	NasalC3        = NasalS3 // N3-N4
-	NasalC4        = NasalS4 // N4-N5
-	NasalC5        = NasalS5 // N5-N6
-	NasalC6        = NasalS6 // N6-Air
-	NasalCoefCount = NasalSectCount
+	NasalC1      = NasalS1 // N1-N2
+	NasalC2      = NasalS2 // N2-N3
+	NasalC3      = NasalS3 // N3-N4
+	NasalC4      = NasalS4 // N4-N5
+	NasalC5      = NasalS5 // N5-N6
+	NasalC6      = NasalS6 // N6-Air
+	NasalCoefCnt = NasalSectCnt
 )
 
 //go:generate stringer -type=NasalCoefs
@@ -431,7 +408,7 @@ const (
 	ThreeWayLeft = iota
 	ThreeWayRight
 	ThreeWayUpper
-	ThreeWayCount
+	ThreeWayCnt
 )
 
 //go:generate stringer -type=ThreeWayJunction
@@ -448,54 +425,54 @@ const (
 	FricationInjC6        // S8
 	FricationInjC7        // S9
 	FricationInjC8        // S10
-	FricationInjCoefCount
+	FricationInjCoefCnt
 )
 
 //go:generate stringer -type=FricationInjCoefs
 
 type VocalTract struct {
-	Buf          sound.Wave     `desc:"XX"`
-	Volume       float32        `desc:"XX"`
-	Balance      float32        `desc:"XX"`
-	Duration     float32        `desc:"XX"` // duration of synthesized sound
-	Params       TractParams    `desc:"XX"`
-	Voice        VoiceParams    `desc:"XX"`
-	CurControl   VocalTractCtrl `desc:"XX"`
-	PrevControl  VocalTractCtrl `desc:"XX"`
-	DeltaControl VocalTractCtrl `desc:"XX"`
-	DeltaMax     VocalTractCtrl `desc:"XX"`
-	PhoneTable   etable.Table   `desc:"XX"`
-	Dictionary   etable.Table   `desc:"XX"`
+	Buf        sound.Wave   `desc:"XX"`
+	Volume     float32      `desc:"XX"`
+	Balance    float32      `desc:"XX"`
+	Duration   float32      `desc:"XX"` // duration of synthesized sound
+	Params     TractParams  `desc:"XX"`
+	Voice      VoiceParams  `desc:"XX"`
+	CurCtrl    TractCtrl    `desc:"XX"`
+	PrvCtrl    TractCtrl    `desc:"XX"`
+	DeltaCtrl  TractCtrl    `desc:"XX"`
+	DeltaMax   TractCtrl    `desc:"XX"`
+	PhoneTable etable.Table `desc:"XX"`
+	Dictionary etable.Table `desc:"XX"`
 
 	// derived values
-	ControlRate      float32 `desc:"XX"` // 1.0-1000.0 input tables/second (Hz)
-	ControlPeriod    int     `desc:"XX"`
-	SampleRate       int     `desc:"XX"`
-	ActualTubeLength float32 `desc:"XX"` // actual length in cm
+	CtrlRate   float32 `desc:"XX"` // 1.0-1000.0 input tables/second (Hz)
+	CtrlPeriod int     `desc:"XX"`
+	SampleRate int     `desc:"XX"`
+	TubeLength float32 `desc:"XX"` // actual length in cm
 
-	CurrentData VocalTractCtrl `desc:"XX"` // current control data
+	CurData TractCtrl `desc:"XX"` // current control data
 
 	// tube and tube coefficients
-	Oropharynx      [OroPharynxSectCount][2][2]float32
-	OropharynxCoefs [OroPharynxCoefCount]float32
-	Nasal           [NasalSectCount][2][2]float32
-	NasalCoefs      [NasalCoefCount]float32
-	Alpha           [ThreeWayCount]float32
+	Oropharynx      [OroPharynxSectCnt][2][2]float32
+	OropharynxCoefs [OroPharynxCoefCnt]float32
+	Nasal           [NasalSectCnt][2][2]float32
+	NasalCoefs      [NasalCoefCnt]float32
+	Alpha           [ThreeWayCnt]float32
 	CurPtr          int
-	PrevPtr         int
+	PrvPtr          int
 
 	// memory for frication taps
-	FricationTap [FricationInjCoefCount]float32
+	FricationTap [FricationInjCoefCnt]float32
 
-	DampingFactor     float32 // calculated
-	CrossmixFactor    float32 //  calculated
-	BreathinessFactor float32
-	PrevGlotAmplitude float32
+	DampingFactor    float32 // calculated
+	CrossmixFactor   float32 //  calculated
+	BreathFactor     float32
+	PrvGlotAmplitude float32
 
 	SynthOutput []float32
 	Wave        []float32
 
-	SampleRateConverter   RateConverter
+	RateConverter         RateConverter
 	MouthRadiationFilter  RadiationFilter
 	MouthReflectionFilter ReflectionFilter
 	NasalRadiationFilter  RadiationFilter
@@ -515,18 +492,18 @@ func (vt *VocalTract) Init() {
 	vt.Voice.Breathiness = 1.5 // ToDo: how is it getting set in C++ version and why isn't the male value!!
 	vt.Params.Defaults()
 	vt.InitSynth()
-	vt.CurrentData.Defaults()
-	vt.CurControl.SetFromParams(&vt.CurrentData)
+	vt.CurData.Defaults()
+	vt.CurCtrl.SetFromParams(&vt.CurData)
 	// do we need the next 2 set here?
-	vt.PrevControl.SetFromParams(&vt.CurControl) // no deltas if reset
-	vt.CurrentData.SetFromParams(&vt.CurControl)
+	vt.PrvCtrl.SetFromParams(&vt.CurCtrl) // no deltas if reset
+	vt.CurData.SetFromParams(&vt.CurCtrl)
 }
 
 func (vt *VocalTract) Defaults() {
 	vt.Volume = 60.0
 	vt.Balance = 0.0
 	vt.Duration = 25.0
-	vt.ControlRate = 0.0
+	vt.CtrlRate = 0.0
 	vt.DeltaMax.DefaultMaxDeltas()
 	vt.Reset()
 	vt.SynthOutput = make([]float32, 0)
@@ -534,7 +511,7 @@ func (vt *VocalTract) Defaults() {
 
 func (vt *VocalTract) ControlFromTable(col etensor.Tensor, row int, normalized bool) {
 	params := col.SubSpace([]int{row}).(*etensor.Float32)
-	vt.CurControl.SetFromValues(params.Values)
+	vt.CurCtrl.SetFromValues(params.Values)
 }
 
 // LoadEnglishPhones loads the file of English phones
@@ -704,46 +681,46 @@ func (vt *VocalTract) SynthWords(ws string, resetFirst bool, play bool) bool {
 
 // Reset reset all vocal tract values
 func (vt *VocalTract) Reset() {
-	vt.ControlPeriod = 0
-	vt.ActualTubeLength = 0.0
-	for i := 0; i < OroPharynxSectCount; i++ {
+	vt.CtrlPeriod = 0
+	vt.TubeLength = 0.0
+	for i := 0; i < OroPharynxSectCnt; i++ {
 		for j := 0; j < 2; j++ {
 			for k := 0; k < 2; k++ {
 				vt.Oropharynx[i][j][k] = 0.0
 			}
 		}
 	}
-	for i := 0; i < OroPharynxCoefCount; i++ {
+	for i := 0; i < OroPharynxCoefCnt; i++ {
 		vt.OropharynxCoefs[i] = 0.0
 	}
 
-	for i := 0; i < NasalSectCount; i++ {
+	for i := 0; i < NasalSectCnt; i++ {
 		for j := 0; j < 2; j++ {
 			for k := 0; k < 2; k++ {
 				vt.Nasal[i][j][k] = 0.0
 			}
 		}
 	}
-	for i := 0; i < NasalCoefCount; i++ {
+	for i := 0; i < NasalCoefCnt; i++ {
 		vt.NasalCoefs[i] = 0.0
 	}
-	for i := 0; i < ThreeWayCount; i++ {
+	for i := 0; i < ThreeWayCnt; i++ {
 		vt.Alpha[i] = 0.0
 	}
-	for i := 0; i < FricationInjCoefCount; i++ {
+	for i := 0; i < FricationInjCoefCnt; i++ {
 		vt.FricationTap[i] = 0.0
 	}
 	vt.CurPtr = 1
-	vt.PrevPtr = 0
+	vt.PrvPtr = 0
 	vt.DampingFactor = 0.0
 	vt.CrossmixFactor = 0.0
-	vt.BreathinessFactor = 0.0
-	vt.PrevGlotAmplitude = -1.0
+	vt.BreathFactor = 0.0
+	vt.PrvGlotAmplitude = -1.0
 	//for i := 0; i < len(vt.SynthOutput); i++ {
 	//	vt.SynthOutput[i] = 0
 	//}
 	vt.SynthOutput = nil
-	vt.SampleRateConverter.Reset()
+	vt.RateConverter.Reset()
 	vt.MouthRadiationFilter.Reset()
 	vt.MouthReflectionFilter.Reset()
 	vt.NasalRadiationFilter.Reset()
@@ -767,15 +744,15 @@ func (vt *VocalTract) InitializeSynthesizer() {
 	// calculate the sample rate, based on nominal tube length and speed of sound
 	if vt.Voice.TractLength > 0.0 {
 		c := SpeedOfSound(vt.Params.Temp)
-		vt.ControlPeriod = int(math.Round(float64(c*OroPharynxSectCount*100.0) / float64(vt.Voice.TractLength*vt.ControlRate)))
-		vt.SampleRate = int(vt.ControlRate * float32(vt.ControlPeriod))
-		vt.ActualTubeLength = float32(c*OroPharynxSectCount*100.0) / float32(vt.SampleRate)
+		vt.CtrlPeriod = int(math.Round(float64(c*OroPharynxSectCnt*100.0) / float64(vt.Voice.TractLength*vt.CtrlRate)))
+		vt.SampleRate = int(vt.CtrlRate * float32(vt.CtrlPeriod))
+		vt.TubeLength = float32(c*OroPharynxSectCnt*100.0) / float32(vt.SampleRate)
 		nyquist = float32(vt.SampleRate) / 2.0
 	} else {
 		nyquist = 1.0
 		fmt.Println("Illegal tube length")
 	}
-	vt.BreathinessFactor = vt.Voice.Breathiness / 100.0
+	vt.BreathFactor = vt.Voice.Breathiness / 100.0
 	vt.CrossmixFactor = 1.0 / Amplitude(vt.Params.MixOff)
 	vt.DampingFactor = (1.0 - (vt.Params.Loss / 100.0))
 
@@ -801,8 +778,8 @@ func (vt *VocalTract) InitializeSynthesizer() {
 	vt.Throat.Init(float32(vt.SampleRate), vt.Params.ThroatCutoff, Amplitude(vt.Params.ThroatVol))
 	vt.Throat.Reset()
 
-	vt.SampleRateConverter.Init(vt.SampleRate, OutputRate, &vt.SynthOutput)
-	vt.SampleRateConverter.Reset()
+	vt.RateConverter.Init(vt.SampleRate, OutputRate, &vt.SynthOutput)
+	vt.RateConverter.Reset()
 	for i := 0; i < len(vt.SynthOutput); i++ {
 		vt.SynthOutput[i] = 0
 	}
@@ -816,10 +793,10 @@ func (vt *VocalTract) InitSynth() {
 	vt.SampleRate = 44100
 	vt.InitSndBuf(0, 1, vt.SampleRate, 16)
 	vt.Reset()
-	vt.ControlRate = 1.0 / (vt.Duration / 1000.0)
+	vt.CtrlRate = 1.0 / (vt.Duration / 1000.0)
 	vt.InitializeSynthesizer()
-	vt.PrevControl.SetFromParams(&vt.CurControl)
-	vt.CurrentData.SetFromParams(&vt.CurControl)
+	vt.PrvCtrl.SetFromParams(&vt.CurCtrl)
+	vt.CurData.SetFromParams(&vt.CurCtrl)
 }
 
 // InitBuffer
@@ -855,22 +832,20 @@ func (vt *VocalTract) SynthReset(initBuffer bool) {
 // Synth set params before making a call to synthesize the signal and then outputs the signal
 func (vt *VocalTract) Synth(reset bool) {
 	ctrlRate := 1.0 / (vt.Duration / 1000.0)
-	if ctrlRate != vt.ControlRate { // todo: if ctrlRate != vt.ControlRate || !IsValid()
+	if ctrlRate != vt.CtrlRate { // todo: if ctrlRate != vt.ControlRate || !IsValid()
 		vt.InitSynth()
 	} else if reset {
 		vt.SynthReset(true)
 	}
 
-	controlFreq := 1.0 / float32(vt.ControlPeriod)
-	//fmt.Printf("control period: %v, freq: %v", vt.ControlPeriod, controlFreq)
+	controlFreq := 1.0 / float32(vt.CtrlPeriod)
+	vt.DeltaCtrl.ComputeDeltas(&vt.CurCtrl, &vt.PrvCtrl, float32(controlFreq))
 
-	vt.DeltaControl.ComputeDeltas(&vt.CurControl, &vt.PrevControl, float32(controlFreq))
-
-	for j := 0; j < vt.ControlPeriod; j++ {
+	for j := 0; j < vt.CtrlPeriod; j++ {
 		vt.SynthSignal()
-		vt.CurrentData.UpdateFromDeltas(&vt.DeltaControl)
+		vt.CurData.UpdateFromDeltas(&vt.DeltaCtrl)
 	}
-	vt.PrevControl.SetFromParams(&vt.CurrentData) // prev is where we actually got, not where we wanted to get..
+	vt.PrvCtrl.SetFromParams(&vt.CurData) // prev is where we actually got, not where we wanted to get..
 
 	//sz := vt.Buf.SampleSize()
 	//type := vt.Buf.SampleType()
@@ -890,19 +865,18 @@ func (vt *VocalTract) Synth(reset bool) {
 	vt.Wave = make([]float32, len(vt.SynthOutput))
 	for i := 0; i < len(vt.SynthOutput); i++ {
 		vt.Wave[i] = vt.SynthOutput[i] * scale // THESE ARE THE VALUES FOR THE WAVE PLOT !!!!! - how to write them to snd buf is another issue!
-		//fmt.Printf("scale=%f\t wave val=%f\n", scale, vt.Wave[i])
 	}
 }
 
 // SynthSignal
 func (vt *VocalTract) SynthSignal() {
 	// convert parameters here
-	f0 := Frequency(vt.CurrentData.GlotPitch)
-	ax := Amplitude(vt.CurrentData.GlotVol)
-	ah1 := Amplitude(vt.CurrentData.AspVol)
+	f0 := Frequency(vt.CurData.GlotPitch)
+	ax := Amplitude(vt.CurData.GlotVol)
+	ah1 := Amplitude(vt.CurData.AspVol)
 	vt.TubeCoefficients()
 	vt.SetFricationTaps()
-	vt.BandpassFilter.Update(float64(vt.SampleRate), float64(vt.CurrentData.FricBw), float64(vt.CurrentData.FricCf))
+	vt.BandpassFilter.Update(float64(vt.SampleRate), float64(vt.CurData.FricBw), float64(vt.CurData.FricCf))
 
 	// do synthesis here
 	// create low-pass filtered noise
@@ -910,20 +884,18 @@ func (vt *VocalTract) SynthSignal() {
 
 	// update the shape of the glottal pulse, if necessary
 	if vt.Params.WaveForm == Pulse {
-		if ax != vt.PrevGlotAmplitude {
+		if ax != vt.PrvGlotAmplitude {
 			vt.GlottalSource.Update(ax)
 		}
 	}
 
 	//  create glottal pulse (or sine tone)
 	pulse := vt.GlottalSource.GetSample(f0)
-	//fmt.Printf("%f\n", pulse)
 	pulsedNoise := lpNoise * pulse
 
 	// create noisy glottal pulse
-	pulse = ax * ((pulse * (1.0 - vt.BreathinessFactor)) + (pulsedNoise * vt.BreathinessFactor))
+	pulse = ax * ((pulse * (1.0 - vt.BreathFactor)) + (pulsedNoise * vt.BreathFactor))
 
-	// Pulse is GOOD  - What about pulsedNoise???
 	var signal float32
 	// cross-mix pure noise with pulsed noise
 	if vt.Params.NoiseMod {
@@ -935,23 +907,13 @@ func (vt *VocalTract) SynthSignal() {
 	} else {
 		signal = lpNoise
 	}
-	//fmt.Printf("pre/post %f\t", signal)
 
-	//fmt.Printf("pulse %f\n", pulse)
-	// put signal through vocal tract
-	//bf := float32(vt.BandpassFilter.Filter(float64(signal)))
-	//fmt.Printf("%f\n", bf)
-	//signal = vt.Update(((pulse + (ah1 * signal)) * VtScale), float32(vt.BandpassFilter.Filter(float64(signal))))
 	signal = vt.Update(((pulse + (ah1 * signal)) * VtScale), float32(vt.BandpassFilter.Filter(float64(signal))))
-	//fmt.Printf("%f\n", signal)
-
-	// put pulse through throat
 	signal += vt.Throat.Process(pulse * VtScale)
-	//fmt.Printf("%f\n", signal)
 
 	// output sample here
-	vt.SampleRateConverter.DataFill(signal)
-	vt.PrevGlotAmplitude = ax
+	vt.RateConverter.DataFill(signal)
+	vt.PrvGlotAmplitude = ax
 }
 
 // InitNasalCavity
@@ -978,36 +940,33 @@ func (vt *VocalTract) InitNasal() {
 func (vt *VocalTract) TubeCoefficients() {
 	var radA2, radB2 float32
 	// calculate coefficients for the oropharynx
-	for i := 0; i < OroPharynxRegCount-1; i++ {
-		//fmt.Printf("rad val i %f\n", vt.CurrentData.RadiusVal(i))
-		radA2 = vt.CurrentData.RadiusVal(i)
+	for i := 0; i < OroPharynxRegCnt-1; i++ {
+		radA2 = vt.CurData.RadiusVal(i)
 		radA2 *= radA2
-		radB2 = vt.CurrentData.RadiusVal(i + 1)
+		radB2 = vt.CurData.RadiusVal(i + 1)
 		radB2 *= radB2
 		vt.OropharynxCoefs[i] = (radA2 - radB2) / (radA2 + radB2)
 	}
 
 	// calculate the coefficient for the mouth aperture
-	radA2 = vt.CurrentData.RadiusVal(OroPharynxReg8)
+	radA2 = vt.CurData.RadiusVal(OroPharynxReg8)
 	radA2 *= radA2
 	radB2 = vt.Voice.ApertureRadius * vt.Voice.ApertureRadius
 	vt.OropharynxCoefs[OroPharynxC8] = (radA2 - radB2) / (radA2 + radB2)
 
-	//fmt.Printf("C8 %f\n", vt.OropharynxCoefs[OroPharynxC8])
-
 	// calculate alpha coefficients for 3-way junction
 	// note:  since junction is in middle of region 4, r0_2 = r1_2
-	r0_2 := vt.CurrentData.RadiusVal(OroPharynxReg4)
+	r0_2 := vt.CurData.RadiusVal(OroPharynxReg4)
 	r0_2 *= r0_2
 	r1_2 := r0_2
-	r2_2 := vt.CurrentData.Velum * vt.CurrentData.Velum
+	r2_2 := vt.CurData.Velum * vt.CurData.Velum
 	sum := 2.0 / (r0_2 + r1_2 + r2_2)
 	vt.Alpha[ThreeWayLeft] = sum * r0_2
 	vt.Alpha[ThreeWayRight] = sum * r1_2
 	vt.Alpha[ThreeWayUpper] = sum * r2_2
 
 	// and 1st nasal passage coefficient
-	radA2 = vt.CurrentData.Velum * vt.CurrentData.Velum
+	radA2 = vt.CurData.Velum * vt.CurData.Velum
 	radB2 = vt.Voice.NoseRadii[NasalS2]
 	radB2 *= radB2
 	vt.NasalCoefs[NasalC1] = (radA2 - radB2) / (radA2 + radB2)
@@ -1015,16 +974,16 @@ func (vt *VocalTract) TubeCoefficients() {
 
 // SetFricationTaps Sets frication taps according to the current position and amplitude of frication
 func (vt *VocalTract) SetFricationTaps() {
-	fricationAmplitude := Amplitude(vt.CurrentData.FricVol)
+	fricationAmplitude := Amplitude(vt.CurData.FricVol)
 
-	integerPart := int(vt.CurrentData.FricPos)
-	complement := vt.CurrentData.FricPos - float32(integerPart)
+	integerPart := int(vt.CurData.FricPos)
+	complement := vt.CurData.FricPos - float32(integerPart)
 	remainder := 1.0 - complement
 
-	for i := FricationInjC1; i < FricationInjCoefCount; i++ {
+	for i := FricationInjC1; i < FricationInjCoefCnt; i++ {
 		if i == int(integerPart) {
 			vt.FricationTap[i] = remainder * fricationAmplitude
-			if (i + 1) < FricationInjCoefCount {
+			if (i + 1) < FricationInjCoefCnt {
 				i += 1
 				vt.FricationTap[i] = complement * fricationAmplitude
 			}
@@ -1042,113 +1001,105 @@ func (vt *VocalTract) Update(input, frication float32) (output float32) {
 		vt.CurPtr = 0
 	}
 
-	vt.PrevPtr += 1
-	if vt.PrevPtr > 1 {
-		vt.PrevPtr = 0
+	vt.PrvPtr += 1
+	if vt.PrvPtr > 1 {
+		vt.PrvPtr = 0
 	}
 	// input to top of tube
 	vt.Oropharynx[OroPharynxS1][Top][vt.CurPtr] =
-		(vt.Oropharynx[OroPharynxS1][Bottom][vt.PrevPtr] * vt.DampingFactor) + input
+		(vt.Oropharynx[OroPharynxS1][Bottom][vt.PrvPtr] * vt.DampingFactor) + input
 
 	// calculate the scattering junctions for s1-s2
 	delta := vt.OropharynxCoefs[OroPharynxC1] *
-		(vt.Oropharynx[OroPharynxS1][Top][vt.PrevPtr] - vt.Oropharynx[OroPharynxS2][Bottom][vt.PrevPtr])
+		(vt.Oropharynx[OroPharynxS1][Top][vt.PrvPtr] - vt.Oropharynx[OroPharynxS2][Bottom][vt.PrvPtr])
 	vt.Oropharynx[OroPharynxS2][Top][vt.CurPtr] =
-		(vt.Oropharynx[OroPharynxS1][Top][vt.PrevPtr] + delta) * vt.DampingFactor
+		(vt.Oropharynx[OroPharynxS1][Top][vt.PrvPtr] + delta) * vt.DampingFactor
 	vt.Oropharynx[OroPharynxS1][Bottom][vt.CurPtr] =
-		(vt.Oropharynx[OroPharynxS2][Bottom][vt.PrevPtr] + delta) * vt.DampingFactor
-
-	//fmt.Printf("delta %f\n", delta)
+		(vt.Oropharynx[OroPharynxS2][Bottom][vt.PrvPtr] + delta) * vt.DampingFactor
 
 	// calculate the scattering junctions for s2-s3 and s3-s4
 	for i, j, k := OroPharynxS2, OroPharynxC2, FricationInjC1; i < OroPharynxS4; i, j, k = i+1, j+1, k+1 {
 		delta = vt.OropharynxCoefs[j] *
-			(vt.Oropharynx[i][Top][vt.PrevPtr] - vt.Oropharynx[i+1][Bottom][vt.PrevPtr])
-		//fmt.Printf(" %f\n", vt.Oropharynx[i][Top][vt.PrevPtr])
+			(vt.Oropharynx[i][Top][vt.PrvPtr] - vt.Oropharynx[i+1][Bottom][vt.PrvPtr])
 		vt.Oropharynx[i+1][Top][vt.CurPtr] =
-			((vt.Oropharynx[i][Top][vt.PrevPtr] + delta) * vt.DampingFactor) +
+			((vt.Oropharynx[i][Top][vt.PrvPtr] + delta) * vt.DampingFactor) +
 				(vt.FricationTap[k] * frication)
 		vt.Oropharynx[i][Bottom][vt.CurPtr] =
-			(vt.Oropharynx[i+1][Bottom][vt.PrevPtr] + delta) * vt.DampingFactor
+			(vt.Oropharynx[i+1][Bottom][vt.PrvPtr] + delta) * vt.DampingFactor
 	}
 
-	//fmt.Printf("delta %f\n", delta)
-
 	// update 3-way junction between the middle of R4 and nasal cavity
-	junctionPressure := (vt.Alpha[ThreeWayLeft] * vt.Oropharynx[OroPharynxS4][Top][vt.PrevPtr]) +
-		(vt.Alpha[ThreeWayRight] * vt.Oropharynx[OroPharynxS5][Bottom][vt.PrevPtr]) +
-		(vt.Alpha[ThreeWayUpper] * vt.Nasal[Velum][Bottom][vt.PrevPtr])
+	junctionPressure := (vt.Alpha[ThreeWayLeft] * vt.Oropharynx[OroPharynxS4][Top][vt.PrvPtr]) +
+		(vt.Alpha[ThreeWayRight] * vt.Oropharynx[OroPharynxS5][Bottom][vt.PrvPtr]) +
+		(vt.Alpha[ThreeWayUpper] * vt.Nasal[Velum][Bottom][vt.PrvPtr])
 	vt.Oropharynx[OroPharynxS4][Bottom][vt.CurPtr] =
-		(junctionPressure - vt.Oropharynx[OroPharynxS4][Top][vt.PrevPtr]) * vt.DampingFactor
+		(junctionPressure - vt.Oropharynx[OroPharynxS4][Top][vt.PrvPtr]) * vt.DampingFactor
 	vt.Oropharynx[OroPharynxS5][Top][vt.CurPtr] =
-		((junctionPressure - vt.Oropharynx[OroPharynxS5][Bottom][vt.PrevPtr]) * vt.DampingFactor) + (vt.FricationTap[FricationInjC3] * frication)
+		((junctionPressure - vt.Oropharynx[OroPharynxS5][Bottom][vt.PrvPtr]) * vt.DampingFactor) + (vt.FricationTap[FricationInjC3] * frication)
 	vt.Nasal[Velum][Top][vt.CurPtr] =
-		(junctionPressure - vt.Nasal[Velum][Bottom][vt.PrevPtr]) * vt.DampingFactor
+		(junctionPressure - vt.Nasal[Velum][Bottom][vt.PrvPtr]) * vt.DampingFactor
 
 	// calculate junction between R4 and R5 (S5-S6)
 	delta = vt.OropharynxCoefs[OroPharynxC4] *
-		(vt.Oropharynx[OroPharynxS5][Top][vt.PrevPtr] - vt.Oropharynx[OroPharynxS6][Bottom][vt.PrevPtr])
+		(vt.Oropharynx[OroPharynxS5][Top][vt.PrvPtr] - vt.Oropharynx[OroPharynxS6][Bottom][vt.PrvPtr])
 	vt.Oropharynx[OroPharynxS6][Top][vt.CurPtr] =
-		((vt.Oropharynx[OroPharynxS5][Top][vt.PrevPtr] + delta) * vt.DampingFactor) +
+		((vt.Oropharynx[OroPharynxS5][Top][vt.PrvPtr] + delta) * vt.DampingFactor) +
 			(vt.FricationTap[FricationInjC4] * frication)
 	vt.Oropharynx[OroPharynxS5][Bottom][vt.CurPtr] =
-		(vt.Oropharynx[OroPharynxS6][Bottom][vt.PrevPtr] + delta) * vt.DampingFactor
+		(vt.Oropharynx[OroPharynxS6][Bottom][vt.PrvPtr] + delta) * vt.DampingFactor
 
 	// Calculate junction inside R5 (S6-S7) (pure delay with damping)
 	vt.Oropharynx[OroPharynxS7][Top][vt.CurPtr] =
-		(vt.Oropharynx[OroPharynxS6][Top][vt.PrevPtr] * vt.DampingFactor) +
+		(vt.Oropharynx[OroPharynxS6][Top][vt.PrvPtr] * vt.DampingFactor) +
 			(vt.FricationTap[FricationInjC5] * frication)
 	vt.Oropharynx[OroPharynxS6][Bottom][vt.CurPtr] =
-		vt.Oropharynx[OroPharynxS7][Bottom][vt.PrevPtr] * vt.DampingFactor
+		vt.Oropharynx[OroPharynxS7][Bottom][vt.PrvPtr] * vt.DampingFactor
 
 	// calculate last 3 internal junctions (S7-S8, S8-S9, S9-S10)
 	for i, j, k := OroPharynxS7, OroPharynxC5, FricationInjC6; i < OroPharynxS10; i, j, k = i+1, j+1, k+1 {
 		delta = vt.OropharynxCoefs[j] *
-			(vt.Oropharynx[i][Top][vt.PrevPtr] - vt.Oropharynx[i+1][Bottom][vt.PrevPtr])
+			(vt.Oropharynx[i][Top][vt.PrvPtr] - vt.Oropharynx[i+1][Bottom][vt.PrvPtr])
 		vt.Oropharynx[i+1][Top][vt.CurPtr] =
-			((vt.Oropharynx[i][Top][vt.PrevPtr] + delta) * vt.DampingFactor) +
+			((vt.Oropharynx[i][Top][vt.PrvPtr] + delta) * vt.DampingFactor) +
 				(vt.FricationTap[k] * frication)
 		vt.Oropharynx[i][Bottom][vt.CurPtr] =
-			(vt.Oropharynx[i+1][Bottom][vt.PrevPtr] + delta) * vt.DampingFactor
+			(vt.Oropharynx[i+1][Bottom][vt.PrvPtr] + delta) * vt.DampingFactor
 	}
 
 	// reflected signal at mouth goes through a lowpass filter
 	vt.Oropharynx[OroPharynxS10][Bottom][vt.CurPtr] = vt.DampingFactor *
 		vt.MouthReflectionFilter.Filter(vt.OropharynxCoefs[OroPharynxC8]*
-			vt.Oropharynx[OroPharynxS10][Top][vt.PrevPtr])
+			vt.Oropharynx[OroPharynxS10][Top][vt.PrvPtr])
 
 	// output from mouth goes through a highpass filter
 	output = vt.MouthRadiationFilter.Filter((1.0 + vt.OropharynxCoefs[OroPharynxC8]) *
-		vt.Oropharynx[OroPharynxS10][Top][vt.PrevPtr])
-
-	//fmt.Printf("%f\t%f\t%f\n", vt.OropharynxCoefs[OroPharynxC8], vt.MouthRadiationFilter.Filter((1.0 + vt.OropharynxCoefs[OroPharynxC8])), vt.Oropharynx[OroPharynxS10][Top][vt.PrevPtr])
+		vt.Oropharynx[OroPharynxS10][Top][vt.PrvPtr])
 
 	//  update nasal cavity
 	for i, j := Velum, NasalC1; i < NasalC6; i, j = i+1, j+1 {
 		delta = vt.NasalCoefs[j] *
-			(vt.Nasal[i][Top][vt.PrevPtr] - vt.Nasal[i+1][Bottom][vt.PrevPtr])
+			(vt.Nasal[i][Top][vt.PrvPtr] - vt.Nasal[i+1][Bottom][vt.PrvPtr])
 		vt.Nasal[i+1][Top][vt.CurPtr] =
-			(vt.Nasal[i][Top][vt.PrevPtr] + delta) * vt.DampingFactor
+			(vt.Nasal[i][Top][vt.PrvPtr] + delta) * vt.DampingFactor
 		vt.Nasal[i][Bottom][vt.CurPtr] =
-			(vt.Nasal[i+1][Bottom][vt.PrevPtr] + delta) * vt.DampingFactor
+			(vt.Nasal[i+1][Bottom][vt.PrvPtr] + delta) * vt.DampingFactor
 	}
 
 	// reflected signal at nose goes through a lowpass filter
 	vt.Nasal[NasalS6][Bottom][vt.CurPtr] = vt.DampingFactor *
-		vt.NasalReflectionFilter.Filter(vt.NasalCoefs[NasalC6]*vt.Nasal[NasalC6][Top][vt.PrevPtr])
+		vt.NasalReflectionFilter.Filter(vt.NasalCoefs[NasalC6]*vt.Nasal[NasalC6][Top][vt.PrvPtr])
 
 	// output from nose goes through a highpass filter
 	output += vt.NasalRadiationFilter.Filter((1.0 + vt.NasalCoefs[NasalC6]) *
-		vt.Nasal[NasalS6][Top][vt.PrevPtr])
+		vt.Nasal[NasalS6][Top][vt.PrvPtr])
 
-	//fmt.Printf("%f\n", output)
 	// return summed output from mouth and nose
 	return output
 }
 
 // MonoScale
 func (vt *VocalTract) MonoScale() float32 {
-	return (OutputScale / (vt.SampleRateConverter.MaxSampleVal()) * Amplitude(vt.Volume))
+	return (OutputScale / (vt.RateConverter.MaxSampleVal()) * Amplitude(vt.Volume))
 }
 
 // StereoScale
@@ -1161,7 +1112,7 @@ func (vt *VocalTract) StereoScale(leftScale,
 	if vt.Balance > 0.0 {
 		scale = rightScale
 	}
-	newMax := (vt.SampleRateConverter.MaxSampleVal() * (*scale))
+	newMax := (vt.RateConverter.MaxSampleVal() * (*scale))
 	*scale = (OutputScale / (newMax * Amplitude(vt.Volume)))
 	*leftScale *= *scale
 	*rightScale *= *scale
