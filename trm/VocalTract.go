@@ -1,4 +1,4 @@
-// Copyright (c) 2019, The GoKi Authors. All rights reserved.
+// Copyright (c) 2019, The Emergent Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -832,7 +832,7 @@ func (vt *VocalTract) SynthReset(initBuffer bool) {
 // Synth set params before making a call to synthesize the signal and then outputs the signal
 func (vt *VocalTract) Synth(reset bool) {
 	ctrlRate := 1.0 / (vt.Duration / 1000.0)
-	if ctrlRate != vt.CtrlRate { // todo: if ctrlRate != vt.ControlRate || !IsValid()
+	if ctrlRate != vt.CtrlRate { // todo: || !IsValid()
 		vt.InitSynth()
 	} else if reset {
 		vt.SynthReset(true)
@@ -847,24 +847,10 @@ func (vt *VocalTract) Synth(reset bool) {
 	}
 	vt.PrvCtrl.SetFromParams(&vt.CurData) // prev is where we actually got, not where we wanted to get..
 
-	//sz := vt.Buf.SampleSize()
-	//type := vt.Buf.SampleType()
-	//frames := (vt.Duration / 1000.0) * float32(vt.SampleRate)
-	//curBufFrames := vt.Buf.Buf.NumFrames()
-	//needBufFrames := len(vt.SynthOutput)
-	//if curBufFrames < needBufFrames {
-	//	vt.InitSndBuf(needBufFrames * 2, 1, vt.SampleRate, 16)
-	//}
-
 	scale := vt.MonoScale()
-	//for f := 0; f < needBufFrames; f++ {
-	//	fmt.Printf("%f\n", vt.SynthOutput[f])
-	//	//vt.Buf.Buf.Data[f] = int(vt.SynthOutput[f])
-	//}
 	vt.ResizeSndBuf(len(vt.SynthOutput))
-	vt.Wave = make([]float32, len(vt.SynthOutput))
 	for i := 0; i < len(vt.SynthOutput); i++ {
-		vt.Wave[i] = vt.SynthOutput[i] * scale // THESE ARE THE VALUES FOR THE WAVE PLOT !!!!! - how to write them to snd buf is another issue!
+		vt.Buf.Buf.Data[i] = int(vt.SynthOutput[i] * scale * 32767) // scale to normalize, then multiply by max signed int
 	}
 }
 

@@ -5,6 +5,7 @@
 package main
 
 import (
+	"fmt"
 	"strconv"
 
 	"github.com/emer/auditory/trm"
@@ -32,6 +33,7 @@ type Synth struct {
 	ToolBar    *gi.ToolBar    `view:"-" desc:"the master toolbar"`
 	SignalData *etable.Table  `desc:"waveform data"`
 	WavePlot   *eplot.Plot2D  `view:"-" desc:"waveform plot"`
+	text       string         `desc:"the text to be synthesized"`
 }
 
 func (syn *Synth) Defaults() {
@@ -65,10 +67,10 @@ func (syn *Synth) ConfigWavePlot(plt *eplot.Plot2D, dt *etable.Table) *eplot.Plo
 }
 
 func (syn *Synth) UpdateWave() {
+	syn.SignalData.AddRows(len(syn.vt.SynthOutput))
 	for i := 0; i < len(syn.vt.SynthOutput); i++ {
-		syn.SignalData.AddRows(1)
 		syn.SignalData.SetCellFloat("Time", i, float64(i))
-		syn.SignalData.SetCellFloat("Amplitude", i, float64(syn.vt.Wave[i]))
+		syn.SignalData.SetCellFloat("Amplitude", i, float64(syn.vt.Buf.Buf.Data[i]))
 	}
 }
 
@@ -136,8 +138,14 @@ func mainrun() {
 	TheSyn.Defaults()
 	TheSyn.vt.Init()
 	TheSyn.vt.LoadEnglishPhones()
-	//TheSyn.vt.SynthWords("dog", true, true)
-	TheSyn.vt.SynthPhones("a", true, false)
+	//TheSyn.vt.SynthPhones("a", true, false)
+	TheSyn.text = "mouse"
+	TheSyn.vt.SynthWords(TheSyn.text, true, true)
+	fn := TheSyn.text + ".wav"
+	err := TheSyn.vt.Buf.WriteWave(fn)
+	if err != nil {
+		fmt.Printf("File not found or error opening file: %s (%s)", fn, err)
+	}
 
 	win := TheSyn.ConfigGui()
 	TheSyn.WavePlot.GoUpdate()

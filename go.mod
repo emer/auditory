@@ -7,5 +7,6 @@ require (
 	github.com/emer/etable v1.0.0
 	github.com/go-audio/audio v1.0.0
 	github.com/go-audio/wav v1.0.0
+	github.com/goki/gi v0.9.10
 	gonum.org/v1/gonum v0.6.2
 )
