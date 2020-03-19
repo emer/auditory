@@ -39,5 +39,7 @@ func (nf *NoiseFilter) Reset() {
 
 // Filter
 func (nf *NoiseFilter) Filter(input float32) float32 {
-	return input + nf.NoiseX
+	out := input + nf.NoiseX
+	nf.NoiseX = input
+	return out
 }
