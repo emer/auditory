@@ -223,7 +223,7 @@ func (src *RateConverter) DataEmpty() {
 			index := src.EmptyPtr
 			for fidx := lValue(src.TimeReg); fidx < FilterLength; fidx += uint32(src.FilterIncrement) {
 				SrDecrement(&index, BufferSize)
-				output += (src.Buffer[index]*src.H[fidx] + (src.DeltaH[fidx] * interpolation))
+				output += (src.Buffer[index] * (src.H[fidx] + (src.DeltaH[fidx] * interpolation)))
 			}
 
 			// adjust values for right side calculation
@@ -235,7 +235,7 @@ func (src *RateConverter) DataEmpty() {
 			SrIncrement(&index, BufferSize)
 			for fidx := lValue(src.TimeReg); fidx < FilterLength; fidx += uint32(src.FilterIncrement) {
 				SrDecrement(&index, BufferSize)
-				output += (src.Buffer[index]*src.H[fidx] + (src.DeltaH[fidx] * interpolation))
+				output += (src.Buffer[index] * (src.H[fidx] + (src.DeltaH[fidx] * interpolation)))
 			}
 
 			// record maximum sample value
