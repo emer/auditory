@@ -28,7 +28,7 @@
 package trm
 
 import (
-	"github.com/chewxy/math32"
+	"math"
 )
 
 const Limit = 200
@@ -36,13 +36,13 @@ const Limit = 200
 type FirFilter struct {
 	Ptr   int
 	NTaps int
-	Data  []float32
-	Coef  []float32
+	Data  []float64
+	Coef  []float64
 }
 
 // Init
-func (ff *FirFilter) Init(beta, gamma, cutoff float32) {
-	coefficients := make([]float32, Limit+1)
+func (ff *FirFilter) Init(beta, gamma, cutoff float64) {
+	coefficients := make([]float64, Limit+1)
 	nCoefficients := len(coefficients)
 
 	// determine ideal low pass filter coefficients
@@ -53,8 +53,8 @@ func (ff *FirFilter) Init(beta, gamma, cutoff float32) {
 
 	// determine the number of taps in the filter
 	ff.NTaps = (nCoefficients * 2) - 1
-	ff.Data = make([]float32, ff.NTaps)
-	ff.Coef = make([]float32, ff.NTaps)
+	ff.Data = make([]float64, ff.NTaps)
+	ff.Coef = make([]float64, ff.NTaps)
 
 	// initialize the coefficients
 	increment := -1
@@ -81,9 +81,9 @@ func (ff *FirFilter) Reset() {
 // MaximallyFlat calculates coefficients for a linear phase lowpass FIR
 // filter, with beta being the center frequency of the transition band (as a fraction
 // of the sampling frequency), and gamme the width of the transition band
-func (ff *FirFilter) MaximallyFlat(beta, gamma float32, np *int, coefficients []float32) int {
-	a := make([]float32, Limit+1)
-	c := make([]float32, Limit+1)
+func (ff *FirFilter) MaximallyFlat(beta, gamma float64, np *int, coefficients []float64) int {
+	a := make([]float64, Limit+1)
+	c := make([]float64, Limit+1)
 
 	//  initialize number of points
 	*np = 0
@@ -114,7 +114,7 @@ func (ff *FirFilter) MaximallyFlat(beta, gamma float32, np *int, coefficients []
 	}
 
 	// calculate the rational approximation to the cut-off point
-	ac := (1.0 + math32.Cos((2.0*math32.Pi)*beta)) / 2.0
+	ac := (1.0 + math.Cos((2.0*math.Pi)*beta)) / 2.0
 	var numerator int
 	Approximate(ac, &nt, &numerator, np)
 
@@ -130,8 +130,8 @@ func (ff *FirFilter) MaximallyFlat(beta, gamma float32, np *int, coefficients []
 	ll := nt - numerator
 
 	for i := 2; i <= *np; i++ {
-		var sum float32 = 1.0
-		c[i] = math32.Cos((2.0 * math32.Pi) * (float32(i-1) / float32(n)))
+		var sum float64 = 1.0
+		c[i] = math.Cos((2.0 * math.Pi) * (float64(i-1) / float64(n)))
 		x := (1.0 - c[i]) / 2.0
 		y := x
 
@@ -143,13 +143,13 @@ func (ff *FirFilter) MaximallyFlat(beta, gamma float32, np *int, coefficients []
 			z := y
 			if numerator != 1 {
 				for jj := 1; jj <= numerator-1; jj++ {
-					z *= 1.0 + float32(j)/float32(jj)
+					z *= 1.0 + float64(j)/float64(jj)
 				}
 			}
 			y *= x
-			sum += float32(z)
+			sum += float64(z)
 		}
-		a[i] = sum * math32.Pow(float32(1.0-x), float32(numerator))
+		a[i] = sum * math.Pow(float64(1.0-x), float64(numerator))
 	}
 
 	// Calculate weighting coefficients by an n-point idft
@@ -162,15 +162,15 @@ func (ff *FirFilter) MaximallyFlat(beta, gamma float32, np *int, coefficients []
 			}
 			coefficients[i] += c[m+1] * a[j]
 		}
-		coefficients[i] *= 2.0 / float32(n)
+		coefficients[i] *= 2.0 / float64(n)
 	}
 	return 0
 }
 
 // Trim trims the higher order coefficients of the FIR filter which fall below the cutoff value
-func (ff *FirFilter) Trim(cutoff float32, nCoefficients *int, coefficients []float32) {
+func (ff *FirFilter) Trim(cutoff float64, nCoefficients *int, coefficients []float64) {
 	for i := *nCoefficients; i > 0; i-- {
-		if math32.Abs(coefficients[i]) >= math32.Abs(cutoff) {
+		if math.Abs(coefficients[i]) >= math.Abs(cutoff) {
 			*nCoefficients = i
 			return
 		}
@@ -178,9 +178,9 @@ func (ff *FirFilter) Trim(cutoff float32, nCoefficients *int, coefficients []flo
 }
 
 // Filter
-func (ff *FirFilter) Filter(input float32, needOutput bool) float32 {
+func (ff *FirFilter) Filter(input float64, needOutput bool) float64 {
 	if needOutput {
-		var output float32 = 0.0
+		var output float64 = 0.0
 
 		// put input sample into data buffer
 		ff.Data[ff.Ptr] = input
@@ -224,8 +224,8 @@ func Decrement(ptr, modulus int) int {
 }
 
 // Approximate calculates the best rational approximation to 'number', given the maximum 'order'.
-func Approximate(number float32, order, numerator, denominator *int) {
-	var minimumError float32 = 1.0
+func Approximate(number float64, order, numerator, denominator *int) {
+	var minimumError float64 = 1.0
 	var modulus int = 0
 
 	// return immediately if the order is less than one
@@ -237,7 +237,7 @@ func Approximate(number float32, order, numerator, denominator *int) {
 	}
 
 	// find the absolute value of the fractional part of the number
-	fractionalPart := math32.Abs(number - float32(int(number)))
+	fractionalPart := math.Abs(number - float64(int(number)))
 
 	// determine the maximum value of the denominator
 	orderMaximum := 2 * (*order)
@@ -247,9 +247,9 @@ func Approximate(number float32, order, numerator, denominator *int) {
 
 	//  find the best denominator value
 	for i := (*order); i <= orderMaximum; i++ {
-		ps := float32(i) * fractionalPart
+		ps := float64(i) * fractionalPart
 		ip := int(ps + 0.5)
-		error := math32.Abs((ps - float32(ip)) / float32(i))
+		error := math.Abs((ps - float64(ip)) / float64(i))
 		if error < minimumError {
 			minimumError = error
 			modulus = ip
@@ -258,7 +258,7 @@ func Approximate(number float32, order, numerator, denominator *int) {
 	}
 
 	// determine the numerator value, making it negative if necessary
-	*numerator = int(int(math32.Abs(number))*(*denominator) + modulus)
+	*numerator = int(int(math.Abs(number))*(*denominator) + modulus)
 	if number < 0 {
 		*numerator *= -1
 	}

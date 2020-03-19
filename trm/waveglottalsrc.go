@@ -157,7 +157,7 @@ func (wgs *WavetableGlottalSource) GetSample(frequency float32) (output float32)
 					(wgs.Wavetable[upperPosition] - wgs.Wavetable[lowerPosition]))
 
 			// put value through fir filter
-			output = wgs.FirFilter.Filter(iv, i == 1)
+			output = float32(wgs.FirFilter.Filter(float64(iv), i == 1))
 		}
 		// since we decimate, take only the second output value
 		return output
