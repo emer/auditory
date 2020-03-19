@@ -118,7 +118,7 @@ type VoiceParams struct {
 	GlotPulseFallMin float64    `desc:"XX"`
 	GlotPulseFallMax float64    `desc:"XX"`
 	GlotPitchRef     float64    `desc:"XX"`
-	Breathiness      float64    `desc:"XX"`
+	Breath           float64    `desc:"XX"`
 	GlotPulseRise    float64    `desc:"XX"`
 	ApertureRadius   float64    `desc:"XX"`
 	NoseRadii        [6]float64 `desc:"fixed nose radii (0 - 3 cm)"`
@@ -146,7 +146,7 @@ func (vp *VoiceParams) Male() {
 	vp.GlotPulseFallMin = 24.0
 	vp.GlotPulseFallMax = 24.0
 	vp.GlotPitchRef = -12.0
-	vp.Breathiness = 0.5
+	vp.Breath = 0.5
 }
 
 func (vp *VoiceParams) Female() {
@@ -154,7 +154,7 @@ func (vp *VoiceParams) Female() {
 	vp.GlotPulseFallMin = 32.0
 	vp.GlotPulseFallMax = 32.0
 	vp.GlotPitchRef = 0.0
-	vp.Breathiness = 1.5
+	vp.Breath = 1.5
 }
 
 func (vp *VoiceParams) ChildLg() {
@@ -162,7 +162,7 @@ func (vp *VoiceParams) ChildLg() {
 	vp.GlotPulseFallMin = 24.0
 	vp.GlotPulseFallMax = 24.0
 	vp.GlotPitchRef = 2.5
-	vp.Breathiness = 1.5
+	vp.Breath = 1.5
 }
 
 func (vp *VoiceParams) ChildSm() {
@@ -170,7 +170,7 @@ func (vp *VoiceParams) ChildSm() {
 	vp.GlotPulseFallMin = 24.0
 	vp.GlotPulseFallMax = 24.0
 	vp.GlotPitchRef = 5.0
-	vp.Breathiness = 1.5
+	vp.Breath = 1.5
 }
 
 func (vp *VoiceParams) Baby() {
@@ -178,7 +178,7 @@ func (vp *VoiceParams) Baby() {
 	vp.GlotPulseFallMin = 24.0
 	vp.GlotPulseFallMax = 24.0
 	vp.GlotPitchRef = 7.5
-	vp.Breathiness = 1.5
+	vp.Breath = 1.5
 }
 
 // SetAgeGender is used to set the voicing parameters to one of several predefined voice param sets
@@ -228,18 +228,18 @@ func (vtc *TractCtrl) Defaults() {
 }
 
 // ComputeDeltas computes values in this set of params as deltas from (cur - prv) * ctrl_freq
-func (vtc *TractCtrl) ComputeDeltas(cur, prv *TractCtrl, ctrlFreq float64) {
-	vtc.GlotPitch = (cur.GlotPitch - prv.GlotPitch) * ctrlFreq
-	vtc.GlotVol = (cur.GlotVol - prv.GlotVol) * ctrlFreq
-	vtc.AspVol = (cur.AspVol - prv.AspVol) * ctrlFreq
-	vtc.FricVol = (cur.FricVol - prv.FricVol) * ctrlFreq
-	vtc.FricPos = (cur.FricPos - prv.FricPos) * ctrlFreq
-	vtc.FricCf = (cur.FricCf - prv.FricCf) * ctrlFreq
-	vtc.FricBw = (cur.FricBw - prv.FricBw) * ctrlFreq
+func (vtc *TractCtrl) ComputeDeltas(cur, prv *TractCtrl, cf float64) {
+	vtc.GlotPitch = (cur.GlotPitch - prv.GlotPitch) * cf
+	vtc.GlotVol = (cur.GlotVol - prv.GlotVol) * cf
+	vtc.AspVol = (cur.AspVol - prv.AspVol) * cf
+	vtc.FricVol = (cur.FricVol - prv.FricVol) * cf
+	vtc.FricPos = (cur.FricPos - prv.FricPos) * cf
+	vtc.FricCf = (cur.FricCf - prv.FricCf) * cf
+	vtc.FricBw = (cur.FricBw - prv.FricBw) * cf
 	for i, _ := range vtc.Radii {
-		vtc.Radii[i] = (cur.Radii[i] - prv.Radii[i]) * ctrlFreq
+		vtc.Radii[i] = (cur.Radii[i] - prv.Radii[i]) * cf
 	}
-	vtc.Velum = (cur.Velum - prv.Velum) * ctrlFreq
+	vtc.Velum = (cur.Velum - prv.Velum) * cf
 }
 
 // UpdateFromDeltas updates values in this set of params from deltas
@@ -275,18 +275,18 @@ func (vtc *TractCtrl) DefaultMaxDeltas() {
 }
 
 // SetFromParams fast copy of parameters from other control params
-func (vtc *TractCtrl) SetFromParams(vtcSrc *TractCtrl) {
-	vtc.GlotPitch = vtcSrc.GlotPitch
-	vtc.GlotVol = vtcSrc.GlotVol
-	vtc.AspVol = vtcSrc.AspVol
-	vtc.FricVol = vtcSrc.FricVol
-	vtc.FricPos = vtcSrc.FricPos
-	vtc.FricCf = vtcSrc.FricCf
-	vtc.FricBw = vtcSrc.FricBw
+func (vtc *TractCtrl) SetFromParams(src *TractCtrl) {
+	vtc.GlotPitch = src.GlotPitch
+	vtc.GlotVol = src.GlotVol
+	vtc.AspVol = src.AspVol
+	vtc.FricVol = src.FricVol
+	vtc.FricPos = src.FricPos
+	vtc.FricCf = src.FricCf
+	vtc.FricBw = src.FricBw
 	for i, _ := range vtc.Radii {
-		vtc.Radii[i] = vtcSrc.Radii[i]
+		vtc.Radii[i] = src.Radii[i]
 	}
-	vtc.Velum = vtcSrc.Velum
+	vtc.Velum = src.Velum
 }
 
 // SetFromValues - order must be preserved!
@@ -488,7 +488,7 @@ func (vt *VocalTract) Init() {
 	vt.Defaults()
 	vt.Voice.Defaults()
 	vt.Voice.SetAgeGender(Male)
-	vt.Voice.Breathiness = 1.5 // ToDo: how is it getting set in C++ version and why isn't the male value!!
+	vt.Voice.Breath = 1.5 // ToDo: how is it getting set in C++ version and why isn't the male value!!
 	vt.Params.Defaults()
 	vt.InitSynth()
 	vt.CurData.Defaults()
@@ -526,7 +526,7 @@ func (vt *VocalTract) LoadEnglishPhones() {
 
 //  LoadDictionary loads the English dictionary of words composed of phones and transitions
 func (vt *VocalTract) LoadDictionary() {
-	fn := gi.FileName("VocalTractEnglishDictMini.dat")
+	fn := gi.FileName("VocalTractEnglishDict2.dat")
 	err := vt.Dictionary.OpenCSV(fn, '\t')
 	if err != nil {
 		fmt.Printf("File not found or error open file: %s (%s)", fn, err)
@@ -590,7 +590,7 @@ func (vt *VocalTract) SynthPhones(phones string, resetFirst, play bool) bool {
 			stress = true
 			continue
 		}
-		if c == "\"" {
+		if c == "~" {
 			doubleStress = true
 			continue
 		}
@@ -750,7 +750,7 @@ func (vt *VocalTract) InitializeSynthesizer() {
 		nyquist = 1.0
 		fmt.Println("Illegal tube length")
 	}
-	vt.BreathFactor = vt.Voice.Breathiness / 100.0
+	vt.BreathFactor = vt.Voice.Breath / 100.0
 	vt.CrossmixFactor = 1.0 / Amplitude(vt.Params.MixOff)
 	vt.DampingFactor = (1.0 - (vt.Params.Loss / 100.0))
 
