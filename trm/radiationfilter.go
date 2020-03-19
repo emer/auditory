@@ -42,8 +42,8 @@ func (rf *RadiationFilter) Init(apertureCoef float32) {
 	rf.RadiationX = 0.0
 	rf.RadiationY = 0.0
 	rf.A20 = apertureCoef
-	rf.A21 = rf.A20
-	rf.B21 = rf.A20
+	rf.A21 = -rf.A20
+	rf.B21 = -rf.A20
 }
 
 // Reset
