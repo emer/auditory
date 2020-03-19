@@ -70,7 +70,7 @@ func (syn *Synth) UpdateWave() {
 	syn.SignalData.AddRows(len(syn.vt.SynthOutput))
 	for i := 0; i < len(syn.vt.SynthOutput); i++ {
 		syn.SignalData.SetCellFloat("Time", i, float64(i))
-		syn.SignalData.SetCellFloat("Amplitude", i, float64(syn.vt.Buf.Buf.Data[i]))
+		syn.SignalData.SetCellFloat("Amplitude", i, float64(syn.vt.Wave[i]))
 	}
 }
 
@@ -139,7 +139,7 @@ func mainrun() {
 	TheSyn.vt.Init()
 	TheSyn.vt.LoadEnglishPhones()
 	//TheSyn.vt.SynthPhones("a", true, false)
-	TheSyn.text = "mouse"
+	TheSyn.text = "dog"
 	TheSyn.vt.SynthWords(TheSyn.text, true, true)
 	fn := TheSyn.text + ".wav"
 	err := TheSyn.vt.Buf.WriteWave(fn)

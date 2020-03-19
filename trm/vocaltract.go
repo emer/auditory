@@ -507,6 +507,7 @@ func (vt *VocalTract) Defaults() {
 	vt.DeltaMax.DefaultMaxDeltas()
 	vt.Reset()
 	vt.SynthOutput = make([]float32, 0)
+	vt.Wave = make([]float32, 0)
 }
 
 func (vt *VocalTract) ControlFromTable(col etensor.Tensor, row int, normalized bool) {
@@ -716,10 +717,8 @@ func (vt *VocalTract) Reset() {
 	vt.CrossmixFactor = 0.0
 	vt.BreathFactor = 0.0
 	vt.PrvGlotAmplitude = -1.0
-	//for i := 0; i < len(vt.SynthOutput); i++ {
-	//	vt.SynthOutput[i] = 0
-	//}
 	vt.SynthOutput = nil
+	vt.Wave = nil
 	vt.RateConverter.Reset()
 	vt.MouthRadiationFilter.Reset()
 	vt.MouthReflectionFilter.Reset()
@@ -816,9 +815,6 @@ func (vt *VocalTract) InitSndBuf(frames int, channels, rate, bitDepth int) {
 func (vt *VocalTract) ResizeSndBuf(frames int) {
 	data := make([]int, int(frames))
 	vt.Buf.Buf.Data = data
-	for i := 0; i < len(vt.SynthOutput); i++ {
-		vt.Buf.Buf.Data[i] = int(vt.SynthOutput[i])
-	}
 }
 
 // SynthReset
@@ -847,10 +843,13 @@ func (vt *VocalTract) Synth(reset bool) {
 	}
 	vt.PrvCtrl.SetFromParams(&vt.CurData) // prev is where we actually got, not where we wanted to get..
 
-	scale := vt.MonoScale()
 	vt.ResizeSndBuf(len(vt.SynthOutput))
+	scale := vt.MonoScale()
+	vt.Wave = nil
+	vt.Wave = make([]float32, len(vt.SynthOutput))
 	for i := 0; i < len(vt.SynthOutput); i++ {
-		vt.Buf.Buf.Data[i] = int(vt.SynthOutput[i] * scale * 32767) // scale to normalize, then multiply by max signed int
+		vt.Wave[i] = vt.SynthOutput[i] * scale
+		vt.Buf.Buf.Data[i] = int(vt.SynthOutput[i] * scale * 32767) // scale to normalize, (when writing wave file multiply by max signed int)
 	}
 }
 
