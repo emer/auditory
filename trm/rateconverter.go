@@ -29,17 +29,15 @@ package trm
 
 import (
 	"math"
-
-	"github.com/chewxy/math32"
 )
 
 // kaiser window params
-const Beta = float32(5.658) // kaiser window parameters
+const Beta = float64(5.658) // kaiser window parameters
 const IZeroEpsilon = 1e-21
 
 // Sample rate conversion constants
 const ZeroCrossings = 13              // source cutoff frequency
-const LpCutoff = float32(11.0 / 13.0) // 0.846 of nyquist
+const LpCutoff = float64(11.0 / 13.0) // 0.846 of nyquist
 const FilterLength = ZeroCrossings * LRange
 
 // const NBits = 16
@@ -76,7 +74,7 @@ func fractionValue(x uint32) uint32 {
 
 // RateConverter converts the sample rate
 type RateConverter struct {
-	SampleRateRatio  float32
+	SampleRateRatio  float64
 	FillPtr          int32
 	EmptyPtr         int32
 	PadSize          int32
@@ -86,19 +84,19 @@ type RateConverter struct {
 	PhaseIncrement   uint32
 	TimeRegIncrement uint32
 	TimeReg          uint32
-	MaxSampleValue   float32
+	MaxSampleValue   float64
 	NSamples         int64
-	H                [FilterLength]float32
-	DeltaH           [FilterLength]float32
-	Buffer           [BufferSize]float32
-	OutputData       *[]float32
+	H                [FilterLength]float64
+	DeltaH           [FilterLength]float64
+	Buffer           [BufferSize]float64
+	OutputData       *[]float64
 }
 
 // Init
-func (src *RateConverter) Init(sampleRate int, outputRate int, outputData *[]float32) {
+func (src *RateConverter) Init(sampleRate int, outputRate int, outputData *[]float64) {
 	//src.OutputData = append(src.OutputData, *outputData...)
 	src.OutputData = outputData
-	src.InitConversion(sampleRate, float32(outputRate))
+	src.InitConversion(sampleRate, float64(outputRate))
 }
 
 // Reset resets some values of the converter
@@ -112,15 +110,15 @@ func (src *RateConverter) Reset() {
 }
 
 // InitConversion initializes all the sample rate conversion functions
-func (src *RateConverter) InitConversion(sampleRate int, outputRate float32) {
+func (src *RateConverter) InitConversion(sampleRate int, outputRate float64) {
 	src.InitFilter() // initialize filter impulse response
 
-	src.SampleRateRatio = outputRate / float32(sampleRate)
+	src.SampleRateRatio = outputRate / float64(sampleRate)
 
-	// math32 missing Round
+	//  missing Round
 	src.TimeRegIncrement = uint32(math.Round(math.Pow(2.0, float64(FractionBits)) / float64(src.SampleRateRatio)))
 
-	roundedSampleRateRatio := math32.Pow(2.0, FractionBits) / float32(src.TimeRegIncrement)
+	roundedSampleRateRatio := math.Pow(2.0, FractionBits) / float64(src.TimeRegIncrement)
 
 	if src.SampleRateRatio >= 1.0 {
 		src.FilterIncrement = LRange
@@ -131,21 +129,21 @@ func (src *RateConverter) InitConversion(sampleRate int, outputRate float32) {
 	if src.SampleRateRatio >= 1.0 {
 		src.PadSize = ZeroCrossings
 	} else {
-		src.PadSize = int32(float32(ZeroCrossings)/roundedSampleRateRatio) + 1
+		src.PadSize = int32(float64(ZeroCrossings)/roundedSampleRateRatio) + 1
 	}
 	src.InitBuffer() // initialize the ring buffer
 }
 
 // IZero returns the value for the modified Bessel function of the first kind, order 0, as a float
-func (src *RateConverter) IZero(x float32) float32 {
-	var sum float32 = 1.0
-	var u float32 = 1.0
-	var halfx float32 = x / 2.0
+func (src *RateConverter) IZero(x float64) float64 {
+	var sum float64 = 1.0
+	var u float64 = 1.0
+	var halfx float64 = x / 2.0
 
 	n := 1
 
 	for {
-		temp := halfx / float32(n)
+		temp := halfx / float64(n)
 		n += 1
 		temp *= temp
 		u *= temp
@@ -169,19 +167,19 @@ func (src *RateConverter) InitBuffer() {
 // InitFilter initializes filter impulse response and impulse delta values
 func (src *RateConverter) InitFilter() {
 	src.H[0] = LpCutoff
-	x := math32.Pi / float32(LRange)
+	x := math.Pi / float64(LRange)
 
 	// initialize the filter impulse response
 	for i := 1; i < FilterLength; i++ {
-		y := float32(i) * x
-		src.H[i] = math32.Sin(float32(y)*float32(LpCutoff)) / y
+		y := float64(i) * x
+		src.H[i] = math.Sin(float64(y)*float64(LpCutoff)) / y
 	}
 
 	// apply a kaiser window to the impulse response
 	iBeta := 1.0 / src.IZero(Beta)
 	for i := 0; i < FilterLength; i++ {
-		temp := float32(i / FilterLength)
-		src.H[i] *= src.IZero(Beta*math32.Sqrt(float32(1.0)-(temp*temp))) * iBeta
+		temp := float64(i / FilterLength)
+		src.H[i] *= src.IZero(Beta*math.Sqrt(float64(1.0)-(temp*temp))) * iBeta
 	}
 
 	for i := 0; i < FilterLimit; i++ {
@@ -192,7 +190,7 @@ func (src *RateConverter) InitFilter() {
 
 // DataFill fills the ring buffer with a single sample, increments the counters and pointers,
 // and empties the buffer when full
-func (src *RateConverter) DataFill(data float32) {
+func (src *RateConverter) DataFill(data float64) {
 	src.Buffer[src.FillPtr] = data
 	SrIncrement(&src.FillPtr, BufferSize)
 	src.FillCounter += 1
@@ -216,8 +214,8 @@ func (src *RateConverter) DataEmpty() {
 	// upsample loop (slightly more efficient than downsampling
 	if src.SampleRateRatio >= 1.0 {
 		for src.EmptyPtr < endPtr {
-			output := float32(0.0)
-			interpolation := float32(mValue(src.TimeReg)) / float32(MRange)
+			output := float64(0.0)
+			interpolation := float64(mValue(src.TimeReg)) / float64(MRange)
 
 			// compute the left side of the filter convolution
 			index := src.EmptyPtr
@@ -228,7 +226,7 @@ func (src *RateConverter) DataEmpty() {
 
 			// adjust values for right side calculation
 			src.TimeReg = ^src.TimeReg // inverse of each bit
-			interpolation = float32(mValue(src.TimeReg)) / float32(MRange)
+			interpolation = float64(mValue(src.TimeReg)) / float64(MRange)
 
 			// compute the right side of the filter convolution
 			index = src.EmptyPtr
@@ -239,7 +237,7 @@ func (src *RateConverter) DataEmpty() {
 			}
 
 			// record maximum sample value
-			absoluteSampleValue := math32.Abs(output)
+			absoluteSampleValue := math.Abs(output)
 			if absoluteSampleValue > src.MaxSampleValue {
 				src.MaxSampleValue = absoluteSampleValue
 			}
@@ -330,7 +328,7 @@ func (src *RateConverter) DataEmpty() {
 }
 
 // MaxSampleVal
-func (src *RateConverter) MaxSampleVal() float32 {
+func (src *RateConverter) MaxSampleVal() float64 {
 	return src.MaxSampleValue
 }
 

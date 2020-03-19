@@ -27,22 +27,20 @@
 
 package trm
 
-import (
-	"github.com/chewxy/math32"
-)
+import "math"
 
 // ReflectionFilter
 type ReflectionFilter struct {
-	A10         float32
-	B11         float32
-	ReflectionY float32
+	A10         float64
+	B11         float64
+	ReflectionY float64
 }
 
 // Init initializes all of the filters struct fields
-func (rf *ReflectionFilter) Init(apertureCoef float32) {
+func (rf *ReflectionFilter) Init(apertureCoef float64) {
 	rf.ReflectionY = 0.0
 	rf.B11 = -apertureCoef
-	rf.A10 = 1.0 - math32.Abs(rf.B11)
+	rf.A10 = 1.0 - math.Abs(rf.B11)
 }
 
 // Reset set ReflectionY to 0
@@ -51,8 +49,8 @@ func (rf *ReflectionFilter) Reset() {
 }
 
 // Filter calculates the output based on input on current values
-func (rf *ReflectionFilter) Filter(input float32) float32 {
-	output := rf.A10*float32(input) - rf.B11*rf.ReflectionY
+func (rf *ReflectionFilter) Filter(input float64) float64 {
+	output := rf.A10*float64(input) - rf.B11*rf.ReflectionY
 	rf.ReflectionY = output
 	return output
 }

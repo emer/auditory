@@ -45,7 +45,6 @@ import (
 	"math"
 	"strings"
 
-	"github.com/chewxy/math32"
 	"github.com/emer/auditory/sound"
 	"github.com/emer/etable/etable"
 	"github.com/emer/etable/etensor"
@@ -72,14 +71,14 @@ const Bottom = 1
 //              TractParams
 
 type TractParams struct {
-	Temp         float32
-	Loss         float32
-	MouthCoef    float32
-	NoseCoef     float32
-	ThroatCutoff float32
-	ThroatVol    float32
-	VtlOff       float32
-	MixOff       float32
+	Temp         float64
+	Loss         float64
+	MouthCoef    float64
+	NoseCoef     float64
+	ThroatCutoff float64
+	ThroatVol    float64
+	VtlOff       float64
+	MixOff       float64
 	WaveForm     WaveForm
 	NoiseMod     bool
 }
@@ -115,16 +114,16 @@ const (
 
 // VoiceParams are the parameters that control the quality of the voice
 type VoiceParams struct {
-	TractLength      float32    `desc:"XX"`
-	GlotPulseFallMin float32    `desc:"XX"`
-	GlotPulseFallMax float32    `desc:"XX"`
-	GlotPitchRef     float32    `desc:"XX"`
-	Breathiness      float32    `desc:"XX"`
-	GlotPulseRise    float32    `desc:"XX"`
-	ApertureRadius   float32    `desc:"XX"`
-	NoseRadii        [6]float32 `desc:"fixed nose radii (0 - 3 cm)"`
-	NoseRadiusCoef   float32    `desc:"global nose radius coefficient"`
-	RadiusCoef       float32    `desc:"XX"`
+	TractLength      float64    `desc:"XX"`
+	GlotPulseFallMin float64    `desc:"XX"`
+	GlotPulseFallMax float64    `desc:"XX"`
+	GlotPitchRef     float64    `desc:"XX"`
+	Breathiness      float64    `desc:"XX"`
+	GlotPulseRise    float64    `desc:"XX"`
+	ApertureRadius   float64    `desc:"XX"`
+	NoseRadii        [6]float64 `desc:"fixed nose radii (0 - 3 cm)"`
+	NoseRadiusCoef   float64    `desc:"global nose radius coefficient"`
+	RadiusCoef       float64    `desc:"XX"`
 }
 
 // DefaultParams are the defaults, some of which don't change
@@ -203,15 +202,15 @@ func (vp *VoiceParams) SetAgeGender(voice AgeGender) {
 
 // ToDo: desc for all Radii
 type TractCtrl struct {
-	GlotPitch float32    `min:"-10" max:"0" desc:"ranges from -10 for phoneme k to 0 for most, with some being -2 or -1 -- called microInt in gnuspeech data files"`
-	GlotVol   float32    `min:"0" max:"60" desc:"glottal volume (DB?) typically 60 when present and 0 when not, and sometimes 54, 43.5, 42, "`
-	AspVol    float32    `min:"0" max:"10" desc:"aspiration volume -- typically 0 when not present and 10 when present"`
-	FricVol   float32    `min:"0" max:"24" desc:"fricative volume -- typically 0 or .25 .4, .5, .8 but 24 for ph"`
-	FricPos   float32    `min:"1" max:"7" desc:"ficative position -- varies continuously between 1-7"`
-	FricCf    float32    `min:"864" max:"5500" desc:"fricative center frequency ranges between 864 to 5500 with values around 1770, 2000, 2500, 4500 being common"`
-	FricBw    float32    `min:"500" max:"4500" desc:"fricative bw seems like a frequency -- common intermediate values are 600, 900, 2000, 2600"`
-	Radii     [7]float32 `desc:"Radii 2-8 radius of pharynx vocal tract segment as determined by tongue etc -- typically around 1, ranging .5 - 1.7"`
-	Velum     float32    `min:".1" max:"1.5" desc:"velum opening -- 1.5 when fully open, .1 when closed, and .25, .5 intermediates used"`
+	GlotPitch float64    `min:"-10" max:"0" desc:"ranges from -10 for phoneme k to 0 for most, with some being -2 or -1 -- called microInt in gnuspeech data files"`
+	GlotVol   float64    `min:"0" max:"60" desc:"glottal volume (DB?) typically 60 when present and 0 when not, and sometimes 54, 43.5, 42, "`
+	AspVol    float64    `min:"0" max:"10" desc:"aspiration volume -- typically 0 when not present and 10 when present"`
+	FricVol   float64    `min:"0" max:"24" desc:"fricative volume -- typically 0 or .25 .4, .5, .8 but 24 for ph"`
+	FricPos   float64    `min:"1" max:"7" desc:"ficative position -- varies continuously between 1-7"`
+	FricCf    float64    `min:"864" max:"5500" desc:"fricative center frequency ranges between 864 to 5500 with values around 1770, 2000, 2500, 4500 being common"`
+	FricBw    float64    `min:"500" max:"4500" desc:"fricative bw seems like a frequency -- common intermediate values are 600, 900, 2000, 2600"`
+	Radii     [7]float64 `desc:"Radii 2-8 radius of pharynx vocal tract segment as determined by tongue etc -- typically around 1, ranging .5 - 1.7"`
+	Velum     float64    `min:".1" max:"1.5" desc:"velum opening -- 1.5 when fully open, .1 when closed, and .25, .5 intermediates used"`
 }
 
 func (vtc *TractCtrl) Defaults() {
@@ -229,7 +228,7 @@ func (vtc *TractCtrl) Defaults() {
 }
 
 // ComputeDeltas computes values in this set of params as deltas from (cur - prv) * ctrl_freq
-func (vtc *TractCtrl) ComputeDeltas(cur, prv *TractCtrl, ctrlFreq float32) {
+func (vtc *TractCtrl) ComputeDeltas(cur, prv *TractCtrl, ctrlFreq float64) {
 	vtc.GlotPitch = (cur.GlotPitch - prv.GlotPitch) * ctrlFreq
 	vtc.GlotVol = (cur.GlotVol - prv.GlotVol) * ctrlFreq
 	vtc.AspVol = (cur.AspVol - prv.AspVol) * ctrlFreq
@@ -260,7 +259,7 @@ func (vtc *TractCtrl) UpdateFromDeltas(deltas *TractCtrl) {
 
 // DefaultMaxDeltas updates the default max delta values in this object (for DeltaMax field in VocalTract)
 func (vtc *TractCtrl) DefaultMaxDeltas() {
-	cf := float32(1.0 / 501.0) // default control frequency
+	cf := float64(1.0 / 501.0) // default control frequency
 	// default to entire range ok for now.. fix when glitches encountered.. (comment from c++ code)
 	vtc.GlotPitch = 10 * cf
 	vtc.GlotVol = 60.0 * cf
@@ -291,7 +290,7 @@ func (vtc *TractCtrl) SetFromParams(vtcSrc *TractCtrl) {
 }
 
 // SetFromValues - order must be preserved!
-func (vtc *TractCtrl) SetFromValues(values []float32) {
+func (vtc *TractCtrl) SetFromValues(values []float64) {
 	vtc.GlotPitch = values[0]
 	vtc.GlotVol = values[1]
 	vtc.AspVol = values[2]
@@ -305,7 +304,7 @@ func (vtc *TractCtrl) SetFromValues(values []float32) {
 	vtc.Velum = values[14]
 }
 
-func (vtc *TractCtrl) RadiusVal(idx int) float32 {
+func (vtc *TractCtrl) RadiusVal(idx int) float64 {
 	if idx <= 0 {
 		return 0.8
 	}
@@ -432,9 +431,9 @@ const (
 
 type VocalTract struct {
 	Buf        sound.Wave   `desc:"XX"`
-	Volume     float32      `desc:"XX"`
-	Balance    float32      `desc:"XX"`
-	Duration   float32      `desc:"XX"` // duration of synthesized sound
+	Volume     float64      `desc:"XX"`
+	Balance    float64      `desc:"XX"`
+	Duration   float64      `desc:"XX"` // duration of synthesized sound
 	Params     TractParams  `desc:"XX"`
 	Voice      VoiceParams  `desc:"XX"`
 	CurCtrl    TractCtrl    `desc:"XX"`
@@ -445,32 +444,32 @@ type VocalTract struct {
 	Dictionary etable.Table `desc:"XX"`
 
 	// derived values
-	CtrlRate   float32 `desc:"XX"` // 1.0-1000.0 input tables/second (Hz)
+	CtrlRate   float64 `desc:"XX"` // 1.0-1000.0 input tables/second (Hz)
 	CtrlPeriod int     `desc:"XX"`
 	SampleRate int     `desc:"XX"`
-	TubeLength float32 `desc:"XX"` // actual length in cm
+	TubeLength float64 `desc:"XX"` // actual length in cm
 
 	CurData TractCtrl `desc:"XX"` // current control data
 
 	// tube and tube coefficients
-	Oropharynx      [OroPharynxSectCnt][2][2]float32
-	OropharynxCoefs [OroPharynxCoefCnt]float32
-	Nasal           [NasalSectCnt][2][2]float32
-	NasalCoefs      [NasalCoefCnt]float32
-	Alpha           [ThreeWayCnt]float32
+	Oropharynx      [OroPharynxSectCnt][2][2]float64
+	OropharynxCoefs [OroPharynxCoefCnt]float64
+	Nasal           [NasalSectCnt][2][2]float64
+	NasalCoefs      [NasalCoefCnt]float64
+	Alpha           [ThreeWayCnt]float64
 	CurPtr          int
 	PrvPtr          int
 
 	// memory for frication taps
-	FricationTap [FricationInjCoefCnt]float32
+	FricationTap [FricationInjCoefCnt]float64
 
-	DampingFactor    float32 // calculated
-	CrossmixFactor   float32 //  calculated
-	BreathFactor     float32
-	PrvGlotAmplitude float32
+	DampingFactor    float64 // calculated
+	CrossmixFactor   float64 //  calculated
+	BreathFactor     float64
+	PrvGlotAmplitude float64
 
-	SynthOutput []float32
-	Wave        []float32
+	SynthOutput []float64
+	Wave        []float64
 
 	RateConverter         RateConverter
 	MouthRadiationFilter  RadiationFilter
@@ -506,18 +505,18 @@ func (vt *VocalTract) Defaults() {
 	vt.CtrlRate = 0.0
 	vt.DeltaMax.DefaultMaxDeltas()
 	vt.Reset()
-	vt.SynthOutput = make([]float32, 0)
-	vt.Wave = make([]float32, 0)
+	vt.SynthOutput = make([]float64, 0)
+	vt.Wave = make([]float64, 0)
 }
 
 func (vt *VocalTract) ControlFromTable(col etensor.Tensor, row int, normalized bool) {
-	params := col.SubSpace([]int{row}).(*etensor.Float32)
+	params := col.SubSpace([]int{row}).(*etensor.Float64)
 	vt.CurCtrl.SetFromValues(params.Values)
 }
 
 // LoadEnglishPhones loads the file of English phones
 func (vt *VocalTract) LoadEnglishPhones() {
-	fn := gi.FileName("VocalTractEnglishPhones.dat")
+	fn := gi.FileName("VocalTractEnglishPhones64.dat") // table saved with columns as double precision
 	err := vt.PhoneTable.OpenCSV(fn, '\t')
 	if err != nil {
 		fmt.Printf("File not found or error opengin file: %s (%s)", fn, err)
@@ -732,21 +731,21 @@ func (vt *VocalTract) Reset() {
 }
 
 // SpeedOfSound returns the speed of sound according to the value of the temperature (in Celsius degrees)
-func SpeedOfSound(temp float32) float32 {
+func SpeedOfSound(temp float64) float64 {
 	return 331.4 + (0.6 * temp)
 }
 
 //InitializeSynthesizer initializes all variables so that the synthesis can be run
 func (vt *VocalTract) InitializeSynthesizer() {
-	var nyquist float32
+	var nyquist float64
 
 	// calculate the sample rate, based on nominal tube length and speed of sound
 	if vt.Voice.TractLength > 0.0 {
 		c := SpeedOfSound(vt.Params.Temp)
 		vt.CtrlPeriod = int(math.Round(float64(c*OroPharynxSectCnt*100.0) / float64(vt.Voice.TractLength*vt.CtrlRate)))
-		vt.SampleRate = int(vt.CtrlRate * float32(vt.CtrlPeriod))
-		vt.TubeLength = float32(c*OroPharynxSectCnt*100.0) / float32(vt.SampleRate)
-		nyquist = float32(vt.SampleRate) / 2.0
+		vt.SampleRate = int(vt.CtrlRate * float64(vt.CtrlPeriod))
+		vt.TubeLength = float64(c*OroPharynxSectCnt*100.0) / float64(vt.SampleRate)
+		nyquist = float64(vt.SampleRate) / 2.0
 	} else {
 		nyquist = 1.0
 		fmt.Println("Illegal tube length")
@@ -758,7 +757,7 @@ func (vt *VocalTract) InitializeSynthesizer() {
 	// initialize the wave table
 	gs := WavetableGlottalSource{}
 	vt.GlottalSource = gs
-	vt.GlottalSource.Init(GlottalSourcePulse, float32(vt.SampleRate), vt.Voice.GlotPulseRise, vt.Voice.GlotPulseFallMin, vt.Voice.GlotPulseFallMax)
+	vt.GlottalSource.Init(GlottalSourcePulse, float64(vt.SampleRate), vt.Voice.GlotPulseRise, vt.Voice.GlotPulseFallMin, vt.Voice.GlotPulseFallMax)
 	vt.GlottalSource.Reset()
 
 	mouthApertureCoef := (nyquist - vt.Params.MouthCoef) / nyquist
@@ -774,7 +773,7 @@ func (vt *VocalTract) InitializeSynthesizer() {
 	vt.NasalReflectionFilter.Reset()
 
 	vt.InitNasal()
-	vt.Throat.Init(float32(vt.SampleRate), vt.Params.ThroatCutoff, Amplitude(vt.Params.ThroatVol))
+	vt.Throat.Init(float64(vt.SampleRate), vt.Params.ThroatCutoff, Amplitude(vt.Params.ThroatVol))
 	vt.Throat.Reset()
 
 	vt.RateConverter.Init(vt.SampleRate, OutputRate, &vt.SynthOutput)
@@ -800,7 +799,7 @@ func (vt *VocalTract) InitSynth() {
 
 // InitBuffer
 func (vt *VocalTract) InitSndBuf(frames int, channels, rate, bitDepth int) {
-	//frames := (vt.Duration / 1000.0) * float32(vt.SampleRate)
+	//frames := (vt.Duration / 1000.0) * float64(vt.SampleRate)
 	format := &audio.Format{
 		NumChannels: channels,
 		SampleRate:  rate,
@@ -834,8 +833,8 @@ func (vt *VocalTract) Synth(reset bool) {
 		vt.SynthReset(true)
 	}
 
-	controlFreq := 1.0 / float32(vt.CtrlPeriod)
-	vt.DeltaCtrl.ComputeDeltas(&vt.CurCtrl, &vt.PrvCtrl, float32(controlFreq))
+	controlFreq := 1.0 / float64(vt.CtrlPeriod)
+	vt.DeltaCtrl.ComputeDeltas(&vt.CurCtrl, &vt.PrvCtrl, float64(controlFreq))
 
 	for j := 0; j < vt.CtrlPeriod; j++ {
 		vt.SynthSignal()
@@ -846,7 +845,7 @@ func (vt *VocalTract) Synth(reset bool) {
 	vt.ResizeSndBuf(len(vt.SynthOutput))
 	scale := vt.MonoScale()
 	vt.Wave = nil
-	vt.Wave = make([]float32, len(vt.SynthOutput))
+	vt.Wave = make([]float64, len(vt.SynthOutput))
 	for i := 0; i < len(vt.SynthOutput); i++ {
 		vt.Wave[i] = vt.SynthOutput[i] * scale
 		vt.Buf.Buf.Data[i] = int(vt.SynthOutput[i] * scale * 32767) // scale to normalize, (when writing wave file multiply by max signed int)
@@ -881,7 +880,7 @@ func (vt *VocalTract) SynthSignal() {
 	// create noisy glottal pulse
 	pulse = ax * ((pulse * (1.0 - vt.BreathFactor)) + (pulsedNoise * vt.BreathFactor))
 
-	var signal float32
+	var signal float64
 	// cross-mix pure noise with pulsed noise
 	if vt.Params.NoiseMod {
 		crossmix := ax * vt.CrossmixFactor
@@ -893,7 +892,7 @@ func (vt *VocalTract) SynthSignal() {
 		signal = lpNoise
 	}
 
-	signal = vt.Update(((pulse + (ah1 * signal)) * VtScale), float32(vt.BandpassFilter.Filter(float64(signal))))
+	signal = vt.Update(((pulse + (ah1 * signal)) * VtScale), float64(vt.BandpassFilter.Filter(float64(signal))))
 	signal += vt.Throat.Process(pulse * VtScale)
 
 	// output sample here
@@ -903,7 +902,7 @@ func (vt *VocalTract) SynthSignal() {
 
 // InitNasalCavity
 func (vt *VocalTract) InitNasal() {
-	var radA2, radB2 float32
+	var radA2, radB2 float64
 
 	// calculate coefficients for internal fixed sections of nasal cavity
 	for i, j := NasalS2, NasalC2; i < NasalS6; i, j = i+1, j+1 {
@@ -923,7 +922,7 @@ func (vt *VocalTract) InitNasal() {
 
 // TubeCoefficients
 func (vt *VocalTract) TubeCoefficients() {
-	var radA2, radB2 float32
+	var radA2, radB2 float64
 	// calculate coefficients for the oropharynx
 	for i := 0; i < OroPharynxRegCnt-1; i++ {
 		radA2 = vt.CurData.RadiusVal(i)
@@ -962,7 +961,7 @@ func (vt *VocalTract) SetFricationTaps() {
 	fricationAmplitude := Amplitude(vt.CurData.FricVol)
 
 	integerPart := int(vt.CurData.FricPos)
-	complement := vt.CurData.FricPos - float32(integerPart)
+	complement := vt.CurData.FricPos - float64(integerPart)
 	remainder := 1.0 - complement
 
 	for i := FricationInjC1; i < FricationInjCoefCnt; i++ {
@@ -980,7 +979,7 @@ func (vt *VocalTract) SetFricationTaps() {
 
 // Update updates the pressure wave throughout the vocal tract, and returns
 // the summed output of the oral and nasal cavities.  Also injects frication appropriately
-func (vt *VocalTract) Update(input, frication float32) (output float32) {
+func (vt *VocalTract) Update(input, frication float64) (output float64) {
 	vt.CurPtr += 1
 	if vt.CurPtr > 1 {
 		vt.CurPtr = 0
@@ -1083,13 +1082,13 @@ func (vt *VocalTract) Update(input, frication float32) (output float32) {
 }
 
 // MonoScale
-func (vt *VocalTract) MonoScale() float32 {
+func (vt *VocalTract) MonoScale() float64 {
 	return (OutputScale / (vt.RateConverter.MaxSampleVal()) * Amplitude(vt.Volume))
 }
 
 // StereoScale
 func (vt *VocalTract) StereoScale(leftScale,
-	rightScale *float32) {
+	rightScale *float64) {
 	*leftScale = (-((vt.Balance / 2.0) - 0.5))
 	*rightScale = (-((vt.Balance / 2.0) + 0.5))
 
@@ -1104,7 +1103,7 @@ func (vt *VocalTract) StereoScale(leftScale,
 }
 
 // Amplitude  converts dB value to amplitude value
-func Amplitude(decibelLevel float32) float32 {
+func Amplitude(decibelLevel float64) float64 {
 	decibelLevel -= VolMax
 
 	if decibelLevel <= -VolMax {
@@ -1115,12 +1114,12 @@ func Amplitude(decibelLevel float32) float32 {
 		return 1.0
 	}
 
-	return math32.Pow(10.0, decibelLevel/20.0)
+	return math.Pow(10.0, decibelLevel/20.0)
 }
 
 // Frequency converts a given pitch (0 = middle C) to the corresponding frequency
-func Frequency(pitch float32) float32 {
-	return PitchBase * math32.Pow(2.0, (pitch+PitchOffset)/12.0)
+func Frequency(pitch float64) float64 {
+	return PitchBase * math.Pow(2.0, (pitch+PitchOffset)/12.0)
 }
 
 func PlaySound() {

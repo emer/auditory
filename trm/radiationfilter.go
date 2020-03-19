@@ -30,15 +30,15 @@ package trm
 // RadiationFilter is a variable, one-zero, one-pole, highpass filter, whose cutoff point
 // is determined by the aperture coefficient.
 type RadiationFilter struct {
-	A20        float32
-	A21        float32
-	B21        float32
-	RadiationX float32
-	RadiationY float32
+	A20        float64
+	A21        float64
+	B21        float64
+	RadiationX float64
+	RadiationY float64
 }
 
 // Init
-func (rf *RadiationFilter) Init(apertureCoef float32) {
+func (rf *RadiationFilter) Init(apertureCoef float64) {
 	rf.RadiationX = 0.0
 	rf.RadiationY = 0.0
 	rf.A20 = apertureCoef
@@ -53,7 +53,7 @@ func (rf *RadiationFilter) Reset() {
 }
 
 // Filter
-func (rf *RadiationFilter) Filter(input float32) float32 {
+func (rf *RadiationFilter) Filter(input float64) float64 {
 	output := (rf.A20 * input) + (rf.A21 * rf.RadiationX) - (rf.B21 * rf.RadiationY)
 	rf.RadiationX = input
 	rf.RadiationY = output
