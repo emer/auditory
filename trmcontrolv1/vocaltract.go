@@ -43,11 +43,11 @@ package trmcontrolv1
 import (
 	"errors"
 	"fmt"
-	"github.com/emer/auditory/trm"
 	"math"
 	"strings"
 
 	"github.com/emer/auditory/sound"
+	"github.com/emer/auditory/trm"
 	"github.com/emer/etable/etable"
 	"github.com/emer/etable/etensor"
 	"github.com/go-audio/audio"
@@ -116,16 +116,16 @@ const (
 
 // VoiceParams are the parameters that control the quality of the voice
 type VoiceParams struct {
-	TractLength      float64    `desc:"XX"`
-	GlotPulseFallMin float64    `desc:"XX"`
-	GlotPulseFallMax float64    `desc:"XX"`
-	GlotPitchRef     float64    `desc:"XX"`
-	Breath           float64    `desc:"XX"`
-	GlotPulseRise    float64    `desc:"XX"`
-	ApertureRadius   float64    `desc:"XX"`
+	TractLength      float64    `desc:"length of vocal tract - shortest for baby voice, longest for male voice"`
+	GlotPulseFallMin float64    `desc:"glottal pulse is the rate at which the vocal folds of the glottis open and close - not sure about FallMin/FallMax"`
+	GlotPulseFallMax float64    `desc:"glottal pulse is the rate at which the vocal folds of the glottis open and close - not sure about FallMin/FallMax"`
+	GlotPitchRef     float64    `desc:"the pitch of the voice is usually set by the frequency of glottal pulses during vowels or voiced consonants"`
+	Breath           float64    `desc:"how much air escapes on each glottal pulse, more for female voices"`
+	GlotPulseRise    float64    `desc:"glottal pulse is the rate at which the vocal folds of the glottis open and close - not sure about rise"`
+	ApertureRadius   float64    `desc:""`
 	NoseRadii        [6]float64 `desc:"fixed nose radii (0 - 3 cm)"`
 	NoseRadiusCoef   float64    `desc:"global nose radius coefficient"`
-	RadiusCoef       float64    `desc:"XX"`
+	RadiusCoef       float64    `desc:""`
 }
 
 // DefaultParams are the defaults, some of which don't change
@@ -432,26 +432,26 @@ const (
 //go:generate stringer -type=FricationInjCoefs
 
 type VocalTract struct {
-	Buf        sound.Wave   `desc:"XX"`
-	Volume     float64      `desc:"XX"`
-	Balance    float64      `desc:"XX"`
-	Duration   float64      `desc:"XX"` // duration of synthesized sound
-	Params     TractParams  `desc:"XX"`
-	Voice      VoiceParams  `desc:"XX"`
-	CurCtrl    TractCtrl    `desc:"XX"`
-	PrvCtrl    TractCtrl    `desc:"XX"`
-	DeltaCtrl  TractCtrl    `desc:"XX"`
-	DeltaMax   TractCtrl    `desc:"XX"`
-	PhoneTable etable.Table `desc:"XX"`
-	Dictionary etable.Table `desc:"XX"`
+	Buf        sound.Wave   `desc:""`
+	Volume     float64      `desc:""`
+	Balance    float64      `desc:""`
+	Duration   float64      `desc:""` // duration of synthesized sound
+	Params     TractParams  `desc:""`
+	Voice      VoiceParams  `desc:""`
+	CurCtrl    TractCtrl    `desc:""`
+	PrvCtrl    TractCtrl    `desc:""`
+	DeltaCtrl  TractCtrl    `desc:""`
+	DeltaMax   TractCtrl    `desc:""`
+	PhoneTable etable.Table `desc:""`
+	Dictionary etable.Table `desc:""`
 
 	// derived values
-	CtrlRate   float64 `desc:"XX"` // 1.0-1000.0 input tables/second (Hz)
-	CtrlPeriod int     `desc:"XX"`
-	SampleRate int     `desc:"XX"`
-	TubeLength float64 `desc:"XX"` // actual length in cm
+	CtrlRate   float64 `desc:""` // 1.0-1000.0 input tables/second (Hz)
+	CtrlPeriod int     `desc:""`
+	SampleRate int     `desc:""`
+	TubeLength float64 `desc:""` // actual length in cm
 
-	CurData TractCtrl `desc:"XX"` // current control data
+	CurData TractCtrl `desc:""` // current control data
 
 	// tube and tube coefficients
 	Oropharynx      [OroPharynxSectCnt][2][2]float64
