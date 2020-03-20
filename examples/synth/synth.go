@@ -33,12 +33,16 @@ type Synth struct {
 	ToolBar    *gi.ToolBar    `view:"-" desc:"the master toolbar"`
 	SignalData *etable.Table  `desc:"waveform data"`
 	WavePlot   *eplot.Plot2D  `view:"-" desc:"waveform plot"`
-	text       string         `desc:"the text to be synthesized"`
+	Text       string         `desc:"the text to be synthesized"`
+	Save       bool           `desc:"if true write the synthesized values to .wav file"`
+	Play       bool           `desc:"if true play the sound"`
 }
 
 func (syn *Synth) Defaults() {
 	syn.SignalData = &etable.Table{}
 	syn.ConfigSignalData(syn.SignalData)
+	syn.Save = false
+	syn.Play = false
 }
 
 // ConfigSignalData
@@ -66,11 +70,26 @@ func (syn *Synth) ConfigWavePlot(plt *eplot.Plot2D, dt *etable.Table) *eplot.Plo
 	return plt
 }
 
-func (syn *Synth) UpdateWave() {
+func (syn *Synth) GetWaveData() {
 	syn.SignalData.AddRows(len(syn.vt.SynthOutput))
 	for i := 0; i < len(syn.vt.SynthOutput); i++ {
 		syn.SignalData.SetCellFloat("Time", i, float64(i))
 		syn.SignalData.SetCellFloat("Amplitude", i, float64(syn.vt.Wave[i]))
+	}
+}
+
+func (syn *Synth) Synthesize() {
+	if len(syn.Text) > 0 {
+		syn.vt.SynthWords(syn.Text, true, true)
+		syn.GetWaveData()
+		syn.WavePlot.GoUpdate()
+		if syn.Save {
+			fn := syn.Text + ".wav"
+			err := syn.vt.Buf.WriteWave(fn)
+			if err != nil {
+				fmt.Printf("File not found or error opening file: %s (%s)", fn, err)
+			}
+		}
 	}
 }
 
@@ -108,12 +127,17 @@ func (syn *Synth) ConfigGui() *gi.Window {
 	plt := tview.AddNewTab(eplot.KiT_Plot2D, "wave").(*eplot.Plot2D)
 	syn.WavePlot = syn.ConfigWavePlot(plt, syn.SignalData)
 
-	tbar.AddAction(gi.ActOpts{Label: "Update Wave", Icon: "new"}, win.This(),
+	// tbar.AddAction(gi.ActOpts{Label: "Update Wave", Icon: "new"}, win.This(),
+	// 	func(recv, send ki.Ki, sig int64, data interface{}) {
+	// 		syn.GetWaveData()
+	// 	})
+
+	tbar.AddAction(gi.ActOpts{Label: "Synthesize", Icon: "new"}, win.This(),
 		func(recv, send ki.Ki, sig int64, data interface{}) {
-			syn.UpdateWave()
+			syn.Synthesize()
 		})
 
-	//split.SetSplits(1)
+	split.SetSplitsList([]float32{.3, .7})
 
 	// main menu
 	appnm := gi.AppName()
@@ -137,17 +161,6 @@ var TheSyn Synth
 func mainrun() {
 	TheSyn.Defaults()
 	TheSyn.vt.Init()
-	TheSyn.vt.LoadEnglishPhones()
-	//TheSyn.vt.SynthPhones("a", true, false)
-	TheSyn.text = "dog"
-	TheSyn.vt.SynthWords(TheSyn.text, true, true)
-	fn := TheSyn.text + ".wav"
-	err := TheSyn.vt.Buf.WriteWave(fn)
-	if err != nil {
-		fmt.Printf("File not found or error opening file: %s (%s)", fn, err)
-	}
-
 	win := TheSyn.ConfigGui()
-	TheSyn.WavePlot.GoUpdate()
 	win.StartEventLoop()
 }
