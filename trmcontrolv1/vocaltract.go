@@ -38,11 +38,12 @@
 // 2019-02
 // This is a port to golang of the C++ Gnuspeech port by Marcelo Y. Matuda
 
-package trm
+package trmcontrolv1
 
 import (
 	"errors"
 	"fmt"
+	"github.com/emer/auditory/trm"
 	"math"
 	"strings"
 
@@ -80,7 +81,7 @@ type TractParams struct {
 	ThroatVol    float64
 	VtlOff       float64
 	MixOff       float64
-	WaveForm     WaveForm
+	WaveForm     trm.WaveForm
 	NoiseMod     bool
 }
 
@@ -93,7 +94,7 @@ func (vtc *TractParams) Defaults() {
 	vtc.ThroatCutoff = 1500.0
 	vtc.ThroatVol = 6.0
 	vtc.VtlOff = 0.0
-	vtc.WaveForm = Pulse
+	vtc.WaveForm = trm.Pulse
 	vtc.NoiseMod = true
 	vtc.MixOff = 48.0
 }
@@ -472,16 +473,16 @@ type VocalTract struct {
 	SynthOutput []float64
 	Wave        []float64
 
-	RateConverter         RateConverter
-	MouthRadiationFilter  RadiationFilter
-	MouthReflectionFilter ReflectionFilter
-	NasalRadiationFilter  RadiationFilter
-	NasalReflectionFilter ReflectionFilter
-	Throat                Throat
-	GlottalSource         WavetableGlottalSource
-	BandpassFilter        BandpassFilter
-	NoiseFilter           NoiseFilter
-	NoiseSource           NoiseSource
+	RateConverter         trm.RateConverter
+	MouthRadiationFilter  trm.RadiationFilter
+	MouthReflectionFilter trm.ReflectionFilter
+	NasalRadiationFilter  trm.RadiationFilter
+	NasalReflectionFilter trm.ReflectionFilter
+	Throat                trm.Throat
+	GlottalSource         trm.WavetableGlottalSource
+	BandpassFilter        trm.BandpassFilter
+	NoiseFilter           trm.NoiseFilter
+	NoiseSource           trm.NoiseSource
 }
 
 // Init gets us going - this is the first function to call
@@ -757,7 +758,7 @@ func (vt *VocalTract) InitializeSynthesizer() {
 	vt.DampingFactor = (1.0 - (vt.Params.Loss / 100.0))
 
 	// initialize the wave table
-	gs := WavetableGlottalSource{}
+	gs := trm.WavetableGlottalSource{}
 	vt.GlottalSource = gs
 	vt.GlottalSource.Init(GlottalSourcePulse, float64(vt.SampleRate), vt.Voice.GlotPulseRise, vt.Voice.GlotPulseFallMin, vt.Voice.GlotPulseFallMax)
 	vt.GlottalSource.Reset()
@@ -778,7 +779,7 @@ func (vt *VocalTract) InitializeSynthesizer() {
 	vt.Throat.Init(float64(vt.SampleRate), vt.Params.ThroatCutoff, Amplitude(vt.Params.ThroatVol))
 	vt.Throat.Reset()
 
-	vt.RateConverter.Init(vt.SampleRate, OutputRate, &vt.SynthOutput)
+	vt.RateConverter.Init(vt.SampleRate, trm.OutputRate, &vt.SynthOutput)
 	vt.RateConverter.Reset()
 	for i := 0; i < len(vt.SynthOutput); i++ {
 		vt.SynthOutput[i] = 0
@@ -869,7 +870,7 @@ func (vt *VocalTract) SynthSignal() {
 	lpNoise := vt.NoiseFilter.Filter(vt.NoiseSource.GetSample())
 
 	// update the shape of the glottal pulse, if necessary
-	if vt.Params.WaveForm == Pulse {
+	if vt.Params.WaveForm == trm.Pulse {
 		if ax != vt.PrvGlotAmplitude {
 			vt.GlottalSource.Update(ax)
 		}

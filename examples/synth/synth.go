@@ -9,7 +9,7 @@ import (
 	"log"
 	"strconv"
 
-	"github.com/emer/auditory/trm"
+	"github.com/emer/auditory/trmcontrolv1"
 	"github.com/emer/etable/eplot"
 	"github.com/emer/etable/etable"
 	"github.com/emer/etable/etensor"
@@ -30,7 +30,7 @@ func main() {
 
 // Synth encapsulates
 type Synth struct {
-	vt         trm.VocalTract `view:"noinline"`
+	vt         trmcontrolv1.VocalTract `view:"noinline"`
 	win        *gi.Window
 	ToolBar    *gi.ToolBar   `view:"-" desc:"the master toolbar"`
 	SignalData *etable.Table `desc:"waveform data"`
