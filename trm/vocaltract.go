@@ -41,6 +41,7 @@
 package trm
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"strings"
@@ -661,13 +662,14 @@ func (vt *VocalTract) SynthWord(word string, resetFirst bool, play bool) bool {
 }
 
 // SynthWords
-func (vt *VocalTract) SynthWords(ws string, resetFirst bool, play bool) bool {
+func (vt *VocalTract) SynthWords(ws string, resetFirst bool, play bool) (rval bool, err error) {
 	words := strings.Split(ws, " ")
-	rval := true
 	for i := 0; i < len(words); i++ {
-		rval := vt.SynthWord(words[i], (resetFirst && (i == 0)), false)
+		rval = vt.SynthWord(words[i], (resetFirst && (i == 0)), false)
 		if !rval {
-			break
+			msg := "The word \"" + words[i] + "\" is not in the dictionary"
+			err = errors.New(msg)
+			return rval, err
 		}
 		if i < len(words)-1 {
 			vt.synthPhone("#", false, false, false, false)
@@ -676,7 +678,7 @@ func (vt *VocalTract) SynthWords(ws string, resetFirst bool, play bool) bool {
 	if play {
 		PlaySound()
 	}
-	return rval
+	return rval, nil
 }
 
 // Reset reset all vocal tract values

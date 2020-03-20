@@ -6,6 +6,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"strconv"
 
 	"github.com/emer/auditory/trm"
@@ -30,12 +31,13 @@ func main() {
 // Synth encapsulates
 type Synth struct {
 	vt         trm.VocalTract `view:"noinline"`
-	ToolBar    *gi.ToolBar    `view:"-" desc:"the master toolbar"`
-	SignalData *etable.Table  `desc:"waveform data"`
-	WavePlot   *eplot.Plot2D  `view:"-" desc:"waveform plot"`
-	Text       string         `desc:"the text to be synthesized"`
-	Save       bool           `desc:"if true write the synthesized values to .wav file"`
-	Play       bool           `desc:"if true play the sound"`
+	win        *gi.Window
+	ToolBar    *gi.ToolBar   `view:"-" desc:"the master toolbar"`
+	SignalData *etable.Table `desc:"waveform data"`
+	WavePlot   *eplot.Plot2D `view:"-" desc:"waveform plot"`
+	Text       string        `desc:"the text to be synthesized"`
+	Save       bool          `desc:"if true write the synthesized values to .wav file"`
+	Play       bool          `desc:"if true play the sound"`
 }
 
 func (syn *Synth) Defaults() {
@@ -79,18 +81,26 @@ func (syn *Synth) GetWaveData() {
 }
 
 func (syn *Synth) Synthesize() {
-	if len(syn.Text) > 0 {
-		syn.vt.SynthWords(syn.Text, true, true)
-		syn.GetWaveData()
-		syn.WavePlot.GoUpdate()
-		if syn.Save {
-			fn := syn.Text + ".wav"
-			err := syn.vt.Buf.WriteWave(fn)
-			if err != nil {
-				fmt.Printf("File not found or error opening file: %s (%s)", fn, err)
-			}
+	if len(syn.Text) == 0 {
+		gi.PromptDialog(syn.win.Viewport, gi.DlgOpts{Title: "No text to synthesize", Prompt: fmt.Sprintf("Enter the text to synthesize in the Text field.")}, gi.AddOk, gi.NoCancel, nil, nil)
+		return
+	}
+	// if len(syn.Text) > 0 {
+	_, err := syn.vt.SynthWords(syn.Text, true, true)
+	if err != nil {
+		log.Println(err)
+		gi.PromptDialog(syn.win.Viewport, gi.DlgOpts{Title: "Synthesis error", Prompt: fmt.Sprintf("Synthesis error, see console. Displaying waveform of text to that point.")}, gi.AddOk, gi.NoCancel, nil, nil)
+	}
+	syn.GetWaveData()
+	syn.WavePlot.GoUpdate()
+	if syn.Save {
+		fn := syn.Text + ".wav"
+		err := syn.vt.Buf.WriteWave(fn)
+		if err != nil {
+			fmt.Printf("File not found or error opening file: %s (%s)", fn, err)
 		}
 	}
+	// }
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////
@@ -156,11 +166,11 @@ func (syn *Synth) ConfigGui() *gi.Window {
 	return win
 }
 
-var TheSyn Synth
+var Synther Synth
 
 func mainrun() {
-	TheSyn.Defaults()
-	TheSyn.vt.Init()
-	win := TheSyn.ConfigGui()
-	win.StartEventLoop()
+	Synther.Defaults()
+	Synther.vt.Init()
+	Synther.win = Synther.ConfigGui()
+	Synther.win.StartEventLoop()
 }
