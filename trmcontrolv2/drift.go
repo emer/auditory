@@ -33,10 +33,10 @@ const Factor = 377.0
 type Drift struct {
 	Deviation float64 `desc:"the amount of drift in semitones above and below the median.  A value around 1 or so should give good results."`
 	Offset    float64 `desc:"pitch offset"`
-	Seed      float64 `desc:"pitch offset"`
-	A0        float64 `desc:"pitch offset"`
-	B1        float64 `desc:"pitch offset"`
-	PrvSample float64 `desc:"pitch offset"`
+	Seed      float64 `desc:""`
+	A0        float64 `desc:""`
+	B1        float64 `desc:""`
+	PrvSample float64 `desc:""`
 }
 
 func (dg *Drift) Defaults() {

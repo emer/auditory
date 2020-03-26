@@ -12,7 +12,7 @@
  *  (at your option) any later version.                                    *
  *                                                                         *
  *  This program is distributed in the hope that it will be useful,        *
- *  but WITHOUT ANY WARRANTY without even the implied warranty of         *
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of         *
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the          *
  *  GNU General Public License for more details.                           *
  *                                                                         *
@@ -27,8 +27,32 @@
 
 package trmcontrolv2
 
-type Category struct {
-	Name    string
-	Comment string
-	Native  bool
+type IntonationPt struct {
+	SemiTone float64 `desc:"value of the intonation in semitones"`
+	Offset   float64 `desc:"points are timed wrt a beat + this offset"`
+	Slope    float64 `desc:"Slope of point"`
+	RuleIdx  int     `desc:"Index of posture which is the focus of this point"`
+	Events   []Event `desc:"Current events"`
+}
+
+func (ip *Intonation) Defaults() {
+	ip.SemiTone = 0.0
+	ip.Offset = 0.0
+	ip.Slope = 0.0
+	ip.RuleIdx = 0.0
+}
+
+func (ip *IntonationPt) Init(events []Event) {
+	for _, e := range events {
+		ip.Events = append(ip.Events, e)
+	}
+}
+
+func (ip *IntonationPt) AbsTime() float64 {
+	time := ip.Events.GetBeat(ip.RuleIdx)
+	return time + ip.Offset
+}
+
+func (ip *IntonationPt) BeatTime() float64 {
+	return ip.Events.GetBeat(ip.RuleIdx)
 }
