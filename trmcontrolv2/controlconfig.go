@@ -36,7 +36,7 @@ import (
 )
 
 // IntonationFlags
-type IntonationFlags int
+type IntonationFlags int64
 
 const (
 	//
@@ -62,7 +62,7 @@ const (
 
 //go:generate stringer -type=Intonation
 
-var Kit_Intonation = kit.Enums.AddEnum(IntonationFlagsN, BitFlag, nil)
+var Kit_Intonation = kit.Enums.AddEnum(IntonationFlagsN, kit.BitFlag, nil)
 
 type ModelConfig struct {
 	Name               string
@@ -73,12 +73,12 @@ type ModelConfig struct {
 	PitchOffset        float64
 	DriftDeviation     float64
 	DriftLowpassCutoff float64
-	Intonation         IntonationFlags `desc:"Holds IntonationFlags"`
-	MicroIntonation    int             `desc:"One of 5 types of intonation"`
-	MacroIntonation    int             `desc:"One of 5 types of intonation"`
-	SmoothIntonation   int             `desc:"One of 5 types of intonation"`
-	DriftIntonation    int             `desc:"One of 5 types of intonation"`
-	RandomIntonation   int             `desc:"One of 5 types of intonation"`
+	Intonation         int64 `desc:"Holds IntonationFlags"`
+	MicroIntonation    int   `desc:"One of 5 types of intonation"`
+	MacroIntonation    int   `desc:"One of 5 types of intonation"`
+	SmoothIntonation   int   `desc:"One of 5 types of intonation"`
+	DriftIntonation    int   `desc:"One of 5 types of intonation"`
+	RandomIntonation   int   `desc:"One of 5 types of intonation"`
 
 	// Intonation parameters.
 	NotionalPitch float64
@@ -92,7 +92,7 @@ type ModelConfig struct {
 	Dictionary3File string
 }
 
-func (in *ModelConfig) Defaults() {
+func (mc *ModelConfig) Defaults() {
 	mc.ControlRate = 0.0
 	mc.Tempo = 0.0
 	mc.PitchOffset = 0.0
@@ -108,19 +108,19 @@ func (in *ModelConfig) Defaults() {
 
 // Load will be passed data/en/trm_control_model.config or equivalent file
 func (mc *ModelConfig) Load(path string) error {
-	OpenJSON()
+	mc.OpenJSON(path)
 
 	if mc.MicroIntonation == 1 {
-		bitflag.Set(mc.Intonation, IntonationMicro)
+		bitflag.Set(&mc.Intonation, int(IntonationMicro))
 	}
 	if mc.MacroIntonation == 1 {
-		bitflag.Set(mc.Intonation, IntonationMacro)
+		bitflag.Set(&mc.Intonation, int(IntonationMacro))
 	}
 	if mc.DriftIntonation == 1 {
-		bitflag.Set(mc.Intonation, IntonationDrift)
+		bitflag.Set(&mc.Intonation, int(IntonationDrift))
 	}
 	if mc.RandomIntonation == 1 {
-		bitflag.Set(mc.Intonation, IntonationRandom)
+		bitflag.Set(&mc.Intonation, int(IntonationRandom))
 	}
 }
 
