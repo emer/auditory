@@ -28,89 +28,92 @@
 package trmcontrolv2
 
 import (
+	"strconv"
 
+	"github.com/goki/ki/bitflag"
 )
-const modelConfigFileName = "/trm_controlmodel.config"
-const trmConfigFileName = "/trm.config"
+
+const modelConfigFn = "/trm_control_model.config"
+const resonanceConfigFn = "/trm.config"
 const voiceFilePrefix = "/voice_"
 
 type Control struct {
-	Model Model
-	Events Events
-	ModelConfig ModelConfig
-	TrmConfig TrmConfig
+	Model           *Model
+	Events          Events
+	ModelConfig     ModelConfig
+	ResonanceConfig ResonanceConfig
+	VoiceConfig     VoiceConfig
 }
 
 func (ctrl *Control) Init(path string, model *Model) {
 	ctrl.Model = model
 	ctrl.Events.Init(path, model)
-	ctrl.loadConfigs
+	ctrl.LoadConfigs("")
 }
 
 //
 func (ctrl *Control) LoadConfigs(path string) {
-	// std::ostringstream trmControlModelConfigFilePath;
-	// trmControlModelConfigFilePath << configDirPath << TRM_CONTROL_MODEL_CONFIG_FILE_NAME;
-	// trmControlModelConfig_.load(trmControlModelConfigFilePath.str());
-// 
-	// std::ostringstream trmConfigFilePath;
-	// trmConfigFilePath << configDirPath << TRM_CONFIG_FILE_NAME;
-// 
-	// std::ostringstream voiceFilePath;
-	// voiceFilePath << configDirPath << VOICE_FILE_PREFIX << trmControlModelConfig_.voiceName << ".config";
-// 
-	// trmConfig_.load(trmConfigFilePath.str(), voiceFilePath.str());
+
+	ctrl.ModelConfig.Load(path + modelConfigFn)
+
+	resonanceConfigPath := path + resonanceConfigFn
+
+	voiceConfigPath := path + voiceFilePrefix + ".config"
+
+	ctrl.ResonanceConfig.Load(resonanceConfigPath, voiceConfigPath)
 }
 
-func (ctrl *Control) InitUtterance(std::ostream& trmParamStream) {
-	if (ctrl.TrmConfig.outputRate != 22050.0) && (ctrl.TrmConfig.outputRate != 44100.0) {
-		ctrl.TrmConfig.outputRate = 44100.0
+func (ctrl *Control) InitUtterance() {
+	rc := ctrl.ResonanceConfig
+	mc := ctrl.ModelConfig
+	if rc.OutputRate != 22050.0 && rc.OutputRate != 44100.0 {
+		rc.OutputRate = 44100.0
 	}
-	if ((ctrl.TrmConfig.vtlOffset + ctrl.TrmConfig.TractLength) < 15.9) {
-		ctrl.TrmConfig.outputRate = 44100.0
+	if rc.VtlOffset+vc.TractLength < 15.9 {
+		rc.outputRate = 44100.0
 	}
 
-	ctrl.Events.PitchMean = ctrl.ModelConfig.pitchOffset + ctrl.TrmConfig.referenceGlottalPitch
-	ctrl.Events.SetGlobalTempo(trmControlModelConfig_.tempo)
-	setIntonation(trmControlModelConfig_.intonation)
-	ctrl.Events.SetUpDriftGenerator(trmControlModelConfig_.driftDeviation, trmControlModelConfig_.controlRate, trmControlModelConfig_.driftLowpassCutoff)
-	ctrl.Events.SetRadiusCoef(ctrl.TrmConfig.radiusCoef)
+	ctrl.Events.PitchMean = ctrl.ModelConfig.pitchOffset + rc.referenceGlottalPitch
+	ctrl.Events.SetGlobalTempo(mc.Tempo)
+	setIntonation(mc.Intonation)
+	ctrl.Events.SetUpDriftGenerator(mc.DriftDeviation, mc.ControlRate, mc.DriftLowpassCutoff)
+	ctrl.Events.SetRadiusCoef(rc.radiusCoef)
 
-	trmParamStream <<
-		ctrl.TrmConfig.outputRate              << '\n' <<
-		trmControlModelConfig_.controlRate << '\n' <<
-		ctrl.TrmConfig.volume                  << '\n' <<
-		ctrl.TrmConfig.channels                << '\n' <<
-		ctrl.TrmConfig.balance                 << '\n' <<
-		ctrl.TrmConfig.waveform                << '\n' <<
-		ctrl.TrmConfig.glottalPulseTp          << '\n' <<
-		ctrl.TrmConfig.glottalPulseTnMin       << '\n' <<
-		ctrl.TrmConfig.glottalPulseTnMax       << '\n' <<
-		ctrl.TrmConfig.breathiness             << '\n' <<
-		ctrl.TrmConfig.vtlOffset + ctrl.TrmConfig.TractLength << '\n' << // tube length
-		ctrl.TrmConfig.temperature             << '\n' <<
-		ctrl.TrmConfig.lossFactor              << '\n' <<
-		ctrl.TrmConfig.apertureRadius          << '\n' <<
-		ctrl.TrmConfig.mouthCoef               << '\n' <<
-		ctrl.TrmConfig.noseCoef                << '\n' <<
-		ctrl.TrmConfig.noseRadius[1]           << '\n' <<
-		ctrl.TrmConfig.noseRadius[2]           << '\n' <<
-		ctrl.TrmConfig.noseRadius[3]           << '\n' <<
-		ctrl.TrmConfig.noseRadius[4]           << '\n' <<
-		ctrl.TrmConfig.noseRadius[5]           << '\n' <<
-		ctrl.TrmConfig.throatCutoff            << '\n' <<
-		ctrl.TrmConfig.throatVol               << '\n' <<
-		ctrl.TrmConfig.modulation              << '\n' <<
-		ctrl.TrmConfig.mixOffset               << '\n'
+	trmParamStream<<
+		rc.outputRate<<'\n'<<
+		mc.ControlRate<<'\n'<<
+		rc.volume<<'\n'<<
+		rc.channels<<'\n'<<
+		rc.balance<<'\n'<<
+		rc.waveform<<'\n'<<
+		rc.glottalPulseTp<<'\n'<<
+		rc.glottalPulseTnMin<<'\n'<<
+		rc.glottalPulseTnMax<<'\n'<<
+		rc.breathiness<<'\n'<<
+		rc.vtlOffset + rc.TractLength<<'\n'<< // tube length
+		rc.temperature<<'\n'<<
+		rc.lossFactor<<'\n'<<
+		rc.apertureRadius<<'\n'<<
+		rc.mouthCoef<<'\n'<<
+		rc.noseCoef<<'\n'<<
+		rc.noseRadius[1]<<'\n'<<
+		rc.noseRadius[2]<<'\n'<<
+		rc.noseRadius[3]<<'\n'<<
+		rc.noseRadius[4]<<'\n'<<
+		rc.noseRadius[5]<<'\n'<<
+		rc.throatCutoff<<'\n'<<
+		rc.throatVol<<'\n'<<
+		rc.modulation<<'\n'<<
+		rc.mixOffset<<'\n'
 }
 
 // Chunks are separated by /c.
 // There is always one /c at the begin and another at the end of the string.
-func (ctrl *Control) calcChunks(text string)
-{
-	int tmp = 0, idx = 0
-	while (text[idx] != '\0') {
-		if ((text[idx] == '/') && (text[idx + 1] == 'c')) {
+func (ctrl *Control) CalcChunks(text string) {
+	tmp := 0
+	idx := 0
+	for text[idx] != "0" {
+		if (text[idx] == '/') && (text[idx+1] == 'c') {
 			tmp++
 			idx += 2
 		} else {
@@ -118,16 +121,17 @@ func (ctrl *Control) calcChunks(text string)
 		}
 	}
 	tmp--
-	if tmp < 0 tmp = 0
+	if tmp < 0 {
+		tmp = 0
+	}
 	return tmp
 }
 
-// Returns the position of the next /c (the position of the /).
-func (ctrl *Control) NextChunk(text string) int
-{
-	int idx = 0
-	while (text[idx] != '\0') {
-		if ((text[idx] == '/') && (text[idx + 1] == 'c')) {
+// NextChunk returns the position of the next /c (the position of the /).
+func (ctrl *Control) NextChunk(text string) int {
+	idx := 0
+	for text[idx] != "0" {
+		if (text[idx] == '/') && (text[idx+1] == 'c') {
 			return idx
 		} else {
 			idx++
@@ -136,57 +140,47 @@ func (ctrl *Control) NextChunk(text string) int
 	return 0
 }
 
-func (ctrl *Control) ValidPosture(token char) int
-{
-	switch(token[0]) {
-	case '0':
-	case '1':
-	case '2':
-	case '3':
-	case '4':
-	case '5':
-	case '6':
-	case '7':
-	case '8':
-	case '9':
+// ValidPosture
+func (ctrl *Control) ValidPosture(token string) int {
+	i, err := strconv.Atoi(token[0])
+	if err != nil {
+		return -1
+	}
+
+	if i >= 0 && i <= 9 {
 		return 1
-	default:
-		return (model_.postureList().find(token) != nullptr)
+	} else {
+		return ctrl.Model.Postures.PostureTry(token) != nil
 	}
 }
 
-func (ctrl *Control) SetIntonation(intonation int)
-{
-	if intonation & Configuration::INTONATION_MICRO {
+// SetIntonation
+func (ctrl *Control) SetIntonation(intonation int) {
+	ctrl.Events.SetMicroIntonation(0)
+	ctrl.Events.SetMacroIntonation(0)
+	ctrl.Events.SetSmoothIntonation(0) // Macro and not smooth is not working.
+	ctrl.Events.SetDrift(0)
+	ctrl.Events.SetTgUseRandom(false)
+
+	if bitflag.Has(intonation, int(IntonationMicro)) {
 		ctrl.Events.SetMicroIntonation(1)
-	} else {
-		ctrl.Events.SetMicroIntonation(0)
 	}
 
-	if intonation & Configuration::INTONATION_MACRO {
+	if bitflag.Has(intonation, int(IntonationMacro)) {
 		ctrl.Events.SetMacroIntonation(1)
 		ctrl.Events.SetSmoothIntonation(1) // Macro and not smooth is not working.
-	} else {
-		ctrl.Events.SetMacroIntonation(0)
-		ctrl.Events.SetSmoothIntonation(0) // Macro and not smooth is not working.
 	}
 
 	// Macro and not smooth is not working.
-//	if (intonation & Configuration::INTONATION_SMOOTH) {
-//		ctrl.Events.SetSmoothIntonation(1);
-//	} else {
-//		ctrl.Events.SetSmoothIntonation(0);
-//	}
+	// if bitflag.Has(intonation, int(IntonationSmooth)) {
+	// 	ctrl.Events.SetSmoothIntonation(1)
+	// }
 
-	if intonation & Configuration::INTONATION_DRIFT {
+	if bitflag.Has(intonation, int(IntonationDrift)) {
 		ctrl.Events.SetDrift(1)
-	} else {
-		ctrl.Events.SetDrift(0)
 	}
 
-	if intonation & Configuration::INTONATION_RANDOMIZE {
+	if bitflag.Has(intonation, int(IntonationRandom)) {
 		ctrl.Events.SetTgUseRandom(true)
-	} else {
-		ctrl.Events.SetTgUseRandom(false)
 	}
 }
