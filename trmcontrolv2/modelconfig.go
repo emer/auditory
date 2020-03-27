@@ -27,14 +27,20 @@
 
 package trmcontrolv2
 
-import "github.com/goki/ki/kit"
+import (
+	"encoding/json"
+	"io/ioutil"
 
-// Intonation
-type Intonation int
+	"github.com/goki/ki/bitflag"
+	"github.com/goki/ki/kit"
+)
+
+// IntonationFlags
+type IntonationFlags int
 
 const (
 	//
-	IntonationNone Intonation = iota
+	IntonationNone IntonationFlags = iota
 
 	//
 	IntonationMicro
@@ -51,20 +57,28 @@ const (
 	//
 	IntonationRandom
 
-	IntonationN
+	IntonationFlagsN
 )
 
 //go:generate stringer -type=Intonation
 
-var Kit_Intonation = kit.Enums.AddEnum(IntonationN, NotBitFlag, nil)
+var Kit_Intonation = kit.Enums.AddEnum(IntonationFlagsN, BitFlag, nil)
 
 type ModelConfig struct {
+	Name               string
+	Desc               string
+	Voice              string
 	ControlRate        float64 `desc:"1.0-1000.0 input tables/second (Hz)"`
 	Tempo              float64
 	PitchOffset        float64
 	DriftDeviation     float64
 	DriftLowpassCutoff float64
-	Intonation         Intonation
+	Intonation         IntonationFlags `desc:"Holds IntonationFlags"`
+	MicroIntonation    int             `desc:"One of 5 types of intonation"`
+	MacroIntonation    int             `desc:"One of 5 types of intonation"`
+	SmoothIntonation   int             `desc:"One of 5 types of intonation"`
+	DriftIntonation    int             `desc:"One of 5 types of intonation"`
+	RandomIntonation   int             `desc:"One of 5 types of intonation"`
 
 	// Intonation parameters.
 	NotionalPitch float64
@@ -73,26 +87,49 @@ type ModelConfig struct {
 	TonicRange    float64
 	TonicMovement float64
 
-	VoiceName       string
 	Dictionary1File string
 	Dictionary2File string
 	Dictionary3File string
 }
 
-func (in *Intonation) Defaults() {
-	in.ControlRate = 0.0
-	in.Tempo = 0.0
-	in.PitchOffset = 0.0
-	in.DriftDeviation = 0.0
-	in.DriftLowpassCutoff = 0.0
-	in.Intonation = 0
-	in.NotionalPitch = 0.0
-	in.PretonicRange = 0.0
-	in.PretonicLift = 0.0
-	in.TonicRange = 0.0
-	in.TonicMovement = 0.0
+func (in *ModelConfig) Defaults() {
+	mc.ControlRate = 0.0
+	mc.Tempo = 0.0
+	mc.PitchOffset = 0.0
+	mc.DriftDeviation = 0.0
+	mc.DriftLowpassCutoff = 0.0
+	mc.Intonation = 0
+	mc.NotionalPitch = 0.0
+	mc.PretonicRange = 0.0
+	mc.PretonicLift = 0.0
+	mc.TonicRange = 0.0
+	mc.TonicMovement = 0.0
 }
 
-func (in *Intonation) Load(path string) {
+// Load will be passed data/en/trm_control_model.config or equivalent file
+func (mc *ModelConfig) Load(path string) error {
+	OpenJSON()
 
+	if mc.MicroIntonation == 1 {
+		bitflag.Set(mc.Intonation, IntonationMicro)
+	}
+	if mc.MacroIntonation == 1 {
+		bitflag.Set(mc.Intonation, IntonationMacro)
+	}
+	if mc.DriftIntonation == 1 {
+		bitflag.Set(mc.Intonation, IntonationDrift)
+	}
+	if mc.RandomIntonation == 1 {
+		bitflag.Set(mc.Intonation, IntonationRandom)
+	}
+}
+
+// OpenJSON opens model config from a JSON-formatted file (i.e. model params)
+func (mc *ModelConfig) OpenJSON(fn string) error {
+	b, err := ioutil.ReadFile(string(fn))
+	if err != nil {
+		return err
+	}
+	rval := json.Unmarshal(b, mc)
+	return rval
 }
