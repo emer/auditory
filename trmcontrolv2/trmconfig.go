@@ -29,10 +29,11 @@ package trmcontrolv2
 
 import (
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 )
 
-type ResonanceConfig struct {
+type TrmConfig struct {
 	OutputRate float64 `desc:"output sample rate (22.05, 44.1)"`
 	Volume     float64 `desc:"master volume (0 - 60 dB)"`
 	Channels   int     `desc:"# of sound output channels (1, 2)"`
@@ -48,37 +49,45 @@ type ResonanceConfig struct {
 	ThroatCutoff float64 `desc:"throat lp cutoff (50 - nyquist Hz)"`
 	ThroatVolume float64 `desc:"throat volume (0 - 48 dB)"`
 
-	NosieModulation int     `desc:"pulse mod. of noise (0=OFF, 1=ON)"`
+	NoiseModulation int     `desc:"pulse mod. of noise (0=OFF, 1=ON)"`
 	MixOffset       float64 `desc:"noise crossmix offset (30 - 60 dB)"`
 
 	// Parameters that depend on the voice.
-	GlottalPulseTp        float64 `desc:"% glottal pulse rise time"`
-	GlottalPulseTnMin     float64 `desc:"% glottal pulse fall time minimum"`
-	GlottalPulseTnMax     float64 `desc:"% glottal pulse fall time maximum"`
-	Breathiness           float64 `desc:"% glottal source breathiness"`
-	VocalTractLength      float64
-	ReferenceGlottalPitch float64
-	ApertureRadius        float64 `desc:"aperture scl. radius (3.05 - 12 cm)"`
-	NoseRadius            [Tube::TOTAL_NASAL_SECTIONS] float64  `desc:"fixed nose radii (0 - 3 cm)"`
-	RadiusCoef[Tube::TOTAL_REGIONS] float64
+	GlottalPulseTp    float64 `desc:"% glottal pulse rise time"`
+	GlottalPulseTnMin float64 `desc:"% glottal pulse fall time minimum"`
+	GlottalPulseTnMax float64 `desc:"% glottal pulse fall time maximum"`
+	Breathiness       float64 `desc:"% glottal source breathiness"`
+	VocalTractLength  float64
+	RefGlottalPitch   float64
+	ApertureRadius    float64 `desc:"aperture scl. radius (3.05 - 12 cm)"`
+
+	// ToDo: nose sections should be a lookup
+	NoseRadii [6]float64 `desc:"fixed nose radii (0 - 3 cm)"`
+	// ToDo: also shouldn't be hardcoded
+	RadiusCoefs          [8]float64
+	GlobalRadiusCoef     float64
+	GlobalNoseRadiusCoef float64
 }
 
-func (rc *ResonanceConfig) Defaults() {
+func (trm *TrmConfig) Defaults() {
 
 }
 
 // Load will be passed data/en/trm_control_model.config or equivalent file
-func (rc *ResonanceConfig) Load(configPath string) {
-	rc.OpenJSON(configPath)
+func (trm *TrmConfig) Load(pathTrm, pathVoice string) {
+	fmt.Println("trm config load")
+	trm.OpenJSON(pathTrm)
+	// ToDo: voice name should be gotten from controlconfig previously loaded
+	trm.OpenJSON(pathVoice)
 
 }
 
 // OpenJSON opens model config from a JSON-formatted file (i.e. model params)
-func (rc *ResonanceConfig) OpenJSON(fn string) error {
+func (trm *TrmConfig) OpenJSON(fn string) error {
 	b, err := ioutil.ReadFile(string(fn))
 	if err != nil {
 		return err
 	}
-	rval := json.Unmarshal(b, rc)
+	rval := json.Unmarshal(b, trm)
 	return rval
 }

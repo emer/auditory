@@ -1,5 +1,4 @@
-[
-  {
+{
     "Name": "Std",
     "Desc": "Standard trm control configuration",
     "ControlRate": 250,
@@ -10,7 +9,7 @@
     "DriftLowCutoff": 0.5,
     "MicroIntonation": 1,
     "MacroIntonation": 1,
-    "IntonationDrift": 1,
+    "DriftIntonation": 1,
     "RandomIntonation": 1,
     "NotionalPitch": 2,
     "PreTonicRange": -2,
@@ -21,4 +20,3 @@
     "Dictionary2": "",
     "Dictionary3": "MainDictionary"
   }
-]

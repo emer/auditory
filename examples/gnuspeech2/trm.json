@@ -1,4 +1,3 @@
-[
   {
     "Name": "Std",
     "Desc": "Standard trm resonance configuration",
@@ -15,6 +14,5 @@
     "ThroatCutoff": 1500.0,
     "ThroatVolume": 6.0,
     "NoiseModulation": 1,
-    "MixOffset": 48.0,
+    "MixOffset": 48.0
   }
-]
