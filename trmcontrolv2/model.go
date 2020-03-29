@@ -88,15 +88,15 @@ func (mdl *Model) Reset() {
 //	return -1
 //}
 //
-//// ParamIdx returns the address of the named category or nil if not found
-//func (mdl *Model) CategoryTry(nm string) *Category {
-//	for i, c := range mdl.Categories {
-//		if c.Name == nm {
-//			return &c
-//		}
-//	}
-//	return nil
-//}
+ParamIdx returns the address of the named category or nil if not found
+func (mdl *Model) CategoryTry(nm string) *Category {
+	for i, c := range mdl.Categories {
+	 	if c.Name == nm {
+	 		return &c
+	 	}
+	}
+	return nil
+}
 //
 //
 ////

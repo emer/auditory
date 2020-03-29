@@ -53,7 +53,7 @@ func (pos *Posture) Posture(nm string, paramN, symN int) error {
 	return nil
 }
 
-func (pos *Posture) IsCat(cat *Category) bool {
+func (pos *Posture) IsPosture(cat *Category) bool {
 	for i := 0; i < len(pos.Categories); i++ {
 		if cat == pos.Categories[i] {
 			return true
@@ -62,7 +62,7 @@ func (pos *Posture) IsCat(cat *Category) bool {
 	return false
 }
 
-func (pos *Posture) CatTry(nm string) *Category {
+func (pos *Posture) PostureTry(nm string) *Category {
 	for i := 0; i < len(pos.Categories); i++ {
 		if pos.Categories[i].Name == nm {
 			return &pos.Categories[i]
@@ -73,7 +73,7 @@ func (pos *Posture) CatTry(nm string) *Category {
 
 func (pos *Posture) Copy(newNm string) *Posture {
 	np := Posture
-	np.Posture(newNm, len(pos.ParamTargets), len(pos.SymTargets)
+	np.Posture(newNm, len(pos.ParamTargets), len(pos.SymTargets))
 	for _, c := range pos.Categories {
 		if !c.Native {
 			np.Categories = append(np.Categories, c)
