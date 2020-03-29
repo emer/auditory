@@ -41,8 +41,7 @@ type Control struct {
 	Model           *Model
 	Events          Events
 	ModelConfig     ModelConfig
-	ResonanceConfig ResonanceConfig
-	VoiceConfig     VoiceConfig
+	ResonanceConfig TrmConfig
 }
 
 func (ctrl *Control) Init(path string, model *Model) {

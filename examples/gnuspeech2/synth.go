@@ -41,7 +41,8 @@ func (syn *Synth) Defaults() {
 
 func (syn *Synth) Config() {
 	syn.ModelConfig.Load("./trmControl.json")
-	syn.TrmConfig.Load("./trm.json", "./voice_baby.json")
+	vfp := "./voice_" + syn.ModelConfig.Voice + ".json"
+	syn.TrmConfig.Load("./trm.json", vfp)
 }
 
 // ConfigSignalData

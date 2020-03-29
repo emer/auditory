@@ -27,46 +27,55 @@
 
 package trmcontrolv2
 
-const rightParen = ")"
-const leftParen = "("
-const wildCard = "*"
-const orOpSymb = "or"
-const notOpSymb = "not"
-const xorOpSymb = "xor"
-const andOpSymb = "and"
+import (
+	"errors"
+	"log"
+	"strings"
+	"unicode"
 
-type SymbolType int
+	"github.com/goki/ki/kit"
+)
+
+const rtParen = ")"
+const lftParen = "("
+const wildCard = "*"
+const orSym = "or"
+const notSym = "not"
+const xorSym = "xor"
+const andSym = "and"
+
+type LogicSymbolType int
 
 const (
-	// SymInvalid
-	SymInvalid SymbolType = iota
+	// LogicSymInvalid
+	LogicSymInvalid LogicSymbolType = iota
 
-	// 
-	SymOrOp
+	//
+	LogicSymOr
 
-	// 
-	SymNotOp
-	
-	// 
-	SymXorOp
-	
 	//
-	SymAndOp
-	
+	LogicSymNot
+
 	//
-	SymRtParen
-	
+	LogicSymXor
+
 	//
-	SymLftParen
-	
+	LogicSymAnd
+
 	//
-	SymString
-	
-	SymTypeN
+	LogicSymRtParen
+
+	//
+	LogicSymLftParen
+
+	//
+	LogicSymString
+
+	LogicSymTypeN
 )
-//go:generate stringer -type=SymbolType
+//go:generate stringer -type=LogicSymbolType
 
-var Kit_SymbolType = kit.Enums.AddEnum(SymTypeN, NotBitFlag, nil)
+var Kit_LogicSymbolType = kit.Enums.AddEnum(LogicSymTypeN, kit.NotBitFlag, nil)
 
 // Parse
 type Parse struct {
@@ -74,12 +83,12 @@ type Parse struct {
 	Str string
 	Pos int
 	Symbol string
-	SymType SymbolType
+	SymType LogicSymbolType
 }
 
 func (pars *Parse) Defaults() {
 	pars.Pos = 0
-	pars.SymType = symInvalid
+	pars.SymType = LogicSymInvalid
 }
 
 func (pars *Parse) Init(s string, model *Model) error {
@@ -87,7 +96,7 @@ func (pars *Parse) Init(s string, model *Model) error {
 		errors.New("empty string parameter not allowed")
 	}
 	pars.Model = model
-	pars.Str = strings.TrimSpace()
+	pars.Str = strings.TrimSpace(s)
 	pars.NextSymbol()
 	return pars.Parse()
 }
@@ -96,11 +105,11 @@ func (pars *Parse) Finished() bool {
 	return pars.Pos >= len(pars.Str)
 }
 
-func (pars *Parse) IsSeparator(c string) bool {	
-	if c == rtParens || c == lftParens {
+func IsSeparator(c string) bool {
+	if c == rtParen || c == lftParen {
 		return true
 	}
-	if uni.IsSpace() {
+	if unicode.IsSpace(rune(c[0])) {
 		return true
 	}
 	return false
@@ -108,7 +117,7 @@ func (pars *Parse) IsSeparator(c string) bool {
 
 // SkipSpaces moves the index into string past white space
 func (pars *Parse) SkipSpaces() {
-	for !Finished() && strings.IsSpace(pars.Str[pars.Pos]) {
+	for !pars.Finished() && unicode.IsSpace(rune(pars.Str[pars.Pos])) {
 		pars.Pos++
 	}
 }
@@ -117,15 +126,15 @@ func (pars *Parse) SkipSpaces() {
 func (pars *Parse) NextSymbol() {
 	pars.SkipSpaces()
 	pars.Symbol = ""
-	
+
 	if pars.Finished() {
 		pars.SymType = SymInvalid
 		return
 	}
 
-	c := pars.Str[pars.Pos]
+	c := string(pars.Str[pars.Pos])
 	pars.Pos++
-	pars.SymType = c
+	//pars.SymType = c
 
 	switch c {
 	case rtParen:
@@ -135,81 +144,88 @@ func (pars *Parse) NextSymbol() {
 		pars.SymType = SymLftParen
 		break
 	default:
-		cnext = pars.Str[pars.Pos]  // notice that Pos has been incremented already
-		for !finished() && !isSeparator(cnext)  {
-			pars.Sym += cnew
+		cnext := string(pars.Str[pars.Pos])  // notice that Pos has been incremented already
+		for !pars.Finished() && !IsSeparator(cnext)  {
+			pars.Symbol += cnext
 			pars.Pos++
 		}
-		if pars.Symbol == orOpSymb {
-			pars.SymType = SymOrOp
-		} else if pars.Symbol == andOpSymb {
-			pars.SymType = SymAndOp
-		} else if pars.Symbol == notOpSymb {
-			pars.SymType = SymNotOp
-		} else if pars.Symbol == xorOpSymb {
-			pars.SymType = SymXorOp
+		if pars.Symbol == orSym {
+			pars.SymType = LogicSymOr
+		} else if pars.Symbol == andSym {
+			pars.SymType = LogicSymAnd
+		} else if pars.Symbol == notSym {
+			pars.SymType = LogicSymNot
+		} else if pars.Symbol == xorSym {
+			pars.SymType = LogicSymXor
 		} else {
-			pars.SymType = SymString
+			pars.SymType = LogicSymString
 		}
 	}
 }
 
 // GetNode returns the next boolean node
-func (pars *Parse) GetNode() (*Node, error) {
+func (pars *Parse) GetNode() (node *Node) {
 	switch pars.SymType {
-		
+
 	case SymLftParen:
 	{
-		var p Node
+		//var p *Node
 
-		nextSymbol()
-		if pars.SymType == SymNotOp {
-			// Operand.
-			nextSymbol()
-			Node* op(GetNode())
-			// p.reset(new RuleBooleanNotExpression(std::move(op)))
+		pars.NextSymbol()
+		if pars.SymType == LogicSymNot {
+			// operand.
+			pars.NextSymbol()
+			var op *Node
+			op = pars.GetNode()
+			node = op
 		} else {
-			// 1st operand.
-			Node* op1(GetNode())
+			// 1st operand
+			var op1 *Node
+			op1 = pars.GetNode()
 
-			// Operator.
+			// operator.
+			var op2 *Node
 			switch pars.SymType {
-			case SymOrOp:
+			case LogicSymOr:
 			{	// 2nd operand.
-				nextSymbol()
-				Node* op2(GetNode())
+				pars.NextSymbol()
+				op2 = pars.GetNode()
+				node = RuleOrExpression(op1, op2)
 				// p.reset(new RuleBooleanOrExpression(std::move(op1), std::move(op2)))
 				break;
 			}
-			case SymAndOp:
+			case LogicSymAnd:
 			{	// 2nd operand.
-				nextSymbol()
-				Node* op2(GetNode())
-				// p.reset(new RuleBooleanAndExpression(std::move(op1), std::move(op2)))
-				
+				pars.NextSymbol()
+				op2 = pars.GetNode()
+				node = RuleAndExpression(op1, op2)
+
 			}
-			case SymXorOp:
+			case LogicSymXor:
 			{	// 2nd operand.
-				nextSymbol()
-				Node* op2(GetNode())
-				// p.reset(new RuleBooleanXorExpression(std::move(op1), std::move(op2)))
-				
+				pars.NextSymbol()
+				op2  = pars.GetNode()
+				node = RuleXorExpression(op1, op2)
+
 			}
-			case SymNotOp:
-				return nil, errors.New("Invalid operator")
+			case LogicSymNot:
+				log.Println("Invalid operator")
+				return nil
 			default:
-				return nil, errors.New("Missing operator")
+				log.Println("Missing operator")
+				return nil
 			}
 		}
 
 		if (pars.SymType != SymRtParen) {
-			return nil, errors.New("Right parenthesis not found")
+			log.Println("Right parenthesis not found")
+			return nil
 		}
-		nextSymbol()
-		return p, nil
+		pars.NextSymbol()
+		return nil
 	}
-	
-	case SymString:
+
+	case LogicSymString:
 	{
 		wild := false;
 		if len(pars.Symbol) >= 2 && pars.Symbol[len(pars.Symbol - 1)] == wildCard {
@@ -229,12 +245,14 @@ func (pars *Parse) GetNode() (*Node, error) {
 			category = posture.CategoryNameTry(name)
 		} else {
 			if wild {
-				return nil, errors.New("Asterisk at the end of a category name")
+				log.Println("Asterisk at the end of a category name")
+				return nil
 			}
 			category = pars.Model.CategoryNameTry(name)
 		}
-		if (!category) {
-			return nil, errors.New("Could not find category: ", name)
+		if category == nil {
+			log.Printf("Could not find category: %v", name)
+			return nil
 		}
 
  		nextSymbol()
@@ -242,15 +260,14 @@ func (pars *Parse) GetNode() (*Node, error) {
 		nt.Category = Category
 		nt.Wild = wilcard
 		return &nt
-
 	}
-	case SymOrOp:
+	case LogicSymOr:
 		return nil, errors.New("Unexpected OR op.")
-	case SymNotOp:
+	case LogicSymNot:
 		return nil, errors.New("Unexpected NOT op.")
-	case SymXorOp:
+	case LogicSymXor:
 		return nil, errors.New("Unexpected XOR op.")
-	case SymAndOp:
+	case LogicSymAnd:
 		return nil, errors.New("Unexpected AND op.")
 	case SymRtParen:
 		return nil, errors.New("Unexpected right parenthesis")
@@ -271,15 +288,15 @@ func (pars *Parse) Parse() *Node {
 // EvalExpr
 func (r *Rule) EvalExpr(tempos float64, postures *[]Posture, model *Model, syms *float64) {
 	var localTempos []float64
-	
+
 	model.Formula.Clear()
-	
+
 	if len(postures) >= 2 {
 		pos := postures[0]
 		model.Formula[Transition1] = pos.GetSymbolTarget(1)
-		model.Formula[Qssa1] = pos.GetSymbolTarget(2)	
+		model.Formula[Qssa1] = pos.GetSymbolTarget(2)
 		 model.Formula[Qssb1] = pos.GetSymbolTarget(3)
-		
+
 		pos := postures[1]
 		model.Formula[Transition2] = pos.GetSymbolTarget(1)
 		model.Formula[Qssa2] = Posture.GetSymbolTarget(2)
@@ -290,7 +307,7 @@ func (r *Rule) EvalExpr(tempos float64, postures *[]Posture, model *Model, syms 
 		localTempos[0] = 0.0
 		locatTempos[1] = 0.0
 	}
-	
+
 	if len(postures) >= 3 {
 				pos := postures[2]
 	model.Formula[Transition3] = pos.GetSymbolTarget(1)
@@ -300,73 +317,52 @@ func (r *Rule) EvalExpr(tempos float64, postures *[]Posture, model *Model, syms 
 	} else {
 		localTempos[2] = 0.0
 	}
-	
+
 	if len(postures) >= 4 {
 				pos := postures[3]
 	model.Formula[Transition4] = pos.GetSymbolTarget(1)
 		model.Formula[Qssa4] = pos.GetSymbolTarget(2)
 		 model.Formula[Qssb4] = pos.GetSymbolTarget(3)
-		localTempos[3] = tempos[3]		
+		localTempos[3] = tempos[3]
 	} else {
 		localTempos[3] = 0.0
 	}
 
-	model.Formula[Tempo1] = localTempos[0]
-	model.Formula[Tempo2] = localTempos[1]
-	model.Formula[Tempo3] = localTempos[2]
-	model.Formula[Tempo4] = localTempos[3]
-	model.Formula[SYMB_RD]    = syms[0]
-	model.Formula[SYMB_BEAT]  = syms[1]
-	model.Formula[SYMB_MARK1] = syms[2]
-	model.Formula[SYMB_MARK2] = syms[3]
-	model.Formula[SYMB_MARK3] = syms[4]	
-	
-	
+	model.Formula.Syms[FormulaSymTempo1] = localTempos[0]
+	model.Formula.Syms[FormulaSymTempo2] = localTempos[1]
+	model.Formula.Syms[FormulaSymTempo3] = localTempos[2]
+	model.Formula.Syms[FormulaSymTempo4] = localTempos[3]
+	model.Formula.Syms[FormulaSymRd]    = syms[0]
+	model.Formula.Syms[FormulaSymBeat]  = syms[1]
+	model.Formula.Syms[FormulaSymMark1] = syms[2]
+	model.Formula.Syms[FormulaSymMark2] = syms[3]
+	model.Formula.Syms[FormulaSymMark3] = syms[4]
+
+
 	// Execute in this order.
 	if (exprSymbolEquations_.ruleDuration) {
-		model.setFormulaSymbolValue(FormulaSymbol::SYMB_RD   , model.evalEquationFormula(*exprSymbolEquations_.ruleDuration));
+		model.setFormulaSymbolValue(FormulaSymRd, model.evalEquationFormula(*exprSymbolEquations_.ruleDuration));
 	}
 	if (exprSymbolEquations_.mark1) {
-		model.setFormulaSymbolValue(FormulaSymbol::SYMB_MARK1, model.evalEquationFormula(*exprSymbolEquations_.mark1));
+		model.setFormulaSymbolValue(FormulaSymMark1, model.evalEquationFormula(*exprSymbolEquations_.mark1));
 	}
 	if (exprSymbolEquations_.mark2) {
-		model.setFormulaSymbolValue(FormulaSymbol::SYMB_MARK2, model.evalEquationFormula(*exprSymbolEquations_.mark2));
+		model.setFormulaSymbolValue(FormulaSymMark2, model.evalEquationFormula(*exprSymbolEquations_.mark2));
 	}
 	if (exprSymbolEquations_.mark3) {
-		model.setFormulaSymbolValue(FormulaSymbol::SYMB_MARK3, model.evalEquationFormula(*exprSymbolEquations_.mark3));
+		model.setFormulaSymbolValue(FormulaSymMark3, model.evalEquationFormula(*exprSymbolEquations_.mark3));
 	}
 	if (exprSymbolEquations_.beat) {
-		model.setFormulaSymbolValue(FormulaSymbol::SYMB_BEAT , model.evalEquationFormula(*exprSymbolEquations_.beat));
+		model.setFormulaSymbolValue(FormulaSymBeat, model.evalEquationFormula(*exprSymbolEquations_.beat));
 	}
 
-	syms[0] = model.Formula[Rd]
-	syms[1] = model.Formula[Beat]
-	syms[2] = model.Formula[Mark1]
-	syms[3] = model.Formula[Mark2]
-	syms[4] = model.Formula[Mark3]
+	syms[0] = model.Formula.Syms[FormulaSymRd]
+	syms[1] = model.Formula.Syms[FormulaSymBeat]
+	syms[2] = model.Formula.Syms[FormulaSymMark1]
+	syms[3] = model.Formula.Syms[FormulaSymMark2]
+	syms[4] = model.Formula.Syms[FormulaSymMark3]
 }
 
-
-
-
-
-Rule::setBooleanExpressionList(const std::vector<std::string>& exprList, const Model& model)
-{
-	unsigned int size = exprList.size();
-	if (size < 2U || size > 4U) {
-		THROW_EXCEPTION(InvalidParameterException, "Invalid number of boolean expressions: " << size << '.');
-	}
-
-	RuleBooleanNodeList testBooleanNodeList;
-
-	for (unsigned int i = 0; i < size; ++i) {
-		Parse p(exprList[i], model);
-		testBooleanNodeList.push_back(p.parse());
-	}
-
-	booleanExpressionList_ = exprList;
-	std::swap(booleanNodeList_, testBooleanNodeList);
-}
 
 //////////////////////////////////////////////////
 // Rule
@@ -379,13 +375,14 @@ type ExpSymEquation struct {
 	Mark2 *Equation
 	Mark3 *Equation	
 }
+
 type Rule struct {
 	BoolExprs []string
 	ParamProfileTransitions []Transitions
 	SpecialProfileTransitions []Transitions
 	ExprSymEquations ExprSymEquations
 	Comment string
-	Nodes RuleNodes
+	Nodes []Node
 }
 
 func (r *Rule) Init(nParams int) {
@@ -393,44 +390,53 @@ func (r *Rule) Init(nParams int) {
 	r.SpecialProfileTransitions = make([]Transitions, nParams)
 }
 
-type NodeType int
+type LogicNodeType int
 
 const (
-	NodeAndOp = iota
- 
-	NodeOrOp
- 
-	NodeNotOp
- 
-   NodeXorOp
+	// LogicSymInvalid
+	LogicNodeInvalid LogicNodeType = iota
 
-	NodeTerminal
-	
-	NodeTypeN
+	//
+	LogicNodeOr
+
+	//
+	LogicNodeNot
+
+	//
+	LogicNodeXor
+
+	//
+	LogicNodeAnd
+
+	//
+	LogicNodeTerminal
+
+	LogicNodeTypeN
 )
-//go:generate stringer -type=NodeType
+//go:generate stringer -type=LogicNodeType
 
-var Kit_NodeType = kit.Enums.AddEnum(NodeTypeN, NotBitFlag, nil)
+var Kit_LogicNodeType = kit.Enums.AddEnum(LogicNodeTypeN, kit.NotBitFlag, nil)
 
 type Node struct {
-	Type 
+	NodeType LogicNodeType
 	Child1 *Node // all but terminal
 	Child2 *Node // for and, or, xor
 	Category *Category // only for terminal node
 	wildCard bool // only for terminal node
 }
 
-func NewNode(type NodeType, c1, c2 *Node) *Node {
-	ex := &BoolAndExpr{}
+func NewNode(typ LogicNodeType, c1, c2 *Node) *Node {
+	ex := &Node{}
+	ex.NodeType = typ
 	ex.Child1 = c1
 	ex.Child2 = c2
 	return ex
 }
 
 func (nd *Node) Eval(posture *Posture) (result bool, err error) {
-	switch nd.Type {
+	switch nd.NodeType {
 		
-	case NodeAndOp:
+	case LogicNodeAnd:
 		if nd.Child1 == nil || nd.Child2 == nil {
 			err = "Eval error: One or more of nodes children were nil"
 		}
@@ -438,7 +444,7 @@ func (nd *Node) Eval(posture *Posture) (result bool, err error) {
 		r2 := nd.Child2.Eval(posture)
 		return r1 && r2, nil
 
-	case NodeOrOp:
+	case LogicNodeOr:
 		if nd.Child1 == nil || nd.Child2 == nil {
 			err = "Eval error: One or more of nodes children were nil"
 		}
@@ -446,7 +452,7 @@ func (nd *Node) Eval(posture *Posture) (result bool, err error) {
 		r2 := nd.Child2.Eval(posture)
 		return r1 || r2, nil
 		
-	case NodeXorOp:
+	case LogicNodeXor:
 		if nd.Child1 == nil || nd.Child2 == nil {
 			err = "Eval error: One or more of nodes children were nil"
 		}
@@ -454,14 +460,14 @@ func (nd *Node) Eval(posture *Posture) (result bool, err error) {
 		r2 := nd.Child2.Eval(posture)
 		return r1 != r2, nil
 		
-	case NodeNotOp:
+	case LogicNodeNot:
 		if nd.Child1 == nil {
 			err = "Eval error: child1 was nil"
 		}
 		r1 := nd.Child1.Eval(posture)
 		return !r1, nil
 		
-	case NodeTerminal:
+	case LogicNodeTerminal:
 		if posture.IsMemberOfCategory {
 			return true, nil
 		} else if nd.wildCard {
@@ -471,4 +477,41 @@ func (nd *Node) Eval(posture *Posture) (result bool, err error) {
 		}
 	}
 }
+
+// ToDo: Not right!
+func (r *Rule)SetExprList(exprs []string, model *Model) error {
+	length := len(exprs)
+	if length < 2 || length > 4 {
+		return errors.New("Invalid number of boolean expressions")
+	}
+	var testList []Nodes
+	for _, e := range exprs {
+		p := Parse{}
+		p.Str = e
+		p.Model = model
+		node := p.Parse()
+		testList = append(testList, node)
+	}
+	r.BoolExprs = exprs
+	// std::swap(booleanNodeList_, testBooleanNodeList);	
+}
+
+
+// Rule::setBooleanExpressionList(const std::vector<std::string>& exprList, const Model& model)
+// {
+// 	unsigned int size = exprList.size();
+// 	if (size < 2U || size > 4U) {
+// 		THROW_EXCEPTION(InvalidParameterException, "Invalid number of boolean expressions: " << size << '.');
+// 	}
+// 
+// 	RuleBooleanNodeList testBooleanNodeList;
+// 
+// 	for (unsigned int i = 0; i < size; ++i) {
+// 		Parse p(exprList[i], model);
+// 		testBooleanNodeList.push_back(p.parse());
+// 	}
+// 
+// 	booleanExpressionList_ = exprList;
+// 	std::swap(booleanNodeList_, testBooleanNodeList);
+// }
 

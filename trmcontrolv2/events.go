@@ -43,19 +43,19 @@ const toneQuestion =    2
 const toneContinuation = 3
 const toneSemicolon =    4
 
-cons invalidEvent = math.Inf(1) // positive infinity
+const invalidEvent = math.Inf(1) // positive infinity
 
 type Event struct {
 	Events []float64
 	Size int
 	Time int
-	Flat int
+	Flag int
 }
 
 func (ev *Event) Defaults() {
-	size = 36
-	time = 0.0
-	flag = 0
+	ev.Size = 36
+	ev.Time = 0.0
+	ev.Flag = 0
 	ev.Events = make([]float64, ev.Size)
 	for i:=0; i < len(ev.Events); i++ {
 		ev.Events[i] = invalidEvent 
@@ -73,16 +73,18 @@ func (ev *Event) SetValue(v float64, idx int) {
 	ev.Events[idx] = v
 }
 
-type Posture struct {	
+type PostureData struct {
+	Posture *Posture
 	Syllable int
 	Onset float64
-	RuleTempo float64 // (was 32))
+	RuleTempo float64
 }
 
-func (pos *Posture) Defaults() {
-	pos.Syllable = 0
-	pos.Onset = 0.0
-	pos.RuleTempo = 0.0
+func (pd *PostureData) Defaults() {
+	pd.Posture = nil
+	pd.Syllable = 0
+	pd.Onset = 0.0
+	pd.RuleTempo = 0.0
 }
 
 type Foot struct {
@@ -105,19 +107,19 @@ func (ft *Foot) Defaults() {
 	ft.Last = 0
 }
 
-type Tone struct {
+type ToneGroup struct {
 	StartFoot int
 	EndFoot int
 	Type int
 }
 
-func (tn *Tone) Defaults() {
-	StartFoot = 0
-	EndFoot= 0
-	Type = 0
+func (tn *ToneGroup) Defaults() {
+	tn.StartFoot = 0
+	tn.EndFoot= 0
+	tn.Type = 0
 }
 
-type Rule struct {
+type RuleData struct {
 	Number int
 	FirstPosture int
 	LastPosture int
@@ -125,7 +127,7 @@ type Rule struct {
 	Beat float64
 }
 
-func (rl *Rule) Defaults() {
+func (rl *RuleData) Defaults() {
 	rl.Number = 0
 	rl.FirstPosture = 0
 	rl.LastPosture = 0
@@ -153,7 +155,6 @@ type Events struct {
 	FixedIntonParams []float64
 	
 }
------------------------------------------
 
 func (evs *Events) Defaults() {
 	evs.MacroFlag = 0
@@ -208,25 +209,25 @@ func (evs *Events) GetPostureAtIndex(idx int) *Posture {
 	return nil
 }
 
-const PostureData*
-EventList::getPostureDataAtIndex(unsigned int index) const
-{
-	if (index > currentPosture_) {
-		return nullptr;
-	} else {
-		return &postureData_[index];
-	}
-}
-
-const RuleData*
-EventList::getRuleAtIndex(unsigned int index) const
-{
-	if (static_cast<int>(index) > currentRule_) {
-		return nullptr;
-	} else {
-		return &ruleData_[index];
-	}
-}
+//const PostureData*
+//EventList::getPostureDataAtIndex(unsigned int index) const
+//{
+//	if (index > currentPosture_) {
+//		return nullptr;
+//	} else {
+//		return &postureData_[index];
+//	}
+//}
+//
+//const RuleData*
+//EventList::getRuleAtIndex(unsigned int index) const
+//{
+//	if (static_cast<int>(index) > currentRule_) {
+//		return nullptr;
+//	} else {
+//		return &ruleData_[index];
+//	}
+//}
 
 void
 EventList::setFixedIntonationParameters(float notionalPitch, float pretonicRange, float pretonicLift, float tonicRange, float tonicMovement)

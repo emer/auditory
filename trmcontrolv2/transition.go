@@ -27,6 +27,8 @@
 
 package trmcontrolv2
 
+import "github.com/goki/ki/kit"
+
 type PointOrSlope struct {	
 	
 }
@@ -56,7 +58,7 @@ const (
 
 //go:generate stringer -type=TransitionType
 
-var Kit_TransitionType = kit.Enums.AddEnum(TransTypeN, NotBitFlag, nil)
+var Kit_TransitionType = kit.Enums.AddEnum(TransTypeN, kit.NotBitFlag, nil)
 
 // Transition
 type Transition struct {

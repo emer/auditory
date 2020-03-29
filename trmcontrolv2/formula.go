@@ -34,45 +34,45 @@ import (
 	"github.com/goki/ki/kit"
 )
 
-// TransitionType
-type FormulaCode int
+// FormulaSymbolType
+type FormulaSymbolType int
 
 const (
 	//
-	Transition1 = iota
-	Transition2
-	Transition3
-	Transition4
-	Qssa1
-	Qssa2
-	Qssa3
-	Qssa4
-	Qssb1
-	Qssb2
-	Qssb3
-	Qssb4
-	Tempo1
-	Tempo2
-	Tempo3
-	Tempo4
-	Rd
-	Beat
-	Mark1
-	Mark2
-	Mark3
-	CodeN
+	FormulaSymTransition1 = iota
+	FormulaSymTransition2
+	FormulaSymTransition3
+	FormulaSymTransition4
+	FormulaSymQssa1
+	FormulaSymQssa2
+	FormulaSymQssa3
+	FormulaSymQssa4
+	FormulaSymQssb1
+	FormulaSymQssb2
+	FormulaSymQssb3
+	FormulaSymQssb4
+	FormulaSymTempo1
+	FormulaSymTempo2
+	FormulaSymTempo3
+	FormulaSymTempo4
+	FormulaSymRd
+	FormulaSymBeat
+	FormulaSymMark1
+	FormulaSymMark2
+	FormulaSymMark3
+	FormulaSymTypeN
 )
 
-//go:generate stringer -type=FormulaCode
+//go:generate stringer -type=FormulaSymbolType
 
-var Kit_FormulaCode = kit.Enums.AddEnum(CodeN, NotBitFlag, nil)
+var Kit_FormulaSymbolType = kit.Enums.AddEnum(FormulaSymTypeN, kit.NotBitFlag, nil)
 
 type Formula struct {
-	Codes map[FormulaCode]float64
+	Syms map[FormulaSymbolType]float64
 }
 
 func (fc *Formula) Init() {
-	fc.Codes = make(map[FormulaCodes]float64)
+	fc.Syms = make(map[FormulaSymbolType]float64)
 }
 
 func (fc *Formula) Clear() {
@@ -82,40 +82,40 @@ func (fc *Formula) Clear() {
 }
 
 func (fc *Formula) Default(tt TransitionType) error {
-	fc.Codes[Transition1] = 33.3333
-	fc.Codes[Transition2] = 33.3333
-	fc.Codes[Transition3] = 33.3333
-	fc.Codes[Transition4] = 33.3333
-	fc.Codes[Qssa1] = 33.3333
-	fc.Codes[Qssa2] = 33.3333
-	fc.Codes[Qssa3] = 33.3333
-	fc.Codes[Qssa4] = 33.3333
-	fc.Codes[Qssb1] = 33.3333
-	fc.Codes[Qssb2] = 33.3333
-	fc.Codes[Qssb3] = 33.3333
-	fc.Codes[Qssb4] = 33.3333
-	fc.Codes[Tempo1] = 1.0
-	fc.Codes[Tempo2] = 1.0
-	fc.Codes[Tempo3] = 1.0
-	fc.Codes[Tempo4] = 1.0
+	fc.Syms[FormulaSymTransition1] = 33.3333
+	fc.Syms[FormulaSymTransition2] = 33.3333
+	fc.Syms[FormulaSymTransition3] = 33.3333
+	fc.Syms[FormulaSymTransition4] = 33.3333
+	fc.Syms[FormulaSymQssa1] = 33.3333
+	fc.Syms[FormulaSymQssa2] = 33.3333
+	fc.Syms[FormulaSymQssa3] = 33.3333
+	fc.Syms[FormulaSymQssa4] = 33.3333
+	fc.Syms[FormulaSymQssb1] = 33.3333
+	fc.Syms[FormulaSymQssb2] = 33.3333
+	fc.Syms[FormulaSymQssb3] = 33.3333
+	fc.Syms[FormulaSymQssb4] = 33.3333
+	fc.Syms[FormulaSymTempo1] = 1.0
+	fc.Syms[FormulaSymTempo2] = 1.0
+	fc.Syms[FormulaSymTempo3] = 1.0
+	fc.Syms[FormulaSymTempo4] = 1.0
 
-	fc.Codes[Beat] = 33.0
-	fc.Codes[Mark1] = 100.0
+	fc.Syms[FormulaSymBeat] = 33.0
+	fc.Syms[FormulaSymMark1] = 100.0
 	switch tt {
 	case TransDiPhone:
-		fc.Codes[Rd] = 100.0
-		fc.Codes[Mark2] = 0.0
-		fc.Codes[Mark3] = 0.0
+		fc.Syms[FormulaSymRd] = 100.0
+		fc.Syms[FormulaSymMark2] = 0.0
+		fc.Syms[FormulaSymMark3] = 0.0
 
 	case TransTriPhone:
-		fc.Codes[Rd] = 200.0
-		fc.Codes[Mark2] = 200.0
-		fc.Codes[Mark3] = 0.0
+		fc.Syms[FormulaSymRd] = 200.0
+		fc.Syms[FormulaSymMark2] = 200.0
+		fc.Syms[FormulaSymMark3] = 0.0
 
 	case TransTetraPhone:
-		fc.Codes[Rd] = 300.0
-		fc.Codes[Mark2] = 200.0
-		fc.Codes[Mark3] = 300.0
+		fc.Syms[FormulaSymRd] = 300.0
+		fc.Syms[FormulaSymMark2] = 200.0
+		fc.Syms[FormulaSymMark3] = 300.0
 
 	default:
 		log.Printf("Formula.Default: Unknown TransactionType")

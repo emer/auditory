@@ -27,6 +27,8 @@
 
 package trmcontrolv2
 
+import "github.com/goki/ki/kit"
+
 const         addChar = '+'
 const         subChar = '-'
 const        multChar = '*'
@@ -67,10 +69,10 @@ const (
 )
 //go:generate stringer -type=SymbolType
 
-var Kit_SymbolType = kit.Enums.AddEnum(SymTypeN, NotBitFlag, nil)
+var Kit_SymbolType = kit.Enums.AddEnum(SymTypeN, kit.NotBitFlag, nil)
 
 type FormulaNode struct {
-	Type 
+	Type SymbolType
 	Child1 *FormulaNode
 	Child2 *FormulaNode
 	Value float64

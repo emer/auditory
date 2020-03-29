@@ -9,7 +9,8 @@
   "AperatureRadius": 0,
   "GlobalRadiusCoef": 1,
   "GlobalNoseRadiusCoef": 1,
-  "NoseRadii": [0,
+  "NoseRadii": [
+   0,
    1.35,
    196,
    191,
