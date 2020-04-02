@@ -1,6 +1,6 @@
 # auditory
 
-Package auditory is the overall repository for audition processing code in Go (golang) focused on filtering speech wav files via mel filters. A further step using gabors provides filtering for input to neural networks. The processing code is split into 4 packages, sound, mel, dft and agabor, that can be used independently. A fifth package, trm, is a work in progress port of Gnuspeech. Example code is in examples/processspeech.
+Auditory is the our repository for audition processing code in Go (golang) focused on filtering speech wav files via mel filters. A further step using gabors provides filtering for input to neural networks. The processing code is split into 4 packages, sound, mel, dft and agabor, that can be used independently. A fifth package, trm, is a work in progress port of Gnuspeech. Example code is in examples/processspeech.
 
 The `sound` package contains code for loading a wav file into a buffer and then converting to a floating point tensor. There are functions for trimming and padding.
 
