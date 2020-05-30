@@ -205,7 +205,8 @@ func (sp *Process) Config(rate int) {
 	sp.Derived.StepSamples = MSecToSamples(sp.Params.StepMs, rate)
 	sp.Derived.SegmentSamples = MSecToSamples(sp.Params.SegmentMs, rate)
 	sp.Derived.SegmentSteps = int(math.Round(float64(sp.Params.SegmentMs / sp.Params.StepMs)))
-	sp.Derived.SegmentStepsPlus = sp.Derived.SegmentSteps + int(math.Round(float64(sp.Derived.WinSamples/sp.Derived.StepSamples)))
+	//sp.Derived.SegmentStepsPlus = sp.Derived.SegmentSteps + int(math.Round(float64(sp.Derived.WinSamples/sp.Derived.StepSamples)))
+	sp.Derived.SegmentStepsPlus = sp.Derived.SegmentSteps + int(math.Round(float64(sp.Params.SegmentMs/sp.Params.WinMs)))
 }
 
 // MSecToSamples converts milliseconds to samples, in terms of sample_rate

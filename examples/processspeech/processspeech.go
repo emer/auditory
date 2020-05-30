@@ -111,6 +111,10 @@ func (aud *Aud) Config() {
 	aud.Gabor.On = true
 	if aud.Gabor.On {
 		aud.Gabor.Defaults(aud.SndProcess.Derived.SegmentSteps, aud.Mel.FBank.NFilters)
+		if aud.SndProcess.Params.SegmentMs == 200 {
+			aud.Gabor.SizeTime = 12
+			aud.Gabor.SpaceTime = 4
+		} // otherwise assume 6 and 2 for 100ms segments
 		aud.GaborFilters.SetShape([]int{aud.Gabor.NFilters, aud.Gabor.SizeFreq, aud.Gabor.SizeTime}, nil, nil)
 		aud.Gabor.RenderFilters(&aud.GaborFilters)
 		tsrX := ((aud.SndProcess.Derived.SegmentSteps - 1) / aud.Gabor.SpaceTime) + 1
