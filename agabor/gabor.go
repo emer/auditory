@@ -156,7 +156,8 @@ func Conv(ch int, params Params, steps int, raw *etensor.Float32, melFilterCount
 	if tMin < 0 {
 		tMin = 0
 	}
-	tMax := steps - tMin + 1
+	//tMax := steps - tMin + 1
+	tMax := steps - params.SpaceTime
 
 	fMin := int(0)
 	fMax := melFilterCount - params.SizeFreq
