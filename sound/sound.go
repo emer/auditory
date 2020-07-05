@@ -173,7 +173,10 @@ type Params struct {
 	WinMs     float32 `def:"25" desc:"input window -- number of milliseconds worth of sound to filter at a time"`
 	StepMs    float32 `def:"5,10,12.5" desc:"input step -- number of milliseconds worth of sound that the input is stepped along to obtain the next window sample"`
 	SegmentMs float32 `def:"100" desc:"length of full segment's worth of input -- total number of milliseconds to accumulate into a complete segment -- must be a multiple of StepMs -- input will be SegmentMs / StepMs = SegmentSteps wide in the X axis, and number of filters in the Y axis"`
+	StrideMs  float32 `def:"100" desc:"how far to move on each trial"`
 	Channel   int     `viewif:"Channels=1" desc:"specific channel to process, if input has multiple channels, and we only process one of them (-1 = process all)"`
+	Trim      bool    `def:"true" desc:"trim silence from start/end`
+	Pad       bool    `def:"true" desc:"pad the signal to extend length so that the last steps have full data"`
 	PadValue  float32 `inactive:"+" desc:"use this value for padding signal`
 }
 
@@ -185,6 +188,7 @@ type Derived struct {
 	SegmentSteps     int   `inactive:"+" desc:"number of steps in a segment"`
 	SegmentStepsPlus int   `inactive:"+" desc:"SegmentSteps plus steps overlapping next segment or for padding if no next segment"`
 	Steps            []int `inactive:"+" desc:"pre-calculated start position for each step"`
+	Stride           int   `inactive:"+" desc:"StrideMS converted from milliseconds"`
 }
 
 //
@@ -194,7 +198,10 @@ func (sp *Process) Defaults() {
 	sp.Params.StepMs = 5.0
 	sp.Params.SegmentMs = 100.0
 	sp.Params.Channel = 0
+	sp.Params.Trim = true
+	sp.Params.Pad = true
 	sp.Params.PadValue = 0.0
+	sp.Params.StrideMs = 100.0
 }
 
 // Config computes the sample counts based on time and sample rate
@@ -207,6 +214,7 @@ func (sp *Process) Config(rate int) {
 	sp.Derived.SegmentSteps = int(math.Round(float64(sp.Params.SegmentMs / sp.Params.StepMs)))
 	//sp.Derived.SegmentStepsPlus = sp.Derived.SegmentSteps + int(math.Round(float64(sp.Derived.WinSamples/sp.Derived.StepSamples)))
 	sp.Derived.SegmentStepsPlus = sp.Derived.SegmentSteps + int(math.Round(float64(sp.Params.SegmentMs/sp.Params.WinMs)))
+	sp.Derived.Stride = MSecToSamples(sp.Params.StrideMs, rate)
 }
 
 // MSecToSamples converts milliseconds to samples, in terms of sample_rate
@@ -284,11 +292,11 @@ func (sp *Process) Pad(signal []float32) (padded []float32) {
 	tail := siglen % sp.Derived.SegmentSamples
 
 	padLen := 0
-	if tail < sp.Derived.WinSamples { // less than one window remaining - cut it off
-		padLen = 0
-	} else {
-		padLen = sp.Derived.SegmentStepsPlus*sp.Derived.StepSamples - tail // more than one window remaining - keep and pad
-	}
+	//if tail < sp.Derived.WinSamples { // less than one window remaining - cut it off
+	//	padLen = 0
+	//} else {
+	padLen = sp.Derived.SegmentStepsPlus*sp.Derived.StepSamples - tail // more than one window remaining - keep and pad
+	//}
 
 	padLen = padLen + sp.Derived.WinSamples
 	pad := make([]float32, padLen)
