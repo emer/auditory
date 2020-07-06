@@ -188,7 +188,7 @@ type Derived struct {
 	SegmentSteps     int   `inactive:"+" desc:"number of steps in a segment"`
 	SegmentStepsPlus int   `inactive:"+" desc:"SegmentSteps plus steps overlapping next segment or for padding if no next segment"`
 	Steps            []int `inactive:"+" desc:"pre-calculated start position for each step"`
-	Stride           int   `inactive:"+" desc:"StrideMS converted from milliseconds"`
+	Stride           int   `inactive:"+" desc:"number of samples converted from StrideMS"`
 }
 
 //
@@ -212,7 +212,6 @@ func (sp *Process) Config(rate int) {
 	sp.Derived.StepSamples = MSecToSamples(sp.Params.StepMs, rate)
 	sp.Derived.SegmentSamples = MSecToSamples(sp.Params.SegmentMs, rate)
 	sp.Derived.SegmentSteps = int(math.Round(float64(sp.Params.SegmentMs / sp.Params.StepMs)))
-	//sp.Derived.SegmentStepsPlus = sp.Derived.SegmentSteps + int(math.Round(float64(sp.Derived.WinSamples/sp.Derived.StepSamples)))
 	sp.Derived.SegmentStepsPlus = sp.Derived.SegmentSteps + int(math.Round(float64(sp.Params.SegmentMs/sp.Params.WinMs)))
 	sp.Derived.Stride = MSecToSamples(sp.Params.StrideMs, rate)
 }
@@ -286,18 +285,17 @@ func Trim(signal []float32, rate int, threshold float32, duration int, maxSilenc
 	return signal[start:end]
 }
 
-// Pad pads the signal so that the length of signal divided by segment has no remainder
+// Tail returns the number of samples that remain beyond the last full stride
+func (sp *Process) Tail(signal []float32) int {
+	temp := len(signal) - sp.Derived.SegmentSamples
+	tail := temp % sp.Derived.Stride
+	return tail
+}
+
+// Pad pads the signal so that the length of signal divided by stride that has no remainder
 func (sp *Process) Pad(signal []float32) (padded []float32) {
-	siglen := len(signal)
-	tail := siglen % sp.Derived.SegmentSamples
-
-	padLen := 0
-	//if tail < sp.Derived.WinSamples { // less than one window remaining - cut it off
-	//	padLen = 0
-	//} else {
-	padLen = sp.Derived.SegmentStepsPlus*sp.Derived.StepSamples - tail // more than one window remaining - keep and pad
-	//}
-
+	tail := sp.Tail(signal)
+	padLen := sp.Derived.SegmentStepsPlus*sp.Derived.StepSamples - tail // more than one window remaining - keep and pad
 	padLen = padLen + sp.Derived.WinSamples
 	pad := make([]float32, padLen)
 	for i := range pad {
