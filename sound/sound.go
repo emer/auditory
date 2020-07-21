@@ -292,11 +292,10 @@ func (sp *Process) Tail(signal []float32) int {
 	return tail
 }
 
-// Pad pads the signal so that the length of signal divided by stride that has no remainder
+// Pad pads the signal so that the length of signal divided by stride has no remainder
 func (sp *Process) Pad(signal []float32) (padded []float32) {
 	tail := sp.Tail(signal)
-	padLen := sp.Derived.SegmentStepsPlus*sp.Derived.StepSamples - tail // more than one window remaining - keep and pad
-	padLen = padLen + sp.Derived.WinSamples
+	padLen := sp.Derived.SegmentSamples - sp.Derived.StepSamples - tail%sp.Derived.StepSamples
 	pad := make([]float32, padLen)
 	for i := range pad {
 		pad[i] = sp.Params.PadValue
