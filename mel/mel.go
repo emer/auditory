@@ -71,11 +71,11 @@ func (mel *Params) InitFilters(dftSize int, sampleRate int, filters *etensor.Flo
 		fi := 0
 		bin := 0
 		for bin = mnbin; bin <= pkbin; bin, fi = bin+1, fi+1 {
-			fval := (float32(bin) - float32(mnbin)) / pkmin
+			fval := (float32(bin) - float32(mnbin)) / (pkmin + .001)
 			filters.SetFloat([]int{flt, fi}, float64(fval))
 		}
 		for ; bin <= mxbin; bin, fi = bin+1, fi+1 {
-			fval := (float32(mxbin) - float32(bin)) / pkmax
+			fval := (float32(mxbin) - float32(bin)) / (pkmax + .001)
 			filters.SetFloat([]int{flt, fi}, float64(fval))
 		}
 	}
