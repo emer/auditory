@@ -16,10 +16,10 @@ import (
 // has elongated frequency-band specific tuning, not a parallel horizontal tuning -- and has multiple of these
 type Params struct {
 	On              bool    `desc:"use this gabor filtering of the time-frequency space filtered input (time in terms of steps of the DFT transform, and discrete frequency factors based on the FFT window and input sample rate)"`
-	SizeTime        int     `viewif:"On" def:"6,8,12,16,24" desc:" size of the filter in the time (horizontal) domain, in terms of steps of the underlying DFT filtering steps"`
-	SizeFreq        int     `viewif:"On" def:"6,8,12,16,24" desc:" size of the filter in the frequency domain, in terms of discrete frequency factors based on the FFT window and input sample rate"`
-	SpaceTime       int     `viewif:"On" desc:" spacing in the time (horizontal) domain, in terms of steps"`
-	SpaceFreq       int     `viewif:"On" desc:" spacing in the frequency (vertical) domain"`
+	TimeSize        int     `viewif:"On" def:"6,8,12,16,24" desc:" size of the filter in the time (horizontal) domain, in terms of steps of the underlying DFT filtering steps"`
+	FreqSize        int     `viewif:"On" def:"6,8,12,16,24" desc:" size of the filter in the frequency domain, in terms of discrete frequency factors based on the FFT window and input sample rate"`
+	TimeStride      int     `viewif:"On" desc:" spacing in the time (horizontal) domain, in terms of steps"`
+	FreqStride      int     `viewif:"On" desc:" spacing in the frequency (vertical) domain"`
 	WaveLen         float32 `viewif:"On" def:"1.5,2" desc:"wavelength of the sine waves in normalized units"`
 	SigmaLen        float32 `viewif:"On" def:"0.6" desc:"gaussian sigma for the length dimension (elongated axis perpendicular to the sine waves) -- normalized as a function of filter size in relevant dimension"`
 	SigmaWidth      float32 `viewif:"On" def:"0.3" desc:"gaussian sigma for the width dimension (in the direction of the sine waves) -- normalized as a function of filter size in relevant dimension"`
@@ -37,10 +37,10 @@ func (ga *Params) Defaults(steps int, melFilters int) {
 	ga.On = true
 	ga.Gain = 2.0
 	ga.NHoriz = 4
-	ga.SizeTime = 6.0
-	ga.SizeFreq = 6.0
-	ga.SpaceTime = 2.0
-	ga.SpaceFreq = 2.0
+	ga.TimeSize = 6.0
+	ga.FreqSize = 6.0
+	ga.TimeStride = 2.0
+	ga.FreqStride = 2.0
 	ga.WaveLen = 2.0
 	ga.SigmaLen = 0.6
 	ga.SigmaWidth = 0.3
@@ -51,13 +51,13 @@ func (ga *Params) Defaults(steps int, melFilters int) {
 	ga.NFilters = 3 + ga.NHoriz // 3 is number of angle filters
 }
 
-// RenderFilters generates filters into the given matrix, which is formatted as: [ga.SizeTime_steps][ga.SizeFreq][n_filters]
+// RenderFilters generates filters into the given matrix, which is formatted as: [ga.TimeSize_steps][ga.FreqSize][n_filters]
 func (ga *Params) RenderFilters(filters *etensor.Float32) {
-	ctrTime := (float32(ga.SizeTime) - 1) / 2.0
-	ctrFreq := (float32(ga.SizeFreq) - 1) / 2.0
+	ctrTime := (float32(ga.TimeSize) - 1) / 2.0
+	ctrFreq := (float32(ga.FreqSize) - 1) / 2.0
 	angInc := math32.Pi / 4.0
-	radiusTime := float32(ga.SizeTime / 2.0)
-	radiusFreq := float32(ga.SizeFreq / 2.0)
+	radiusTime := float32(ga.TimeSize / 2.0)
+	radiusFreq := float32(ga.FreqSize / 2.0)
 
 	lenNorm := 1.0 / (2.0 * ga.SigmaLen * ga.SigmaLen)
 	widthNorm := 1.0 / (2.0 * ga.SigmaWidth * ga.SigmaWidth)
@@ -65,15 +65,15 @@ func (ga *Params) RenderFilters(filters *etensor.Float32) {
 	widthHorizNorm := 1.0 / (2.0 * ga.HorizSigmaWidth * ga.HorizSigmaWidth)
 
 	twoPiNorm := (2.0 * math32.Pi) / ga.WaveLen
-	hCtrInc := (ga.SizeFreq - 1) / (ga.NHoriz + 1)
+	hCtrInc := (ga.FreqSize - 1) / (ga.NHoriz + 1)
 
 	fli := 0
 	for hi := 0; hi < ga.NHoriz; hi, fli = hi+1, fli+1 {
 		hCtrFreq := hCtrInc * (hi + 1)
 		angF := -2.0 * angInc
-		for y := 0; y < ga.SizeFreq; y++ {
+		for y := 0; y < ga.FreqSize; y++ {
 			var xf, yf, xfn, yfn float32
-			for x := 0; x < ga.SizeTime; x++ {
+			for x := 0; x < ga.TimeSize; x++ {
 				xf = float32(x) - ctrTime
 				yf = float32(y) - float32(hCtrFreq)
 				xfn = xf / radiusTime
@@ -97,8 +97,8 @@ func (ga *Params) RenderFilters(filters *etensor.Float32) {
 	for ang := 1; ang < 4; ang, fli = ang+1, fli+1 {
 		angF := float32(-ang) * angInc
 		var xf, yf, xfn, yfn float32
-		for y := 0; y < ga.SizeFreq; y++ {
-			for x := 0; x < ga.SizeTime; x++ {
+		for y := 0; y < ga.FreqSize; y++ {
+			for x := 0; x < ga.TimeSize; x++ {
 				xf = float32(x) - ctrTime
 				yf = float32(y) - ctrFreq
 				xfn = xf / radiusTime
@@ -122,8 +122,8 @@ func (ga *Params) RenderFilters(filters *etensor.Float32) {
 	for fli := 0; fli < ga.NFilters; fli++ {
 		posSum := float32(0)
 		negSum := float32(0)
-		for y := 0; y < ga.SizeFreq; y++ {
-			for x := 0; x < ga.SizeTime; x++ {
+		for y := 0; y < ga.FreqSize; y++ {
+			for x := 0; x < ga.TimeSize; x++ {
 				val := float32(filters.Value([]int{fli, y, x}))
 				if val > 0 {
 					posSum += val
@@ -134,8 +134,8 @@ func (ga *Params) RenderFilters(filters *etensor.Float32) {
 		}
 		posNorm := 1.0 / posSum
 		negNorm := -1.0 / negSum
-		for y := 0; y < ga.SizeFreq; y++ {
-			for x := 0; x < ga.SizeTime; x++ {
+		for y := 0; y < ga.FreqSize; y++ {
+			for x := 0; x < ga.TimeSize; x++ {
 				val := filters.Value([]int{fli, y, x})
 				if val > 0.0 {
 					val *= posNorm
@@ -150,21 +150,21 @@ func (ga *Params) RenderFilters(filters *etensor.Float32) {
 
 // Conv processes input using filters that operate over an entire segment of samples
 func Conv(ch int, params Params, steps int, raw *etensor.Float32, melFilterCount int, gaborFilters *etensor.Float32, melData *etensor.Float32) {
-	tHalfSz := params.SizeTime / 2
+	tHalfSz := params.TimeSize / 2
 	tOff := tHalfSz
 	tMin := tOff
 	if tMin < 0 {
 		tMin = 0
 	}
 	//tMax := steps - tMin + 1
-	tMax := steps - params.SpaceTime
+	tMax := steps - params.TimeStride
 
 	fMin := int(0)
-	fMax := melFilterCount - params.SizeFreq
+	fMax := melFilterCount - params.FreqSize
 
 	maxTimeIdx := raw.Dim(2) // dim 0 is channel
 	tIdx := 0
-	for s := tMin; s < tMax; s, tIdx = s+params.SpaceTime, tIdx+1 {
+	for s := tMin; s < tMax; s, tIdx = s+params.TimeStride, tIdx+1 {
 		inSt := s - tOff
 		if tIdx > maxTimeIdx {
 			log.Printf("gabor.GaborFilter: time index %v out of range: %v", tIdx, maxTimeIdx)
@@ -173,7 +173,7 @@ func Conv(ch int, params Params, steps int, raw *etensor.Float32, melFilterCount
 
 		maxFreqIdx := raw.Dim(1) // dim 0 is channel
 		fIdx := 0
-		for flt := fMin; flt < fMax; flt, fIdx = flt+params.SpaceFreq, fIdx+1 {
+		for flt := fMin; flt < fMax; flt, fIdx = flt+params.FreqStride, fIdx+1 {
 			if fIdx > maxFreqIdx {
 				log.Printf("gabor.GaborFilter: freq index %v out of range: %v", tIdx, maxFreqIdx)
 				break
@@ -181,10 +181,13 @@ func Conv(ch int, params Params, steps int, raw *etensor.Float32, melFilterCount
 			nf := params.NFilters
 			for fi := int(0); fi < nf; fi++ {
 				fSum := float32(0.0)
-				for ff := int(0); ff < params.SizeFreq; ff++ {
-					for ft := int(0); ft < params.SizeTime; ft++ {
+				for ff := int(0); ff < params.FreqSize; ff++ {
+					for ft := int(0); ft < params.TimeSize; ft++ {
 						fVal := gaborFilters.Value([]int{fi, ff, ft})
 						iVal := melData.Value([]int{inSt + ft, flt + ff, ch})
+						if math32.IsNaN(iVal) {
+							iVal = .5
+						}
 						fSum += fVal * iVal
 					}
 				}

@@ -112,13 +112,13 @@ func (aud *Aud) Config() {
 	if aud.Gabor.On {
 		aud.Gabor.Defaults(aud.SndProcess.Derived.SegmentSteps, aud.Mel.FBank.NFilters)
 		if aud.SndProcess.Params.SegmentMs == 200 {
-			aud.Gabor.SizeTime = 12
-			aud.Gabor.SpaceTime = 4
+			aud.Gabor.TimeSize = 12
+			aud.Gabor.TimeStride = 4
 		} // otherwise assume 6 and 2 for 100ms segments
-		aud.GaborFilters.SetShape([]int{aud.Gabor.NFilters, aud.Gabor.SizeFreq, aud.Gabor.SizeTime}, nil, nil)
+		aud.GaborFilters.SetShape([]int{aud.Gabor.NFilters, aud.Gabor.FreqSize, aud.Gabor.TimeSize}, nil, nil)
 		aud.Gabor.RenderFilters(&aud.GaborFilters)
-		tsrX := ((aud.SndProcess.Derived.SegmentSteps - 1) / aud.Gabor.SpaceTime) + 1
-		tsrY := ((aud.Mel.FBank.NFilters - aud.Gabor.SizeFreq - 1) / aud.Gabor.SpaceFreq) + 1
+		tsrX := ((aud.SndProcess.Derived.SegmentSteps - 1) / aud.Gabor.TimeStride) + 1
+		tsrY := ((aud.Mel.FBank.NFilters - aud.Gabor.FreqSize - 1) / aud.Gabor.FreqStride) + 1
 		aud.GaborTsr.SetShape([]int{aud.Sound.Channels(), tsrY, tsrX, 2, aud.Gabor.NFilters}, nil, nil)
 		aud.GaborTsr.SetMetaData("odd-row", "true")
 		aud.GaborTsr.SetMetaData("grid-fill", ".9")
