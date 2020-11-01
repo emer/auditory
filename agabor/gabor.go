@@ -33,7 +33,7 @@ type Params struct {
 }
 
 //Initialize initializes the Gabor
-func (ga *Params) Defaults(steps int, melFilters int) {
+func (ga *Params) Defaults(melFilters int) {
 	ga.On = true
 	ga.Gain = 2.0
 	ga.NHoriz = 4
@@ -156,8 +156,7 @@ func Conv(ch int, params Params, steps int, raw *etensor.Float32, melFilterCount
 	if tMin < 0 {
 		tMin = 0
 	}
-	//tMax := steps - tMin + 1
-	tMax := steps - params.TimeStride
+	tMax := melData.Dim(0) - tMin
 
 	fMin := int(0)
 	fMax := melFilterCount - params.FreqSize
