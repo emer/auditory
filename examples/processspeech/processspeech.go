@@ -110,7 +110,7 @@ func (aud *Aud) Config() {
 
 	aud.Gabor.On = true
 	if aud.Gabor.On {
-		aud.Gabor.Defaults(aud.SndProcess.Derived.SegmentSteps, aud.Mel.FBank.NFilters)
+		aud.Gabor.Defaults(aud.Mel.FBank.NFilters)
 		if aud.SndProcess.Params.SegmentMs == 200 {
 			aud.Gabor.TimeSize = 12
 			aud.Gabor.TimeStride = 4
