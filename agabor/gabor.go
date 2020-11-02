@@ -5,8 +5,6 @@
 package agabor
 
 import (
-	"log"
-
 	"github.com/chewxy/math32"
 	"github.com/emer/etable/etensor"
 )
@@ -150,40 +148,31 @@ func (ga *Params) RenderFilters(filters *etensor.Float32) {
 
 // Conv processes input using filters that operate over an entire segment of samples
 func Conv(ch int, params Params, steps int, raw *etensor.Float32, melFilterCount int, gaborFilters *etensor.Float32, melData *etensor.Float32) {
-	tHalfSz := params.TimeSize / 2
-	tOff := tHalfSz
-	tMin := tOff
-	if tMin < 0 {
-		tMin = 0
-	}
-	tMax := melData.Dim(0) - tMin
-
-	fMin := int(0)
-	fMax := melFilterCount - params.FreqSize
-
-	maxTimeIdx := raw.Dim(2) // dim 0 is channel
-	tIdx := 0
-	for s := tMin; s < tMax; s, tIdx = s+params.TimeStride, tIdx+1 {
-		inSt := s - tOff
-		if tIdx > maxTimeIdx {
-			log.Printf("gabor.GaborFilter: time index %v out of range: %v", tIdx, maxTimeIdx)
+	n := 0
+	for i, nm := range melData.DimNames() {
+		if nm == "time" {
+			n = i
 			break
 		}
+	}
 
-		maxFreqIdx := raw.Dim(1) // dim 0 is channel
+	tMin := 0 // tMin was used previously for overlapping segments in both directions - now just forward overlap
+	tMax := melData.Dim(n) - tMin - params.TimeSize
+
+	fMin := 0
+	fMax := melFilterCount - params.FreqSize
+
+	tIdx := 0
+	for s := tMin; s < tMax; s, tIdx = s+params.TimeStride, tIdx+1 {
 		fIdx := 0
 		for flt := fMin; flt < fMax; flt, fIdx = flt+params.FreqStride, fIdx+1 {
-			if fIdx > maxFreqIdx {
-				log.Printf("gabor.GaborFilter: freq index %v out of range: %v", tIdx, maxFreqIdx)
-				break
-			}
 			nf := params.NFilters
 			for fi := int(0); fi < nf; fi++ {
 				fSum := float32(0.0)
 				for ff := int(0); ff < params.FreqSize; ff++ {
 					for ft := int(0); ft < params.TimeSize; ft++ {
 						fVal := gaborFilters.Value([]int{fi, ff, ft})
-						iVal := melData.Value([]int{inSt + ft, flt + ff, ch})
+						iVal := melData.Value([]int{s + ft, flt + ff, ch})
 						if math32.IsNaN(iVal) {
 							iVal = .5
 						}
