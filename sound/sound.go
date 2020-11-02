@@ -174,6 +174,7 @@ type Params struct {
 	StepMs    float32 `def:"5,10,12.5" desc:"input step -- number of milliseconds worth of sound that the input is stepped along to obtain the next window sample"`
 	SegmentMs float32 `def:"100" desc:"length of full segment's worth of input -- total number of milliseconds to accumulate into a complete segment -- must be a multiple of StepMs -- input will be SegmentMs / StepMs = SegmentSteps wide in the X axis, and number of filters in the Y axis"`
 	StrideMs  float32 `def:"100" desc:"how far to move on each trial"`
+	BorderMs  float32 `def:"0" desc:"ms beyond segment to include"`
 	Channel   int     `viewif:"Channels=1" desc:"specific channel to process, if input has multiple channels, and we only process one of them (-1 = process all)"`
 	Trim      bool    `def:"true" desc:"trim silence from start/end`
 	Pad       bool    `def:"true" desc:"pad the signal to extend length so that the last steps have full data"`
@@ -188,7 +189,8 @@ type Derived struct {
 	SegmentSteps     int   `inactive:"+" desc:"number of steps in a segment"`
 	SegmentStepsPlus int   `inactive:"+" desc:"SegmentSteps plus steps overlapping next segment or for padding if no next segment"`
 	Steps            []int `inactive:"+" desc:"pre-calculated start position for each step"`
-	Stride           int   `inactive:"+" desc:"number of samples converted from StrideMS"`
+	Stride           int   `inactive:"+" desc:"number of samples - converted from StrideMS"`
+	Border           int   `inactive:"+" desc:"number or border (forward overlap) steps - converted from BorderMS"`
 }
 
 //
@@ -202,6 +204,7 @@ func (sp *Process) Defaults() {
 	sp.Params.Pad = true
 	sp.Params.PadValue = 0.0
 	sp.Params.StrideMs = 100.0
+	sp.Params.BorderMs = 0
 }
 
 // Config computes the sample counts based on time and sample rate
@@ -212,7 +215,8 @@ func (sp *Process) Config(rate int) {
 	sp.Derived.StepSamples = MSecToSamples(sp.Params.StepMs, rate)
 	sp.Derived.SegmentSamples = MSecToSamples(sp.Params.SegmentMs, rate)
 	sp.Derived.SegmentSteps = int(math.Round(float64(sp.Params.SegmentMs / sp.Params.StepMs)))
-	sp.Derived.SegmentStepsPlus = sp.Derived.SegmentSteps + int(math.Round(float64(sp.Params.SegmentMs/sp.Params.WinMs)))
+	sp.Derived.Border = int(sp.Params.BorderMs / sp.Params.StepMs)
+	sp.Derived.SegmentStepsPlus = sp.Derived.SegmentSteps + int(math.Round(float64(sp.Params.SegmentMs/sp.Params.WinMs))) + sp.Derived.Border
 	sp.Derived.Stride = MSecToSamples(sp.Params.StrideMs, rate)
 }
 
