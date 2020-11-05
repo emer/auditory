@@ -147,31 +147,27 @@ func (ga *Params) RenderFilters(filters *etensor.Float32) {
 }
 
 // Conv processes input using filters that operate over an entire segment of samples
-func Conv(ch int, params Params, steps int, raw *etensor.Float32, melFilterCount int, gaborFilters *etensor.Float32, melData *etensor.Float32) {
-	n := 0
-	for i, nm := range melData.DimNames() {
-		if nm == "time" {
-			n = i
-			break
-		}
+func Conv(ch int, gbor Params, segmentSteps int, borderSteps int, rawOut *etensor.Float32, melFilterCount int, gborFilters *etensor.Float32, melData *etensor.Float32) {
+	tOffset := gbor.TimeSize/2 - borderSteps
+	tMin := tOffset
+	if tMin < 0 {
+		tMin = 0
 	}
-
-	tMin := 0 // tMin was used previously for overlapping segments in both directions - now just forward overlap
-	tMax := melData.Dim(n) - tMin - params.TimeSize
+	tMax := segmentSteps + tOffset + 1 // offset is negative
 
 	fMin := 0
-	fMax := melFilterCount - params.FreqSize
+	fMax := melFilterCount - gbor.FreqSize
 
 	tIdx := 0
-	for s := tMin; s < tMax; s, tIdx = s+params.TimeStride, tIdx+1 {
+	for s := tMin; s < tMax; s, tIdx = s+gbor.TimeStride, tIdx+1 {
 		fIdx := 0
-		for flt := fMin; flt < fMax; flt, fIdx = flt+params.FreqStride, fIdx+1 {
-			nf := params.NFilters
+		for flt := fMin; flt < fMax; flt, fIdx = flt+gbor.FreqStride, fIdx+1 {
+			nf := gbor.NFilters
 			for fi := int(0); fi < nf; fi++ {
 				fSum := float32(0.0)
-				for ff := int(0); ff < params.FreqSize; ff++ {
-					for ft := int(0); ft < params.TimeSize; ft++ {
-						fVal := gaborFilters.Value([]int{fi, ff, ft})
+				for ff := int(0); ff < gbor.FreqSize; ff++ {
+					for ft := int(0); ft < gbor.TimeSize; ft++ {
+						fVal := gborFilters.Value([]int{fi, ff, ft})
 						iVal := melData.Value([]int{s + ft, flt + ff, ch})
 						if math32.IsNaN(iVal) {
 							iVal = .5
@@ -180,13 +176,13 @@ func Conv(ch int, params Params, steps int, raw *etensor.Float32, melFilterCount
 					}
 				}
 				pos := fSum >= 0.0
-				act := params.Gain * math32.Abs(fSum)
+				act := gbor.Gain * math32.Abs(fSum)
 				if pos {
-					raw.SetFloat([]int{ch, fIdx, tIdx, 0, fi}, float64(act))
-					raw.SetFloat([]int{ch, fIdx, tIdx, 1, fi}, 0)
+					rawOut.SetFloat([]int{ch, fIdx, tIdx, 0, fi}, float64(act))
+					rawOut.SetFloat([]int{ch, fIdx, tIdx, 1, fi}, 0)
 				} else {
-					raw.SetFloat([]int{ch, fIdx, tIdx, 0, fi}, 0)
-					raw.SetFloat([]int{ch, fIdx, tIdx, 1, fi}, float64(act))
+					rawOut.SetFloat([]int{ch, fIdx, tIdx, 0, fi}, 0)
+					rawOut.SetFloat([]int{ch, fIdx, tIdx, 1, fi}, float64(act))
 				}
 			}
 		}

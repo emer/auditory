@@ -47,7 +47,7 @@ func (mel *Params) InitFilters(dftSize int, sampleRate int, filters *etensor.Flo
 
 	hiMel := FreqToMel(mel.FBank.HiHz)
 	loMel := FreqToMel(mel.FBank.LoHz)
-	nFiltersEff := mel.FBank.NFilters + 2
+	nFiltersEff := mel.FBank.NFilters + 2 // why is this plus 2?
 	mel.PtBins.SetShape([]int{nFiltersEff}, nil, nil)
 	melIncr := (hiMel - loMel) / float32(mel.FBank.NFilters+1)
 

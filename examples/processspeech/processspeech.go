@@ -5,7 +5,9 @@
 package main
 
 import (
+	"fmt"
 	"log"
+	"math"
 	"os"
 	"strings"
 
@@ -30,11 +32,42 @@ func main() {
 	})
 }
 
+// Params defines the sound input parameters for auditory processing
+type Params struct {
+	WinMs       float32 `def:"25" desc:"input window -- number of milliseconds worth of sound to filter at a time"`
+	StepMs      float32 `def:"5,10,12.5" desc:"input step -- number of milliseconds worth of sound that the input is stepped along to obtain the next window sample"`
+	SegmentMs   float32 `def:"100" desc:"length of full segment's worth of input -- total number of milliseconds to accumulate into a complete segment -- must be a multiple of StepMs -- input will be SegmentMs / StepMs = SegmentSteps wide in the X axis, and number of filters in the Y axis"`
+	StrideMs    float32 `def:"100" desc:"how far to move on each trial"`
+	BorderSteps int     `def:"6" view:"+" desc:"overlap with previous segment"`
+	Channel     int     `viewif:"Channels=1" desc:"specific channel to process, if input has multiple channels, and we only process one of them (-1 = process all)"`
+	PadValue    float32
+
+	// these are calculated
+	WinSamples        int   `inactive:"+" desc:"number of samples to process each step"`
+	StepSamples       int   `inactive:"+" desc:"number of samples to step input by"`
+	SegmentSamples    int   `inactive:"+" desc:"number of samples in a segment"`
+	StrideSamples     int   `inactive:"+" desc:"number of samples converted from StrideMS"`
+	SegmentSteps      int   `inactive:"+" desc:"number of steps in a segment"`
+	SegmentStepsTotal int   `inactive:"+" desc:"SegmentSteps plus steps overlapping next segment or for padding if no next segment"`
+	Steps             []int `inactive:"+" desc:"pre-calculated start position for each step"`
+}
+
+// ParamDefaults initializes the Input
+func (sp *SndProcess) ParamDefaults() {
+	sp.Params.WinMs = 25.0
+	sp.Params.StepMs = 5.0
+	sp.Params.SegmentMs = 100.0
+	sp.Params.Channel = 0
+	sp.Params.PadValue = 0.0
+	sp.Params.StrideMs = 100.0
+	sp.Params.BorderSteps = 6
+}
+
 // Aud encapsulates a specific auditory processing pipeline in
 // use in a given case -- can add / modify this as needed
-type Aud struct {
+type SndProcess struct {
 	Sound           sound.Wave
-	SndProcess      sound.Process     `desc:"specifications set and derived for processing the raw auditory input"`
+	Params          Params
 	Signal          etensor.Float32   `inactive:"+" desc:" the full sound input obtained from the sound input - plus any added padding"`
 	Samples         etensor.Float32   `inactive:"+" desc:" a window's worth of raw sound input, one channel at a time"`
 	Dft             dft.Params        `view:"no-inline"`
@@ -64,127 +97,150 @@ type Aud struct {
 	PrevSndFile  string      `view:"-" desc:" holds the name of the previous sound file loaded"`
 }
 
-func (aud *Aud) SetPath() {
+func (sp *SndProcess) SetPath() {
 	// this code makes sure that the file is opened regardless of running from goland or terminal
 	// as the working directory will be different in the 2 environments
 	dir, err := os.Getwd()
 	if err != nil {
 		log.Fatal(err)
 	}
-	aud.SndPath = ""
+	sp.SndPath = ""
 	if strings.HasSuffix(dir, "auditory") {
-		aud.SndPath = dir + "/examples/processspeech/sounds/"
+		sp.SndPath = dir + "/examples/processspeech/sounds/"
 	} else {
-		aud.SndPath = dir + "/sounds/"
+		sp.SndPath = dir + "/sounds/"
 	}
 }
 
-func (aud *Aud) Config() {
-	aud.SndProcess.Params.SegmentMs = 100 // set param overrides here before calling config
-	aud.SndProcess.Config(aud.Sound.SampleRate())
-	aud.Dft.Initialize(aud.SndProcess.Derived.WinSamples)
-	aud.Mel.Defaults()
+func (sp *SndProcess) Config() {
+	sp.Params.SegmentMs = 100 // set param overrides here before calling config
+
+	sr := sp.Sound.SampleRate()
+	sp.Params.WinSamples = MSecToSamples(sp.Params.WinMs, sr)
+	sp.Params.StepSamples = MSecToSamples(sp.Params.StepMs, sr)
+	sp.Params.SegmentSamples = MSecToSamples(sp.Params.SegmentMs, sr)
+	sp.Params.SegmentSteps = int(math.Round(float64(sp.Params.SegmentMs / sp.Params.StepMs)))
+	sp.Params.SegmentStepsTotal = sp.Params.SegmentSteps + 2*sp.Params.BorderSteps
+	sp.Params.StrideSamples = MSecToSamples(sp.Params.StrideMs, sr)
+
+	sp.Dft.Initialize(sp.Params.WinSamples)
+	sp.Mel.Defaults()
 	// override any default Mel values here - then call InitFilters
-	aud.Mel.InitFilters(aud.SndProcess.Derived.WinSamples/2+1, aud.Sound.SampleRate(), &aud.MelFilters)
-	aud.Samples.SetShape([]int{aud.SndProcess.Derived.WinSamples}, nil, nil)
-	aud.Power.SetShape([]int{aud.SndProcess.Derived.WinSamples/2 + 1}, nil, nil)
-	aud.LogPower.SetShape([]int{aud.SndProcess.Derived.WinSamples/2 + 1}, nil, nil)
-	aud.PowerSegment.SetShape([]int{aud.SndProcess.Derived.SegmentStepsPlus, aud.SndProcess.Derived.WinSamples/2 + 1, aud.Sound.Channels()}, nil, nil)
-	if aud.Dft.CompLogPow {
-		aud.LogPowerSegment.SetShape([]int{aud.SndProcess.Derived.SegmentStepsPlus, aud.SndProcess.Derived.WinSamples/2 + 1, aud.Sound.Channels()}, nil, nil)
+	sp.Mel.InitFilters(sp.Params.WinSamples/2+1, sp.Sound.SampleRate(), &sp.MelFilters)
+	sp.Samples.SetShape([]int{sp.Params.WinSamples}, nil, nil)
+	sp.Power.SetShape([]int{sp.Params.WinSamples/2 + 1}, nil, nil)
+	sp.LogPower.SetShape([]int{sp.Params.WinSamples/2 + 1}, nil, nil)
+	sp.PowerSegment.SetShape([]int{sp.Params.SegmentStepsTotal, sp.Params.WinSamples/2 + 1, sp.Sound.Channels()}, nil, nil)
+	if sp.Dft.CompLogPow {
+		sp.LogPowerSegment.SetShape([]int{sp.Params.SegmentStepsTotal, sp.Params.WinSamples/2 + 1, sp.Sound.Channels()}, nil, nil)
 	}
 
-	aud.FftCoefs = make([]complex128, aud.SndProcess.Derived.WinSamples)
-	aud.Fft = fourier.NewCmplxFFT(len(aud.FftCoefs))
+	sp.FftCoefs = make([]complex128, sp.Params.WinSamples)
+	sp.Fft = fourier.NewCmplxFFT(len(sp.FftCoefs))
 
-	aud.MelFBank.SetShape([]int{aud.Mel.FBank.NFilters}, nil, nil)
-	aud.MelFBankSegment.SetShape([]int{aud.SndProcess.Derived.SegmentStepsPlus, aud.Mel.FBank.NFilters, aud.Sound.Channels()}, nil, nil)
-	if aud.Mel.CompMfcc {
-		aud.MfccDctSegment.SetShape([]int{aud.SndProcess.Derived.SegmentStepsPlus, aud.Mel.FBank.NFilters, aud.Sound.Channels()}, nil, nil)
-		aud.MfccDct.SetShape([]int{aud.Mel.FBank.NFilters}, nil, nil)
+	sp.MelFBank.SetShape([]int{sp.Mel.FBank.NFilters}, nil, nil)
+	sp.MelFBankSegment.SetShape([]int{sp.Params.SegmentStepsTotal, sp.Mel.FBank.NFilters, sp.Sound.Channels()}, nil, nil)
+	if sp.Mel.CompMfcc {
+		sp.MfccDctSegment.SetShape([]int{sp.Params.SegmentStepsTotal, sp.Mel.FBank.NFilters, sp.Sound.Channels()}, nil, nil)
+		sp.MfccDct.SetShape([]int{sp.Mel.FBank.NFilters}, nil, nil)
 	}
 
-	aud.FirstStep = true
-	aud.Segment = -1
-	aud.MoreSegments = true
+	sp.FirstStep = true
+	sp.Segment = -1
+	sp.MoreSegments = true
 
-	aud.Gabor.On = true
-	if aud.Gabor.On {
-		aud.Gabor.Defaults(aud.Mel.FBank.NFilters)
-		if aud.SndProcess.Params.SegmentMs == 200 {
-			aud.Gabor.TimeSize = 12
-			aud.Gabor.TimeStride = 4
+	sp.Gabor.On = true
+	if sp.Gabor.On {
+		sp.Gabor.Defaults(sp.Mel.FBank.NFilters)
+		if sp.Params.SegmentMs == 200 {
+			sp.Gabor.TimeSize = 12
+			sp.Gabor.TimeStride = 4
 		} // otherwise assume 6 and 2 for 100ms segments
-		aud.GaborFilters.SetShape([]int{aud.Gabor.NFilters, aud.Gabor.FreqSize, aud.Gabor.TimeSize}, nil, nil)
-		aud.Gabor.RenderFilters(&aud.GaborFilters)
-		tsrX := ((aud.SndProcess.Derived.SegmentSteps - 1) / aud.Gabor.TimeStride) + 1
-		tsrY := ((aud.Mel.FBank.NFilters - aud.Gabor.FreqSize - 1) / aud.Gabor.FreqStride) + 1
-		aud.GaborTsr.SetShape([]int{aud.Sound.Channels(), tsrY, tsrX, 2, aud.Gabor.NFilters}, nil, nil)
-		aud.GaborTsr.SetMetaData("odd-row", "true")
-		aud.GaborTsr.SetMetaData("grid-fill", ".9")
+		sp.GaborFilters.SetShape([]int{sp.Gabor.NFilters, sp.Gabor.FreqSize, sp.Gabor.TimeSize}, nil, nil)
+		sp.Gabor.RenderFilters(&sp.GaborFilters)
+		tsrX := ((sp.Params.SegmentSteps - 1) / sp.Gabor.TimeStride) + 1
+		tsrY := ((sp.Mel.FBank.NFilters - sp.Gabor.FreqSize - 1) / sp.Gabor.FreqStride) + 1
+		sp.GaborTsr.SetShape([]int{sp.Sound.Channels(), tsrY, tsrX, 2, sp.Gabor.NFilters}, nil, nil)
+		sp.GaborTsr.SetMetaData("odd-row", "true")
+		sp.GaborTsr.SetMetaData("grid-fill", ".9")
 	}
+
+	// 2 reasons for this code
+	// 1 - the amount of signal handed to the fft has a "border" (some extra signal) to avoid edge effects.
+	// On the first step there is no signal to act as the "border" so we pad the data handed on the front.
+	// 2 - signals needs to be aligned when the number when multiple signals are input (e.g. 100 and 300 ms)
+	// so that the leading edge (right edge) is the same time point.
+	// This code does this by generating negative offsets for the start of the processing.
+	// Also see SndToWindow for the use of the step values
+	strides := int(sp.Params.SegmentMs / sp.Params.StrideMs)
+	stepsPerStride := int(sp.Params.StrideMs / sp.Params.StepMs)
+	stepsBack := stepsPerStride*(strides-1) + sp.Params.BorderSteps
+	sp.Params.Steps = make([]int, sp.Params.SegmentStepsTotal)
+	for i := 0; i < sp.Params.SegmentStepsTotal; i++ {
+		sp.Params.Steps[i] = sp.Params.StepSamples * (i - stepsBack)
+	}
+
 }
 
 // Initialize sets all the tensor result data to zeros
-func (aud *Aud) Initialize() {
-	aud.Power.SetZeros()
-	aud.LogPower.SetZeros()
-	aud.PowerSegment.SetZeros()
-	aud.LogPowerSegment.SetZeros()
-	aud.MelFBankSegment.SetZeros()
-	aud.MfccDctSegment.SetZeros()
-	aud.Fft.Reset(aud.SndProcess.Derived.WinSamples)
+func (sp *SndProcess) Initialize() {
+	sp.Power.SetZeros()
+	sp.LogPower.SetZeros()
+	sp.PowerSegment.SetZeros()
+	sp.LogPowerSegment.SetZeros()
+	sp.MelFBankSegment.SetZeros()
+	sp.MfccDctSegment.SetZeros()
+	sp.Fft.Reset(sp.Params.WinSamples)
 }
 
 // LoadSound initializes the AuditoryProc with the sound loaded from file by "Sound"
-func (aud *Aud) LoadSound(snd *sound.Wave) {
-	if aud.Sound.Channels() > 1 {
-		snd.SoundToTensor(&aud.Signal, -1)
+func (sp *SndProcess) LoadSound(snd *sound.Wave) {
+	if sp.Sound.Channels() > 1 {
+		snd.SoundToTensor(&sp.Signal, -1)
 	} else {
-		snd.SoundToTensor(&aud.Signal, aud.SndProcess.Params.Channel)
+		snd.SoundToTensor(&sp.Signal, sp.Params.Channel)
 	}
 }
 
 // ProcessSoundFile loads a sound from file and intializes for a new sound
 // if the sound is more than one segment long call ProcessSegment followed by ApplyGabor for each segment beyond the first
-func (aud *Aud) ProcessSoundFile(fn string) {
-	aud.PrevSndFile = string(aud.CurSndFile)
-	aud.CurSndFile = gi.FileName(fn)
-	err := aud.Sound.Load(fn)
+func (sp *SndProcess) ProcessSoundFile(fn string) {
+	sp.PrevSndFile = string(sp.CurSndFile)
+	sp.CurSndFile = gi.FileName(fn)
+	err := sp.Sound.Load(fn)
 	if err != nil {
 		return
 	}
-	aud.LoadSound(&aud.Sound)
-	aud.Config()
-	aud.Signal.Values = sound.Trim(aud.Signal.Values, aud.Sound.SampleRate(), 1.0, 100, 300)
-	aud.SndProcess.Pad(aud.Signal.Values)
-	aud.ProcessSegment()
-	aud.ApplyGabor()
-	aud.ToolBar.UpdateActions()
+	sp.LoadSound(&sp.Sound)
+	sp.Config()
+	sp.Pad(sp.Signal.Values)
+	sp.ProcessSegment()
+	sp.ApplyGabor()
+	sp.ToolBar.UpdateActions()
 }
 
 // ProcessSegment processes the entire segment's input by processing a small overlapping set of samples on each pass
-func (aud *Aud) ProcessSegment() {
-	cf := string(aud.CurSndFile)
-	if strings.Compare(cf, aud.PrevSndFile) != 0 {
-		aud.ProcessSoundFile(string(aud.CurSndFile))
-	} else if aud.MoreSegments == false {
-		aud.ProcessSoundFile(string(aud.CurSndFile)) // start over - same file
+func (sp *SndProcess) ProcessSegment() {
+	cf := string(sp.CurSndFile)
+	if strings.Compare(cf, sp.PrevSndFile) != 0 {
+		sp.ProcessSoundFile(string(sp.CurSndFile))
+	} else if sp.MoreSegments == false {
+		sp.ProcessSoundFile(string(sp.CurSndFile)) // start over - same file
 	} else {
 		moreSamples := true
-		aud.Segment++
-		for ch := int(0); ch < aud.Sound.Channels(); ch++ {
-			for s := 0; s < int(aud.SndProcess.Derived.SegmentStepsPlus); s++ {
-				moreSamples = aud.ProcessStep(ch, s)
+		sp.Segment++
+		for ch := int(0); ch < sp.Sound.Channels(); ch++ {
+			for s := 0; s < int(sp.Params.SegmentStepsTotal); s++ {
+				moreSamples = sp.ProcessStep(ch, s)
 				if !moreSamples {
-					aud.MoreSegments = false
+					sp.MoreSegments = false
 					break
 				}
 			}
 		}
-		remaining := len(aud.Signal.Values) - aud.SndProcess.Derived.SegmentSamples*(aud.Segment+1)
-		if remaining < aud.SndProcess.Derived.SegmentSamples {
-			aud.MoreSegments = false
+		remaining := len(sp.Signal.Values) - sp.Params.SegmentSamples*(sp.Segment+1)
+		if remaining < sp.Params.SegmentSamples {
+			sp.MoreSegments = false
 		}
 	}
 }
@@ -192,29 +248,44 @@ func (aud *Aud) ProcessSegment() {
 // ProcessStep processes a step worth of sound input from current input_pos, and increment input_pos by input.step_samples
 // Process the data by doing a fourier transform and computing the power spectrum, then apply mel filters to get the frequency
 // bands that mimic the non-linear human perception of sound
-func (aud *Aud) ProcessStep(ch, step int) bool {
-	available := aud.SoundToWindow(aud.Segment, aud.SndProcess.Derived.Steps[step], ch)
-	aud.Dft.Filter(int(ch), int(step), &aud.Samples, aud.FirstStep, aud.SndProcess.Derived.WinSamples, aud.FftCoefs, aud.Fft, &aud.Power, &aud.LogPower, &aud.PowerSegment, &aud.LogPowerSegment)
-	aud.Mel.Filter(int(ch), int(step), &aud.Samples, &aud.MelFilters, &aud.Power, &aud.MelFBankSegment, &aud.MelFBank, &aud.MfccDctSegment, &aud.MfccDct)
-	aud.FirstStep = false
+func (sp *SndProcess) ProcessStep(ch, step int) bool {
+	available := sp.SoundToWindow(sp.Segment, sp.Params.Steps[step], ch)
+	sp.Dft.Filter(int(ch), int(step), &sp.Samples, sp.FirstStep, sp.Params.WinSamples, sp.FftCoefs, sp.Fft, &sp.Power, &sp.LogPower, &sp.PowerSegment, &sp.LogPowerSegment)
+	sp.Mel.Filter(int(ch), int(step), &sp.Samples, &sp.MelFilters, &sp.Power, &sp.MelFBankSegment, &sp.MelFBank, &sp.MfccDctSegment, &sp.MfccDct)
+	sp.FirstStep = false
 	return available
 }
 
 // ApplyGabor convolves the gabor filters with the mel output
-func (aud *Aud) ApplyGabor() {
-	if aud.Gabor.On {
-		for ch := int(0); ch < aud.Sound.Channels(); ch++ {
-			agabor.Conv(ch, aud.Gabor, aud.SndProcess.Derived.SegmentStepsPlus, &aud.GaborTsr, aud.Mel.FBank.NFilters, &aud.GaborFilters, &aud.MelFBankSegment)
+func (sp *SndProcess) ApplyGabor() {
+	if sp.Gabor.On {
+		for ch := int(0); ch < sp.Sound.Channels(); ch++ {
+			agabor.Conv(ch, sp.Gabor, sp.Params.SegmentSteps, sp.Params.BorderSteps, &sp.GaborTsr, sp.Mel.FBank.NFilters, &sp.GaborFilters, &sp.MelFBankSegment)
 		}
 	}
 }
 
 // SoundToWindow gets sound from SignalRaw at given position and channel
-func (aud *Aud) SoundToWindow(segment, stepOffset, ch int) bool {
-	if aud.Signal.NumDims() == 1 {
-		start := segment*aud.SndProcess.Derived.SegmentSamples + stepOffset // segment zero based
-		end := start + aud.SndProcess.Derived.WinSamples
-		aud.Samples.Values = aud.Signal.Values[start:end]
+func (sp *SndProcess) SoundToWindow(segment, stepOffset, ch int) bool {
+	if sp.Signal.NumDims() == 1 {
+		start := segment*sp.Params.SegmentSamples + stepOffset // segment zero based
+		end := start + sp.Params.WinSamples
+
+		if end > len(sp.Signal.Values) {
+			fmt.Println("SndToWindow: end beyond signal length!!")
+			return false
+		}
+		var pad []float32
+		if start < 0 && end <= 0 {
+			pad = make([]float32, end-start)
+			sp.Samples.Values = pad[0:]
+		} else if start < 0 && end > 0 {
+			pad = make([]float32, 0-start)
+			sp.Samples.Values = pad[0:]
+			sp.Samples.Values = append(sp.Samples.Values, sp.Signal.Values[0:end]...)
+		} else {
+			sp.Samples.Values = sp.Signal.Values[start:end]
+		}
 	} else {
 		// ToDo: implement
 		log.Printf("SoundToWindow: else case not implemented - please report this issue")
@@ -222,11 +293,43 @@ func (aud *Aud) SoundToWindow(segment, stepOffset, ch int) bool {
 	return true
 }
 
+///////////////////////////////////////////////////////////////////////////////////////////
+// 		Utility Code
+
+// Tail returns the number of samples that remain beyond the last full stride
+func (sp *SndProcess) Tail(signal []float32) int {
+	temp := len(signal) - sp.Params.SegmentSamples
+	tail := temp % sp.Params.StrideSamples
+	return tail
+}
+
+// Pad pads the signal so that the length of signal divided by stride has no remainder
+func (sp *SndProcess) Pad(signal []float32) (padded []float32) {
+	tail := sp.Tail(signal)
+	padLen := sp.Params.SegmentSamples - sp.Params.StepSamples - tail%sp.Params.StepSamples
+	pad := make([]float32, padLen)
+	for i := range pad {
+		pad[i] = sp.Params.PadValue
+	}
+	padded = append(signal, pad...)
+	return padded
+}
+
+// MSecToSamples converts milliseconds to samples, in terms of sample_rate
+func MSecToSamples(ms float32, rate int) int {
+	return int(math.Round(float64(ms) * 0.001 * float64(rate)))
+}
+
+// SamplesToMSec converts samples to milliseconds, in terms of sample_rate
+func SamplesToMSec(samples int, rate int) float32 {
+	return 1000.0 * float32(samples) / float32(rate)
+}
+
 ////////////////////////////////////////////////////////////////////////////////////////////
 // 		Gui
 
 // ConfigGui configures the GoGi gui interface for this Aud
-func (aud *Aud) ConfigGui() *gi.Window {
+func (sp *SndProcess) ConfigGui() *gi.Window {
 	width := 1600
 	height := 1200
 
@@ -242,7 +345,7 @@ func (aud *Aud) ConfigGui() *gi.Window {
 
 	tbar := gi.AddNewToolBar(mfr, "tbar")
 	tbar.SetStretchMaxWidth()
-	aud.ToolBar = tbar
+	sp.ToolBar = tbar
 
 	split := gi.AddNewSplitView(mfr, "split")
 	split.Dim = gi.X
@@ -251,15 +354,15 @@ func (aud *Aud) ConfigGui() *gi.Window {
 
 	sv := giv.AddNewStructView(split, "sv")
 	// parent gets signal when file chooser dialog is closed - connect to view updates on parent
-	sv.SetStruct(aud)
+	sv.SetStruct(sp)
 
 	split.SetSplits(1)
 
 	tbar.AddAction(gi.ActOpts{Label: "Next Segment", Icon: "step-fwd", UpdateFunc: func(act *gi.Action) {
-		act.SetActiveStateUpdt(aud.MoreSegments)
+		act.SetActiveStateUpdt(sp.MoreSegments)
 	}}, win.This(), func(recv, send ki.Ki, sig int64, data interface{}) {
-		aud.ProcessSegment()
-		aud.ApplyGabor()
+		sp.ProcessSegment()
+		sp.ApplyGabor()
 		vp.FullRender2DTree()
 	})
 
@@ -280,11 +383,11 @@ func (aud *Aud) ConfigGui() *gi.Window {
 	return win
 }
 
-var TheSP Aud
+var TheSP SndProcess
 
 func mainrun() {
 	TheSP.SetPath()
-	TheSP.SndProcess.Defaults()
+	TheSP.ParamDefaults()
 	TheSP.CurSndFile = gi.FileName(TheSP.SndPath + "bug.wav")
 	TheSP.ProcessSoundFile(string(TheSP.CurSndFile))
 
