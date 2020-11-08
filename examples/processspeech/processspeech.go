@@ -151,7 +151,7 @@ func (sp *SndProcess) Config() {
 
 	sp.Gabor.On = true
 	if sp.Gabor.On {
-		sp.Gabor.Defaults(sp.Mel.FBank.NFilters)
+		sp.Gabor.Defaults()
 		if sp.Params.SegmentMs == 200 {
 			sp.Gabor.TimeSize = 12
 			sp.Gabor.TimeStride = 4
