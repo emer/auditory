@@ -31,7 +31,7 @@ type Params struct {
 }
 
 //Initialize initializes the Gabor
-func (ga *Params) Defaults(melFilters int) {
+func (ga *Params) Defaults() {
 	ga.On = true
 	ga.Gain = 2.0
 	ga.NHoriz = 4
@@ -156,7 +156,7 @@ func Conv(ch int, gbor Params, segmentSteps int, borderSteps int, rawOut *etenso
 	tMax := segmentSteps + tOffset + 1 // offset is negative
 
 	fMin := 0
-	fMax := melFilterCount - gbor.FreqSize
+	fMax := melFilterCount - gbor.FreqSize - 3
 
 	tIdx := 0
 	for s := tMin; s < tMax; s, tIdx = s+gbor.TimeStride, tIdx+1 {
