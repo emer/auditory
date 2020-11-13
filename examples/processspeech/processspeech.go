@@ -126,7 +126,7 @@ func (sp *SndProcess) Config() {
 	sp.Dft.Initialize(sp.Params.WinSamples)
 	sp.Mel.Defaults()
 	// override any default Mel values here - then call InitFilters
-	sp.Mel.InitFilters(sp.Params.WinSamples/2+1, sp.Sound.SampleRate(), &sp.MelFilters)
+	sp.Mel.InitFilters(sp.Params.WinSamples, sp.Sound.SampleRate(), &sp.MelFilters)
 	sp.Samples.SetShape([]int{sp.Params.WinSamples}, nil, nil)
 	sp.Power.SetShape([]int{sp.Params.WinSamples/2 + 1}, nil, nil)
 	sp.LogPower.SetShape([]int{sp.Params.WinSamples/2 + 1}, nil, nil)
