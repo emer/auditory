@@ -9,3 +9,5 @@ The 'dft' package does a fourier transform and computes the power spectrum on th
 The 'mel' package creates a set of mel filter banks and applies them to the power data to create a spectrogram.
 
 The 'agabor' package produces an edge detector that detects oriented contrast transitions between light and dark which can be convolved with the output of the mel processing.
+
+11/13/20 - Important fix to example code (processspeech.go). The mel InitFilters call was passing WindowSamples/2 rather than WindowSamples. The effect was to cut off the upper half of frequencies in the mel output.
