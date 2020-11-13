@@ -29,9 +29,9 @@ type FilterBank struct {
 // Params
 type Params struct {
 	FBank      FilterBank
-	PtBins     etensor.Int32 `view:"no-inline" desc:" mel scale points in fft bins"`
-	CompMfcc   bool          `desc:" compute cepstrum discrete cosine transform (dct) of the mel-frequency filter bank features"`
-	MfccNCoefs int           `def:"13" desc:" number of mfcc coefficients to output -- typically 1/2 of the number of filterbank features"` // Todo: should be 12 total - 2 - 13, higher ones not useful
+	BinPts     []int32 `view:"no-inline" desc:" mel scale points in fft bins"`
+	CompMfcc   bool    `desc:" compute cepstrum discrete cosine transform (dct) of the mel-frequency filter bank features"`
+	MfccNCoefs int     `def:"13" desc:" number of mfcc coefficients to output -- typically 1/2 of the number of filterbank features"` // Todo: should be 12 total - 2 - 13, higher ones not useful
 }
 
 // Defaults
@@ -43,28 +43,27 @@ func (mel *Params) Defaults() {
 
 // InitFilters computes the filter bin values
 func (mel *Params) InitFilters(dftSize int, sampleRate int, filters *etensor.Float32) {
+	mel.BinPts = make([]int32, mel.FBank.NFilters+2)
 	mel.FBank.RenormScale = 1.0 / (mel.FBank.RenormMax - mel.FBank.RenormMin)
 
 	hiMel := FreqToMel(mel.FBank.HiHz)
 	loMel := FreqToMel(mel.FBank.LoHz)
-	nFiltersEff := mel.FBank.NFilters + 2 // why is this plus 2?
-	mel.PtBins.SetShape([]int{nFiltersEff}, nil, nil)
-	melIncr := (hiMel - loMel) / float32(mel.FBank.NFilters+1)
+	nFiltersEff := mel.FBank.NFilters + 2 // plus 2 because we need end points to create the right number of bins
+	incr := (hiMel - loMel) / float32(mel.FBank.NFilters+1)
 
 	for i := 0; i < nFiltersEff; i++ {
-		ml := loMel + float32(i)*melIncr
+		ml := loMel + float32(i)*incr
 		hz := MelToFreq(ml)
-		bin := FreqToBin(hz, float32(dftSize), float32(sampleRate))
-		mel.PtBins.SetFloat1D(i, float64(bin))
+		mel.BinPts[i] = int32(FreqToBin(hz, float32(dftSize), float32(sampleRate)))
 	}
 
-	maxBins := int(mel.PtBins.Value1D(nFiltersEff-1)) - int(mel.PtBins.Value1D(nFiltersEff-3)) + 1
+	maxBins := int(mel.BinPts[nFiltersEff-1]) - int(mel.BinPts[nFiltersEff-3]) + 1
 	filters.SetShape([]int{mel.FBank.NFilters, maxBins}, nil, nil)
 
 	for flt := 0; flt < mel.FBank.NFilters; flt++ {
-		mnbin := int(mel.PtBins.Value1D(flt))
-		pkbin := int(mel.PtBins.Value1D(flt + 1))
-		mxbin := int(mel.PtBins.Value1D(flt + 2))
+		mnbin := int(mel.BinPts[flt])
+		pkbin := int(mel.BinPts[flt+1])
+		mxbin := int(mel.BinPts[flt+2])
 		pkmin := float32(pkbin) - float32(mnbin)
 		pkmax := float32(mxbin) - float32(pkbin)
 
@@ -85,8 +84,8 @@ func (mel *Params) InitFilters(dftSize int, sampleRate int, filters *etensor.Flo
 func (mel *Params) FilterDft(ch, step int, dftPowerOut etensor.Float32, segmentData *etensor.Float32, fBankData *etensor.Float32, filters *etensor.Float32) {
 	mi := 0
 	for flt := 0; flt < int(mel.FBank.NFilters); flt, mi = flt+1, mi+1 {
-		minBin := mel.PtBins.Value1D(flt)
-		maxBin := mel.PtBins.Value1D(flt + 2)
+		minBin := mel.BinPts[flt]
+		maxBin := mel.BinPts[flt+2]
 
 		sum := float32(0)
 		fi := 0
@@ -119,7 +118,7 @@ func (mel *Params) FilterDft(ch, step int, dftPowerOut etensor.Float32, segmentD
 
 // FreqToMel converts frequency to mel scale
 func FreqToMel(freq float32) float32 {
-	return 1127.0 * math32.Log(1.0+freq/700.0)
+	return 1127.0 * math32.Log(1.0+freq/700.0) // 1127 because we are using natural log
 }
 
 // FreqToMel converts mel scale to frequency
