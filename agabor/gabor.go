@@ -25,6 +25,7 @@ type Params struct {
 	HorizSigmaWidth float32 `viewif:"On" def:"0.1" desc:"gaussian sigma for the horizontal dimension for special horizontal narrow-band filters -- normalized as a function of filter size in relevant dimension"`
 	Gain            float32 `viewif:"On" def:"2" desc:"overall gain multiplier applied after gabor filtering -- only relevant if not using renormalization (otherwize it just gets renormed awaY"`
 	NHoriz          int     `viewif:"On" def:"4" desc:"number of horizontally-elongated,  pure time-domain, frequency-band specific filters to include, evenly spaced over the available frequency space for this filter set -- in addition to these, there are two diagonals (45, 135) and a vertically-elongated (wide frequency band) filter"`
+	NAng            int     `viewif:"On" def:"3" desc:"number of time-domain / frequency-band filters, typically there are two diagonals (45, 135) and a vertically-elongated (wide frequency band) filter"`
 	PhaseOffset     float32 `viewif:"On" def:"0,1.5708" desc:"offset for the sine phase -- default is an asymmetric sine wave -- can make it into a symmetric cosine gabor by using PI/2 = 1.5708"`
 	CircleEdge      bool    `viewif:"On" def:"true" desc:"cut off the filter (to zero) outside a circle of diameter filter_size -- makes the filter more radially symmetric"`
 	NFilters        int     `viewif:"On" desc:" total number of filters = 3 + NHoriz"`
@@ -35,18 +36,19 @@ func (ga *Params) Defaults() {
 	ga.On = true
 	ga.Gain = 2.0
 	ga.NHoriz = 4
+	ga.NAng = 3
 	ga.TimeSize = 6.0
 	ga.FreqSize = 6.0
 	ga.TimeStride = 2.0
 	ga.FreqStride = 2.0
-	ga.WaveLen = 2.0
+	ga.WaveLen = 6.0
 	ga.SigmaLen = 0.6
 	ga.SigmaWidth = 0.3
 	ga.HorizSigmaLen = 0.3
-	ga.HorizSigmaWidth = 0.1
+	ga.HorizSigmaWidth = 0.2
 	ga.PhaseOffset = 0.0
 	ga.CircleEdge = true
-	ga.NFilters = 3 + ga.NHoriz // 3 is number of angle filters
+	ga.NFilters = ga.NAng + ga.NHoriz // 3 is number of angle filters
 }
 
 // RenderFilters generates filters into the given matrix, which is formatted as: [ga.TimeSize_steps][ga.FreqSize][n_filters]
@@ -57,8 +59,13 @@ func (ga *Params) RenderFilters(filters *etensor.Float32) {
 	radiusTime := float32(ga.TimeSize / 2.0)
 	radiusFreq := float32(ga.FreqSize / 2.0)
 
+	//gs_len_eff := ga.SigmaLen * float32(ga.TimeSize)
+	//gs_wd_eff := ga.SigmaWidth * float32(ga.FreqSize)
+	//lenNorm := 1.0 / (2.0 * gs_len_eff * gs_len_eff)
+	//widthNorm := 1.0 / (2.0 * gs_wd_eff * gs_wd_eff)
 	lenNorm := 1.0 / (2.0 * ga.SigmaLen * ga.SigmaLen)
 	widthNorm := 1.0 / (2.0 * ga.SigmaWidth * ga.SigmaWidth)
+
 	lenHorizNorm := 1.0 / (2.0 * ga.HorizSigmaLen * ga.HorizSigmaLen)
 	widthHorizNorm := 1.0 / (2.0 * ga.HorizSigmaWidth * ga.HorizSigmaWidth)
 
@@ -92,7 +99,7 @@ func (ga *Params) RenderFilters(filters *etensor.Float32) {
 	}
 
 	// fli should be ga.Horiz - 1 at this point
-	for ang := 1; ang < 4; ang, fli = ang+1, fli+1 {
+	for ang := 1; ang < ga.NAng+1; ang, fli = ang+1, fli+1 {
 		angF := float32(-ang) * angInc
 		var xf, yf, xfn, yfn float32
 		for y := 0; y < ga.FreqSize; y++ {
@@ -153,10 +160,10 @@ func Conv(ch int, gbor Params, segmentSteps int, borderSteps int, rawOut *etenso
 	if tMin < 0 {
 		tMin = 0
 	}
-	tMax := segmentSteps + tOffset + 1 // offset is negative
+	tMax := rawOut.Shp[2] * gbor.TimeStride
 
 	fMin := 0
-	fMax := melFilterCount - gbor.FreqSize - 3
+	fMax := rawOut.Shp[1] * gbor.FreqStride
 
 	tIdx := 0
 	for s := tMin; s < tMax; s, tIdx = s+gbor.TimeStride, tIdx+1 {
