@@ -8,8 +8,8 @@ import (
 	"log"
 	"math"
 
-	"github.com/chewxy/math32"
 	"github.com/emer/etable/etensor"
+	"github.com/goki/mat32"
 	"gonum.org/v1/gonum/dsp/fourier"
 )
 
@@ -99,7 +99,7 @@ func (mel *Params) FilterDft(ch, step int, dftPowerOut etensor.Float32, segmentD
 		if sum == 0 {
 			val = mel.FBank.LogMin
 		} else {
-			val = math32.Log(sum)
+			val = mat32.Log(sum)
 		}
 		if mel.FBank.Renorm {
 			val -= mel.FBank.RenormMin
@@ -118,17 +118,17 @@ func (mel *Params) FilterDft(ch, step int, dftPowerOut etensor.Float32, segmentD
 
 // FreqToMel converts frequency to mel scale
 func FreqToMel(freq float32) float32 {
-	return 1127.0 * math32.Log(1.0+freq/700.0) // 1127 because we are using natural log
+	return 1127.0 * mat32.Log(1.0+freq/700.0) // 1127 because we are using natural log
 }
 
 // FreqToMel converts mel scale to frequency
 func MelToFreq(mel float32) float32 {
-	return 700.0 * (math32.Exp(mel/1127.0) - 1.0)
+	return 700.0 * (mat32.Exp(mel/1127.0) - 1.0)
 }
 
 // FreqToBin converts frequency into FFT bin number, using parameters of number of FFT bins and sample rate
 func FreqToBin(freq, nFft, sampleRate float32) int {
-	return int(math32.Floor(((nFft + 1) * freq) / sampleRate))
+	return int(mat32.Floor(((nFft + 1) * freq) / sampleRate))
 }
 
 //Defaults initializes FBank values - these are the ones you most likely need to adjust for your particular signals

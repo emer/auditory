@@ -5,8 +5,8 @@
 package agabor
 
 import (
-	"github.com/chewxy/math32"
 	"github.com/emer/etable/etensor"
+	"github.com/goki/mat32"
 )
 
 // Gabor params for auditory gabor filters: 2d Gaussian envelope times a sinusoidal plane wave --
@@ -55,7 +55,7 @@ func (ga *Params) Defaults() {
 func (ga *Params) RenderFilters(filters *etensor.Float32) {
 	ctrTime := (float32(ga.TimeSize) - 1) / 2.0
 	ctrFreq := (float32(ga.FreqSize) - 1) / 2.0
-	angInc := math32.Pi / 4.0
+	angInc := mat32.Pi / 4.0
 	radiusTime := float32(ga.TimeSize / 2.0)
 	radiusFreq := float32(ga.FreqSize / 2.0)
 
@@ -69,13 +69,13 @@ func (ga *Params) RenderFilters(filters *etensor.Float32) {
 	lenHorizNorm := 1.0 / (2.0 * ga.HorizSigmaLen * ga.HorizSigmaLen)
 	widthHorizNorm := 1.0 / (2.0 * ga.HorizSigmaWidth * ga.HorizSigmaWidth)
 
-	twoPiNorm := (2.0 * math32.Pi) / ga.WaveLen
+	twoPiNorm := (2.0 * mat32.Pi) / ga.WaveLen
 	hCtrInc := (ga.FreqSize - 1) / (ga.NHoriz + 1)
 
 	fli := 0
 	for hi := 0; hi < ga.NHoriz; hi, fli = hi+1, fli+1 {
 		hCtrFreq := hCtrInc * (hi + 1)
-		angF := -2.0 * angInc
+		angF := float32(-2.0 * angInc)
 		for y := 0; y < ga.FreqSize; y++ {
 			var xf, yf, xfn, yfn float32
 			for x := 0; x < ga.TimeSize; x++ {
@@ -84,13 +84,13 @@ func (ga *Params) RenderFilters(filters *etensor.Float32) {
 				xfn = xf / radiusTime
 				yfn = yf / radiusFreq
 
-				dist := math32.Hypot(xfn, yfn)
+				dist := mat32.Hypot(xfn, yfn)
 				val := float32(0)
 				if !(ga.CircleEdge && dist > 1.0) {
-					nx := xfn*math32.Cos(angF) - yfn*math32.Sin(angF)
-					ny := yfn*math32.Cos(angF) + xfn*math32.Sin(angF)
-					gauss := math32.Exp(-(widthHorizNorm*(nx*nx) + lenHorizNorm*(ny*ny)))
-					sinVal := math32.Sin(twoPiNorm*ny + ga.PhaseOffset)
+					nx := xfn*mat32.Cos(angF) - yfn*mat32.Sin(angF)
+					ny := yfn*mat32.Cos(angF) + xfn*mat32.Sin(angF)
+					gauss := mat32.Exp(-(widthHorizNorm*(nx*nx) + lenHorizNorm*(ny*ny)))
+					sinVal := mat32.Sin(twoPiNorm*ny + ga.PhaseOffset)
 					val = gauss * sinVal
 				}
 				filters.Set([]int{fli, y, x}, val)
@@ -100,7 +100,7 @@ func (ga *Params) RenderFilters(filters *etensor.Float32) {
 
 	// fli should be ga.Horiz - 1 at this point
 	for ang := 1; ang < ga.NAng+1; ang, fli = ang+1, fli+1 {
-		angF := float32(-ang) * angInc
+		angF := float32(-ang) * float32(angInc)
 		var xf, yf, xfn, yfn float32
 		for y := 0; y < ga.FreqSize; y++ {
 			for x := 0; x < ga.TimeSize; x++ {
@@ -109,13 +109,13 @@ func (ga *Params) RenderFilters(filters *etensor.Float32) {
 				xfn = xf / radiusTime
 				yfn = yf / radiusFreq
 
-				dist := math32.Hypot(xfn, yfn)
+				dist := mat32.Hypot(xfn, yfn)
 				val := float32(0)
 				if !(ga.CircleEdge && dist > 1.0) {
-					nx := xfn*math32.Cos(angF) - yfn*math32.Sin(angF)
-					ny := yfn*math32.Cos(angF) + xfn*math32.Sin(angF)
-					gauss := math32.Exp(-(lenNorm*(nx*nx) + widthNorm*(ny*ny)))
-					sinVal := math32.Sin(twoPiNorm*ny + ga.PhaseOffset)
+					nx := xfn*mat32.Cos(angF) - yfn*mat32.Sin(angF)
+					ny := yfn*mat32.Cos(angF) + xfn*mat32.Sin(angF)
+					gauss := mat32.Exp(-(lenNorm*(nx*nx) + widthNorm*(ny*ny)))
+					sinVal := mat32.Sin(twoPiNorm*ny + ga.PhaseOffset)
 					val = gauss * sinVal
 				}
 				filters.Set([]int{fli, y, x}, val)
@@ -176,14 +176,14 @@ func Conv(ch int, gbor Params, segmentSteps int, borderSteps int, rawOut *etenso
 					for ft := int(0); ft < gbor.TimeSize; ft++ {
 						fVal := gborFilters.Value([]int{fi, ff, ft})
 						iVal := melData.Value([]int{s + ft, flt + ff, ch})
-						if math32.IsNaN(iVal) {
+						if mat32.IsNaN(iVal) {
 							iVal = .5
 						}
 						fSum += fVal * iVal
 					}
 				}
 				pos := fSum >= 0.0
-				act := gbor.Gain * math32.Abs(fSum)
+				act := gbor.Gain * mat32.Abs(fSum)
 				if pos {
 					rawOut.SetFloat([]int{ch, fIdx, tIdx, 0, fi}, float64(act))
 					rawOut.SetFloat([]int{ch, fIdx, tIdx, 1, fi}, 0)
