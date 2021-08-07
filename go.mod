@@ -1,6 +1,6 @@
 module github.com/emer/auditory
 
-go 1.13
+go 1.15
 
 require (
 	github.com/emer/etable v1.0.32
