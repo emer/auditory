@@ -155,11 +155,15 @@ func (ga *Params) RenderFilters(filters *etensor.Float32) {
 
 // Conv processes input using filters that operate over an entire segment of samples
 func Conv(ch int, gbor Params, segmentSteps int, borderSteps int, rawOut *etensor.Float32, melFilterCount int, gborFilters *etensor.Float32, melData *etensor.Float32) {
-	tOffset := gbor.TimeSize/2 - borderSteps
-	tMin := tOffset
-	if tMin < 0 {
-		tMin = 0
-	}
+	//tOffset := gbor.TimeSize/2 - borderSteps
+	//tMin := tOffset
+	//if tMin < 0 {
+	//	tMin = 0
+	//}
+
+	// just set tMin to zero - any offset is handled by the calling code
+	tMin := 0
+
 	tMax := rawOut.Shp[2] * gbor.TimeStride
 
 	fMin := 0
