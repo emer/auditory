@@ -156,6 +156,7 @@ func (sp *SndProcess) Config() {
 			sp.Gabor.TimeSize = 12
 			sp.Gabor.TimeStride = 4
 		} // otherwise assume 6 and 2 for 100ms segments
+		sp.Gabor.Init() // must call - even if no overrides
 		sp.GaborFilters.SetShape([]int{sp.Gabor.NFilters, sp.Gabor.FreqSize, sp.Gabor.TimeSize}, nil, nil)
 		sp.Gabor.RenderFilters(&sp.GaborFilters)
 		tsrX := ((sp.Params.SegmentSteps - 1) / sp.Gabor.TimeStride) + 1
