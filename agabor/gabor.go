@@ -31,7 +31,7 @@ type Params struct {
 	NFilters        int     `viewif:"On" desc:" total number of filters = 3 + NHoriz"`
 }
 
-//Initialize initializes the Gabor
+//Defaults sets the default parameters
 func (ga *Params) Defaults() {
 	ga.On = true
 	ga.Gain = 2.0
@@ -48,11 +48,17 @@ func (ga *Params) Defaults() {
 	ga.HorizSigmaWidth = 0.2
 	ga.PhaseOffset = 0.0
 	ga.CircleEdge = true
+}
+
+// must call even if not overriding params
+func (ga *Params) Init() {
 	ga.NFilters = ga.NAng + ga.NHoriz // 3 is number of angle filters
 }
 
 // RenderFilters generates filters into the given matrix, which is formatted as: [ga.TimeSize_steps][ga.FreqSize][n_filters]
 func (ga *Params) RenderFilters(filters *etensor.Float32) {
+	ga.NFilters = ga.NAng + ga.NHoriz // in case user overrode defaults
+
 	ctrTime := (float32(ga.TimeSize) - 1) / 2.0
 	ctrFreq := (float32(ga.FreqSize) - 1) / 2.0
 	angInc := mat32.Pi / 4.0
@@ -155,19 +161,16 @@ func (ga *Params) RenderFilters(filters *etensor.Float32) {
 
 // Conv processes input using filters that operate over an entire segment of samples
 func Conv(ch int, gbor Params, segmentSteps int, borderSteps int, rawOut *etensor.Float32, melFilterCount int, gborFilters *etensor.Float32, melData *etensor.Float32) {
-	//tOffset := gbor.TimeSize/2 - borderSteps
-	//tMin := tOffset
-	//if tMin < 0 {
-	//	tMin = 0
-	//}
-
-	// just set tMin to zero - any offset is handled by the calling code
+	// just set tMin to zero - any offset should be handled by the calling code
 	tMin := 0
-
-	tMax := rawOut.Shp[2] * gbor.TimeStride
+	tMax1 := rawOut.Shp[2] * gbor.TimeStride
+	tMax2 := melData.Shp[0] - gbor.TimeStride - 1
+	tMax := int(mat32.Min32i(int32(tMax1), int32(tMax2)))
 
 	fMin := 0
-	fMax := rawOut.Shp[1] * gbor.FreqStride
+	fMax1 := rawOut.Shp[1] * gbor.FreqStride      // limit frequency strides so we don't overrun the output tensor
+	fMax2 := melData.Shp[1] - gbor.FreqStride - 1 // limit strides based on melData in frequency dimension
+	fMax := int(mat32.Min32i(int32(fMax1), int32(fMax2)))
 
 	tIdx := 0
 	for s := tMin; s < tMax; s, tIdx = s+gbor.TimeStride, tIdx+1 {
