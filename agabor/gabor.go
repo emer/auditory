@@ -72,8 +72,8 @@ func (ga *Params) RenderFilters(filters *etensor.Float32) {
 	//lenNorm := 1.0 / (2.0 * ga.SigmaLen * ga.SigmaLen)
 	//widthNorm := 1.0 / (2.0 * ga.SigmaWidth * ga.SigmaWidth)
 
-	lenHorizNorm := 1.0 / (2.0 * ga.HorizSigmaLen * ga.HorizSigmaLen * float32(ga.TimeSize))
-	widthHorizNorm := 1.0 / (2.0 * ga.HorizSigmaWidth * ga.HorizSigmaWidth * float32(ga.FreqSize))
+	lenHorizNorm := 1.0 / (2.0 * ga.HorizSigmaLen * ga.HorizSigmaLen)
+	widthHorizNorm := 1.0 / (2.0 * ga.HorizSigmaWidth * ga.HorizSigmaWidth)
 
 	twoPiNorm := (2.0 * mat32.Pi) / ga.WaveLen
 	hCtrInc := (ga.FreqSize - 1) / (ga.NHoriz + 1)
