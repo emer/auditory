@@ -45,7 +45,7 @@ func (ga *Params) Defaults() {
 	ga.SigmaLen = 0.6
 	ga.SigmaWidth = 0.3
 	ga.HorizSigmaLen = 0.3
-	ga.HorizSigmaWidth = 0.2
+	ga.HorizSigmaWidth = 0.6
 	ga.PhaseOffset = 0.0
 	ga.CircleEdge = true
 }
@@ -81,7 +81,7 @@ func (ga *Params) RenderFilters(filters *etensor.Float32) {
 	fli := 0
 	for hi := 0; hi < ga.NHoriz; hi, fli = hi+1, fli+1 {
 		hCtrFreq := hCtrInc * (hi + 1)
-		angF := float32(-2.0 * angInc)
+		//angF := float32(-2.0 * angInc)
 		for y := 0; y < ga.FreqSize; y++ {
 			var xf, yf, xfn, yfn float32
 			for x := 0; x < ga.TimeSize; x++ {
@@ -93,8 +93,8 @@ func (ga *Params) RenderFilters(filters *etensor.Float32) {
 				dist := mat32.Hypot(xfn, yfn)
 				val := float32(0)
 				if !(ga.CircleEdge && dist > 1.0) {
-					nx := xfn*mat32.Cos(angF) - yfn*mat32.Sin(angF)
-					ny := yfn*mat32.Cos(angF) + xfn*mat32.Sin(angF)
+					nx := xfn*mat32.Cos(0) - yfn*mat32.Sin(0)
+					ny := yfn*mat32.Cos(0) + xfn*mat32.Sin(0)
 					gauss := mat32.Exp(-(widthHorizNorm*(nx*nx) + lenHorizNorm*(ny*ny)))
 					sinVal := mat32.Sin(twoPiNorm*ny + ga.PhaseOffset)
 					val = gauss * sinVal
