@@ -37,11 +37,11 @@ func (ga *Params) Defaults() {
 	ga.Gain = 2.0
 	ga.NHoriz = 4
 	ga.NAng = 3
-	ga.TimeSize = 6.0
-	ga.FreqSize = 6.0
+	ga.TimeSize = 7.0
+	ga.FreqSize = 7.0
 	ga.TimeStride = 2.0
 	ga.FreqStride = 2.0
-	ga.WaveLen = 6.0
+	ga.WaveLen = 2.0
 	ga.SigmaLen = 0.6
 	ga.SigmaWidth = 0.3
 	ga.HorizSigmaLen = 0.3
@@ -65,15 +65,15 @@ func (ga *Params) RenderFilters(filters *etensor.Float32) {
 	radiusTime := float32(ga.TimeSize / 2.0)
 	radiusFreq := float32(ga.FreqSize / 2.0)
 
-	//gs_len_eff := ga.SigmaLen * float32(ga.TimeSize)
-	//gs_wd_eff := ga.SigmaWidth * float32(ga.FreqSize)
-	//lenNorm := 1.0 / (2.0 * gs_len_eff * gs_len_eff)
-	//widthNorm := 1.0 / (2.0 * gs_wd_eff * gs_wd_eff)
-	lenNorm := 1.0 / (2.0 * ga.SigmaLen * ga.SigmaLen)
-	widthNorm := 1.0 / (2.0 * ga.SigmaWidth * ga.SigmaWidth)
+	gs_len_eff := ga.SigmaLen * float32(ga.TimeSize)
+	gs_wd_eff := ga.SigmaWidth * float32(ga.FreqSize)
+	lenNorm := 1.0 / (2.0 * gs_len_eff * gs_len_eff)
+	widthNorm := 1.0 / (2.0 * gs_wd_eff * gs_wd_eff)
+	//lenNorm := 1.0 / (2.0 * ga.SigmaLen * ga.SigmaLen)
+	//widthNorm := 1.0 / (2.0 * ga.SigmaWidth * ga.SigmaWidth)
 
-	lenHorizNorm := 1.0 / (2.0 * ga.HorizSigmaLen * ga.HorizSigmaLen)
-	widthHorizNorm := 1.0 / (2.0 * ga.HorizSigmaWidth * ga.HorizSigmaWidth)
+	lenHorizNorm := 1.0 / (2.0 * ga.HorizSigmaLen * ga.HorizSigmaLen * float32(ga.TimeSize))
+	widthHorizNorm := 1.0 / (2.0 * ga.HorizSigmaWidth * ga.HorizSigmaWidth * float32(ga.FreqSize))
 
 	twoPiNorm := (2.0 * mat32.Pi) / ga.WaveLen
 	hCtrInc := (ga.FreqSize - 1) / (ga.NHoriz + 1)
