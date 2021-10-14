@@ -82,8 +82,7 @@ type SndProcess struct {
 	MfccDct         etensor.Float32 `view:"no-inline" desc:" discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
 	MfccDctSegment  etensor.Float32 `view:"no-inline" desc:" full segment's worth of discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
 	GaborSpecs      []agabor.Filter
-	GaborFilters    agabor.FilterSet `viewif:"On=true" desc:"a set of gabor filters with same x and y dimensions"`
-	GaborGain       float32
+	GaborFilters    agabor.FilterSet  `viewif:"On=true" desc:"a set of gabor filters with same x and y dimensions"`
 	GaborTsr        etensor.Float32   `view:"no-inline" desc:" raw output of Gabor -- full segment's worth of gabor steps"`
 	Segment         int               `inactive:"+" desc:" the current segment (i.e. one segments worth of samples) - zero is first segment"`
 	FftCoefs        []complex128      `view:"-" desc:" discrete fourier transform (fft) output complex representation"`
@@ -169,6 +168,7 @@ func (sp *SndProcess) Config() {
 	// filter size is assumed to be consistent and taken from first in the spec list
 	sp.GaborFilters.SizeX = sp.GaborSpecs[0].SizeX
 	sp.GaborFilters.SizeY = sp.GaborSpecs[0].SizeY
+	sp.GaborFilters.Gain = 0.5
 	x := sp.GaborFilters.SizeX
 	y := sp.GaborFilters.SizeY
 	n := len(sp.GaborSpecs)
@@ -179,7 +179,6 @@ func (sp *SndProcess) Config() {
 	sp.GaborTsr.SetShape([]int{sp.Sound.Channels(), tsrY, tsrX, 2, n}, nil, nil)
 	sp.GaborTsr.SetMetaData("odd-row", "true")
 	sp.GaborTsr.SetMetaData("grid-fill", ".9")
-	sp.GaborGain = 2.0
 
 	// 2 reasons for this code
 	// 1 - the amount of signal handed to the fft has a "border" (some extra signal) to avoid edge effects.
@@ -275,7 +274,7 @@ func (sp *SndProcess) ProcessStep(ch, step int) bool {
 // ApplyGabor convolves the gabor filters with the mel output
 func (sp *SndProcess) ApplyGabor() {
 	for ch := int(0); ch < sp.Sound.Channels(); ch++ {
-		agabor.Convolve(ch, sp.Params.SegmentSteps, sp.Params.BorderSteps, sp.Mel.FBank.NFilters, &sp.MelFBankSegment, sp.GaborFilters, 2, 2, sp.GaborGain, &sp.GaborTsr)
+		agabor.Convolve(ch, sp.Params.SegmentSteps, sp.Params.BorderSteps, sp.Mel.FBank.NFilters, &sp.MelFBankSegment, sp.GaborFilters, 2, 2, &sp.GaborTsr)
 	}
 }
 

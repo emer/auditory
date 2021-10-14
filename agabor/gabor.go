@@ -27,6 +27,7 @@ type Filter struct {
 type FilterSet struct {
 	SizeX   int             `desc:"size of each filter in X"`
 	SizeY   int             `desc:"size of each filter in Y"`
+	Gain    float32         `desc:""`
 	Filters etensor.Float32 `desc:"actual gabor filters"`
 }
 
@@ -157,7 +158,7 @@ func ToTensor(specs []Filter, set *FilterSet) { // i is filter index in tensor
 }
 
 // Convolve processes input using filters that operate over an entire segment of samples
-func Convolve(ch int, segmentSteps int, borderSteps int, melFilterCount int, melData *etensor.Float32, filters FilterSet, strideX int, strideY int, gain float32, rawOut *etensor.Float32) {
+func Convolve(ch int, segmentSteps int, borderSteps int, melFilterCount int, melData *etensor.Float32, filters FilterSet, strideX int, strideY int, rawOut *etensor.Float32) {
 	// just set tMin to zero - any offset should be handled by the calling code
 	tMin := 0
 	tMax1 := rawOut.Shp[2] * strideX
@@ -187,7 +188,7 @@ func Convolve(ch int, segmentSteps int, borderSteps int, melFilterCount int, mel
 					}
 				}
 				pos := fSum >= 0.0
-				act := gain * mat32.Abs(fSum)
+				act := filters.Gain * mat32.Abs(fSum)
 				if pos {
 					rawOut.SetFloat([]int{ch, fIdx, tIdx, 0, fi}, float64(act))
 					rawOut.SetFloat([]int{ch, fIdx, tIdx, 1, fi}, 0)
