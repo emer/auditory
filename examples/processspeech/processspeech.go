@@ -150,6 +150,7 @@ func (sp *SndProcess) Config() {
 	sp.Segment = -1
 	sp.MoreSegments = true
 
+	sp.GaborSpecs = nil
 	spec := agabor.Filter{SizeX: 7, SizeY: 7, WaveLen: 2.0, Orientation: 0, SigmaWidth: 0.6, SigmaLength: 0.3, PhaseOffset: 0, CircleEdge: true}
 	sp.GaborSpecs = append(sp.GaborSpecs, spec)
 	spec = agabor.Filter{SizeX: 7, SizeY: 7, WaveLen: 2.0, Orientation: 0, SigmaWidth: 0.3, SigmaLength: 0.1, PhaseOffset: 0, CircleEdge: true}
@@ -172,7 +173,7 @@ func (sp *SndProcess) Config() {
 	y := sp.GaborFilters.SizeY
 	n := len(sp.GaborSpecs)
 	sp.GaborFilters.Filters.SetShape([]int{n, x, y}, nil, nil)
-	agabor.ToTensor(sp.GaborSpecs, &sp.GaborFilters.Filters)
+	agabor.ToTensor(sp.GaborSpecs, &sp.GaborFilters)
 	tsrX := ((sp.Params.SegmentSteps - 1) / 2) + 1
 	tsrY := ((sp.Mel.FBank.NFilters - y - 1) / 2) + 1
 	sp.GaborTsr.SetShape([]int{sp.Sound.Channels(), tsrY, tsrX, 2, n}, nil, nil)

@@ -47,7 +47,7 @@ func (f *Filter) Defaults() {
 }
 
 // ToTensor generates filters into the tensor passed by caller
-func ToTensor(specs []Filter, filters *etensor.Float32) { // i is filter index in tensor
+func ToTensor(specs []Filter, set *FilterSet) { // i is filter index in tensor
 	nhf := 0 // number of horizontal filters
 	nvf := 0 // number of vertical filters
 	for _, f := range specs {
@@ -58,8 +58,8 @@ func ToTensor(specs []Filter, filters *etensor.Float32) { // i is filter index i
 		}
 	}
 
-	sizeX := specs[0].SizeX
-	sizeY := specs[0].SizeY
+	sizeX := set.SizeX
+	sizeY := set.SizeY
 	radiusX := float32(sizeX / 2.0)
 	radiusY := float32(sizeY / 2.0)
 
@@ -121,18 +121,18 @@ func ToTensor(specs []Filter, filters *etensor.Float32) { // i is filter index i
 					sinVal := mat32.Sin(twoPiNorm*ny + f.PhaseOffset)
 					val = gauss * sinVal
 				}
-				filters.Set([]int{i, y, x}, val)
+				set.Filters.Set([]int{i, y, x}, val)
 			}
 		}
 	}
 
 	// renorm each half
-	for i := 0; i < filters.Dim(0); i++ {
+	for i := 0; i < set.Filters.Dim(0); i++ {
 		posSum := float32(0)
 		negSum := float32(0)
 		for y := 0; y < sizeY; y++ {
 			for x := 0; x < sizeX; x++ {
-				val := float32(filters.Value([]int{i, y, x}))
+				val := float32(set.Filters.Value([]int{i, y, x}))
 				if val > 0 {
 					posSum += val
 				} else if val < 0 {
@@ -144,13 +144,13 @@ func ToTensor(specs []Filter, filters *etensor.Float32) { // i is filter index i
 		negNorm := -1.0 / negSum
 		for y := 0; y < sizeY; y++ {
 			for x := 0; x < sizeX; x++ {
-				val := filters.Value([]int{i, y, x})
+				val := set.Filters.Value([]int{i, y, x})
 				if val > 0.0 {
 					val *= posNorm
 				} else if val < 0.0 {
 					val *= negNorm
 				}
-				filters.Set([]int{i, y, x}, val)
+				set.Filters.Set([]int{i, y, x}, val)
 			}
 		}
 	}
