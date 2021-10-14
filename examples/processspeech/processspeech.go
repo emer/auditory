@@ -6,12 +6,12 @@ package main
 
 import (
 	"fmt"
+	"github.com/emer/auditory/agabor2"
 	"log"
 	"math"
 	"os"
 	"strings"
 
-	"github.com/emer/auditory/agabor"
 	"github.com/emer/auditory/dft"
 	"github.com/emer/auditory/mel"
 	"github.com/emer/auditory/sound"
@@ -68,21 +68,22 @@ func (sp *SndProcess) ParamDefaults() {
 type SndProcess struct {
 	Sound           sound.Wave
 	Params          Params
-	Signal          etensor.Float32   `inactive:"+" desc:" the full sound input obtained from the sound input - plus any added padding"`
-	Samples         etensor.Float32   `inactive:"+" desc:" a window's worth of raw sound input, one channel at a time"`
-	Dft             dft.Params        `view:"no-inline"`
-	Power           etensor.Float32   `view:"-" desc:" power of the dft, up to the nyquist limit frequency (1/2 input.WinSamples)"`
-	LogPower        etensor.Float32   `view:"-" desc:" log power of the dft, up to the nyquist liit frequency (1/2 input.WinSamples)"`
-	PowerSegment    etensor.Float32   `view:"no-inline" desc:" full segment's worth of power of the dft, up to the nyquist limit frequency (1/2 input.WinSamples)"`
-	LogPowerSegment etensor.Float32   `view:"no-inline" desc:" full segment's worth of log power of the dft, up to the nyquist limit frequency (1/2 input.WinSamples)"`
-	Mel             mel.Params        `view:"no-inline"`
-	MelFBank        etensor.Float32   `view:"no-inline" desc:" mel scale transformation of dft_power, using triangular filters, resulting in the mel filterbank output -- the natural log of this is typically applied"`
-	MelFBankSegment etensor.Float32   `view:"no-inline" desc:" full segment's worth of mel feature-bank output"`
-	MelFilters      etensor.Float32   `view:"no-inline" desc:" the actual filters"`
-	MfccDct         etensor.Float32   `view:"no-inline" desc:" discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
-	MfccDctSegment  etensor.Float32   `view:"no-inline" desc:" full segment's worth of discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
-	Gabor           agabor.Params     `viewif:"FBank.On" desc:" full set of frequency / time gabor filters -- first size"`
-	GaborFilters    etensor.Float32   `viewif:"On=true" desc:"full gabor filters"`
+	Signal          etensor.Float32 `inactive:"+" desc:" the full sound input obtained from the sound input - plus any added padding"`
+	Samples         etensor.Float32 `inactive:"+" desc:" a window's worth of raw sound input, one channel at a time"`
+	Dft             dft.Params      `view:"no-inline"`
+	Power           etensor.Float32 `view:"-" desc:" power of the dft, up to the nyquist limit frequency (1/2 input.WinSamples)"`
+	LogPower        etensor.Float32 `view:"-" desc:" log power of the dft, up to the nyquist liit frequency (1/2 input.WinSamples)"`
+	PowerSegment    etensor.Float32 `view:"no-inline" desc:" full segment's worth of power of the dft, up to the nyquist limit frequency (1/2 input.WinSamples)"`
+	LogPowerSegment etensor.Float32 `view:"no-inline" desc:" full segment's worth of log power of the dft, up to the nyquist limit frequency (1/2 input.WinSamples)"`
+	Mel             mel.Params      `view:"no-inline"`
+	MelFBank        etensor.Float32 `view:"no-inline" desc:" mel scale transformation of dft_power, using triangular filters, resulting in the mel filterbank output -- the natural log of this is typically applied"`
+	MelFBankSegment etensor.Float32 `view:"no-inline" desc:" full segment's worth of mel feature-bank output"`
+	MelFilters      etensor.Float32 `view:"no-inline" desc:" the actual filters"`
+	MfccDct         etensor.Float32 `view:"no-inline" desc:" discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
+	MfccDctSegment  etensor.Float32 `view:"no-inline" desc:" full segment's worth of discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
+	GaborSpecs      []agabor2.Filter
+	GaborFilters    agabor2.FilterSet `viewif:"On=true" desc:"a set of gabor filters with same x and y dimensions"`
+	GaborGain       float32
 	GaborTsr        etensor.Float32   `view:"no-inline" desc:" raw output of Gabor -- full segment's worth of gabor steps"`
 	Segment         int               `inactive:"+" desc:" the current segment (i.e. one segments worth of samples) - zero is first segment"`
 	FftCoefs        []complex128      `view:"-" desc:" discrete fourier transform (fft) output complex representation"`
@@ -149,22 +150,35 @@ func (sp *SndProcess) Config() {
 	sp.Segment = -1
 	sp.MoreSegments = true
 
-	sp.Gabor.On = true
-	if sp.Gabor.On {
-		sp.Gabor.Defaults()
-		if sp.Params.SegmentMs == 200 {
-			sp.Gabor.TimeSize = 12
-			sp.Gabor.TimeStride = 4
-		} // otherwise assume 6 and 2 for 100ms segments
-		sp.Gabor.Init() // must call - even if no overrides
-		sp.GaborFilters.SetShape([]int{sp.Gabor.NFilters, sp.Gabor.FreqSize, sp.Gabor.TimeSize}, nil, nil)
-		sp.Gabor.RenderFilters(&sp.GaborFilters)
-		tsrX := ((sp.Params.SegmentSteps - 1) / sp.Gabor.TimeStride) + 1
-		tsrY := ((sp.Mel.FBank.NFilters - sp.Gabor.FreqSize - 1) / sp.Gabor.FreqStride) + 1
-		sp.GaborTsr.SetShape([]int{sp.Sound.Channels(), tsrY, tsrX, 2, sp.Gabor.NFilters}, nil, nil)
-		sp.GaborTsr.SetMetaData("odd-row", "true")
-		sp.GaborTsr.SetMetaData("grid-fill", ".9")
-	}
+	spec := agabor2.Filter{SizeX: 7, SizeY: 7, WaveLen: 2.0, Orientation: 0, SigmaWidth: 0.6, SigmaLength: 0.3, PhaseOffset: 0, CircleEdge: true}
+	sp.GaborSpecs = append(sp.GaborSpecs, spec)
+	spec = agabor2.Filter{SizeX: 7, SizeY: 7, WaveLen: 2.0, Orientation: 0, SigmaWidth: 0.3, SigmaLength: 0.1, PhaseOffset: 0, CircleEdge: true}
+	sp.GaborSpecs = append(sp.GaborSpecs, spec)
+	spec = agabor2.Filter{SizeX: 7, SizeY: 7, WaveLen: 2.0, Orientation: 0, SigmaWidth: 0.6, SigmaLength: 0.3, PhaseOffset: 0, CircleEdge: true}
+	sp.GaborSpecs = append(sp.GaborSpecs, spec)
+	spec = agabor2.Filter{SizeX: 7, SizeY: 7, WaveLen: 2.0, Orientation: 0, SigmaWidth: 0.3, SigmaLength: 0.1, PhaseOffset: 0, CircleEdge: true}
+	sp.GaborSpecs = append(sp.GaborSpecs, spec)
+	spec = agabor2.Filter{SizeX: 7, SizeY: 7, WaveLen: 2.0, Orientation: 45, SigmaWidth: 0.3, SigmaLength: 0.6, PhaseOffset: 0, CircleEdge: true}
+	sp.GaborSpecs = append(sp.GaborSpecs, spec)
+	spec = agabor2.Filter{SizeX: 7, SizeY: 7, WaveLen: 2.0, Orientation: 90, SigmaWidth: 0.3, SigmaLength: 0.6, PhaseOffset: 0, CircleEdge: true}
+	sp.GaborSpecs = append(sp.GaborSpecs, spec)
+	spec = agabor2.Filter{SizeX: 7, SizeY: 7, WaveLen: 2.0, Orientation: 135, SigmaWidth: 0.3, SigmaLength: 0.6, PhaseOffset: 0, CircleEdge: true}
+	sp.GaborSpecs = append(sp.GaborSpecs, spec)
+
+	// filter size is assumed to be consistent and taken from first in the spec list
+	sp.GaborFilters.SizeX = sp.GaborSpecs[0].SizeX
+	sp.GaborFilters.SizeY = sp.GaborSpecs[0].SizeY
+	x := sp.GaborFilters.SizeX
+	y := sp.GaborFilters.SizeY
+	n := len(sp.GaborSpecs)
+	sp.GaborFilters.Filters.SetShape([]int{n, x, y}, nil, nil)
+	agabor2.ToTensor(sp.GaborSpecs, &sp.GaborFilters.Filters)
+	tsrX := ((sp.Params.SegmentSteps - 1) / 2) + 1
+	tsrY := ((sp.Mel.FBank.NFilters - y - 1) / 2) + 1
+	sp.GaborTsr.SetShape([]int{sp.Sound.Channels(), tsrY, tsrX, 2, n}, nil, nil)
+	sp.GaborTsr.SetMetaData("odd-row", "true")
+	sp.GaborTsr.SetMetaData("grid-fill", ".9")
+	sp.GaborGain = 2.0
 
 	// 2 reasons for this code
 	// 1 - the amount of signal handed to the fft has a "border" (some extra signal) to avoid edge effects.
@@ -259,10 +273,8 @@ func (sp *SndProcess) ProcessStep(ch, step int) bool {
 
 // ApplyGabor convolves the gabor filters with the mel output
 func (sp *SndProcess) ApplyGabor() {
-	if sp.Gabor.On {
-		for ch := int(0); ch < sp.Sound.Channels(); ch++ {
-			agabor.Conv(ch, sp.Gabor, sp.Params.SegmentSteps, sp.Params.BorderSteps, &sp.GaborTsr, sp.Mel.FBank.NFilters, &sp.GaborFilters, &sp.MelFBankSegment)
-		}
+	for ch := int(0); ch < sp.Sound.Channels(); ch++ {
+		agabor2.Convolve(ch, sp.Params.SegmentSteps, sp.Params.BorderSteps, sp.Mel.FBank.NFilters, &sp.MelFBankSegment, sp.GaborFilters, 2, 2, sp.GaborGain, &sp.GaborTsr)
 	}
 }
 

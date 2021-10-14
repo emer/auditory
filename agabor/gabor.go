@@ -5,137 +5,134 @@
 package agabor
 
 import (
+	"fmt"
 	"github.com/emer/etable/etensor"
 	"github.com/goki/mat32"
+	"math"
 )
 
-// Gabor params for auditory gabor filters: 2d Gaussian envelope times a sinusoidal plane wave --
-// by default produces 2 phase asymmetric edge detector filters -- horizontal tuning is different from V1 version --
-// has elongated frequency-band specific tuning, not a parallel horizontal tuning -- and has multiple of these
-type Params struct {
-	On              bool    `desc:"use this gabor filtering of the time-frequency space filtered input (time in terms of steps of the DFT transform, and discrete frequency factors based on the FFT window and input sample rate)"`
-	TimeSize        int     `viewif:"On" def:"6,8,12,16,24" desc:" size of the filter in the time (horizontal) domain, in terms of steps of the underlying DFT filtering steps"`
-	FreqSize        int     `viewif:"On" def:"6,8,12,16,24" desc:" size of the filter in the frequency domain, in terms of discrete frequency factors based on the FFT window and input sample rate"`
-	TimeStride      int     `viewif:"On" desc:" spacing in the time (horizontal) domain, in terms of steps"`
-	FreqStride      int     `viewif:"On" desc:" spacing in the frequency (vertical) domain"`
-	WaveLen         float32 `viewif:"On" def:"1.5,2" desc:"wavelength of the sine waves in normalized units"`
-	SigmaLen        float32 `viewif:"On" def:"0.6" desc:"gaussian sigma for the length dimension (elongated axis perpendicular to the sine waves) -- normalized as a function of filter size in relevant dimension"`
-	SigmaWidth      float32 `viewif:"On" def:"0.3" desc:"gaussian sigma for the width dimension (in the direction of the sine waves) -- normalized as a function of filter size in relevant dimension"`
-	HorizSigmaLen   float32 `viewif:"On" def:"0.3" desc:"gaussian sigma for the length of special horizontal narrow-band filters -- normalized as a function of filter size in relevant dimension"`
-	HorizSigmaWidth float32 `viewif:"On" def:"0.1" desc:"gaussian sigma for the horizontal dimension for special horizontal narrow-band filters -- normalized as a function of filter size in relevant dimension"`
-	Gain            float32 `viewif:"On" def:"2" desc:"overall gain multiplier applied after gabor filtering -- only relevant if not using renormalization (otherwize it just gets renormed awaY"`
-	NHoriz          int     `viewif:"On" def:"4" desc:"number of horizontally-elongated,  pure time-domain, frequency-band specific filters to include, evenly spaced over the available frequency space for this filter set -- in addition to these, there are two diagonals (45, 135) and a vertically-elongated (wide frequency band) filter"`
-	NAng            int     `viewif:"On" def:"3" desc:"number of time-domain / frequency-band filters, typically there are two diagonals (45, 135) and a vertically-elongated (wide frequency band) filter"`
-	PhaseOffset     float32 `viewif:"On" def:"0,1.5708" desc:"offset for the sine phase -- default is an asymmetric sine wave -- can make it into a symmetric cosine gabor by using PI/2 = 1.5708"`
-	CircleEdge      bool    `viewif:"On" def:"true" desc:"cut off the filter (to zero) outside a circle of diameter filter_size -- makes the filter more radially symmetric"`
-	NFilters        int     `viewif:"On" desc:" total number of filters = 3 + NHoriz"`
+// Filter, a struct of gabor filter parameters
+type Filter struct {
+	SizeX       int     `desc:"size of the filter in X, for audition this is the time (horizontal) domain, in terms of steps of the underlying DFT filtering steps"`
+	SizeY       int     `desc:"size of the filter in Y, for audition this is the frequency domain, in terms of discrete frequency factors based on the FFT window and input sample rate"`
+	WaveLen     float32 `desc:"wavelength of the sine waves in normalized units, 1.5 and 2 are reasonable values"`
+	Orientation float32 `desc:"orientation of the gabor in degrees, e.g. 0, 45, 90, 135. Multiple of the same orientation will get evenly distributed with the filter matrix"`
+	SigmaLength float32 `def:"0.3" desc:"gaussian sigma for the length dimension (elongated axis perpendicular to the sine waves) -- normalized as a function of filter size in relevant dimension"`
+	SigmaWidth  float32 `def:"0.6" desc:"gaussian sigma for the width dimension (in the direction of the sine waves) -- normalized as a function of filter size in relevant dimension"`
+	PhaseOffset float32 `def:"0" desc:"offset for the sine phase -- default is an asymmetric sine wave -- can make it into a symmetric cosine gabor by using PI/2 = 1.5708"`
+	CircleEdge  bool    `desc:"cut off the filter (to zero) outside a circle of diameter filter_size -- makes the filter more radially symmetric - no default - suggest using true"`
 }
 
-//Defaults sets the default parameters
-func (ga *Params) Defaults() {
-	ga.On = true
-	ga.Gain = 2.0
-	ga.NHoriz = 4
-	ga.NAng = 3
-	ga.TimeSize = 7.0
-	ga.FreqSize = 7.0
-	ga.TimeStride = 2.0
-	ga.FreqStride = 2.0
-	ga.WaveLen = 2.0
-	ga.SigmaLen = 0.6
-	ga.SigmaWidth = 0.3
-	ga.HorizSigmaLen = 0.3
-	ga.HorizSigmaWidth = 0.6
-	ga.PhaseOffset = 0.0
-	ga.CircleEdge = true
+// FilterSet, a struct holding a set of gabor filters stored as a tensor. Though individual filters can vary in size, when used as a set they should all have the same size.
+type FilterSet struct {
+	SizeX   int             `desc:"size of each filter in X"`
+	SizeY   int             `desc:"size of each filter in Y"`
+	Filters etensor.Float32 `desc:"actual gabor filters"`
 }
 
-// must call even if not overriding params
-func (ga *Params) Init() {
-	ga.NFilters = ga.NAng + ga.NHoriz // 3 is number of angle filters
+// Defaults sets default values for any filter fields where 0 is not a reasonable value
+func (f *Filter) Defaults() {
+	if f.WaveLen == 0 {
+		f.WaveLen = 2
+		fmt.Println("filter spec missing value for WaveLen: setting to 2")
+	}
+	if f.SigmaLength == 0 {
+		f.SigmaLength = 0.6
+		fmt.Println("filter spec missing value for SigmaLength: setting to 0.6")
+	}
+	if f.SigmaWidth == 0 {
+		f.SigmaWidth = 0.3
+		fmt.Println("filter spec missing value for SigmaWidth: setting to 0.3")
+	}
 }
 
-// RenderFilters generates filters into the given matrix, which is formatted as: [ga.TimeSize_steps][ga.FreqSize][n_filters]
-func (ga *Params) RenderFilters(filters *etensor.Float32) {
-	ga.NFilters = ga.NAng + ga.NHoriz // in case user overrode defaults
-
-	ctrTime := (float32(ga.TimeSize) - 1) / 2.0
-	ctrFreq := (float32(ga.FreqSize) - 1) / 2.0
-	angInc := mat32.Pi / 4.0
-	radiusTime := float32(ga.TimeSize / 2.0)
-	radiusFreq := float32(ga.FreqSize / 2.0)
-
-	gs_len_eff := ga.SigmaLen * float32(ga.TimeSize)
-	gs_wd_eff := ga.SigmaWidth * float32(ga.FreqSize)
-	lenNorm := 1.0 / (2.0 * gs_len_eff * gs_len_eff)
-	widthNorm := 1.0 / (2.0 * gs_wd_eff * gs_wd_eff)
-	//lenNorm := 1.0 / (2.0 * ga.SigmaLen * ga.SigmaLen)
-	//widthNorm := 1.0 / (2.0 * ga.SigmaWidth * ga.SigmaWidth)
-
-	lenHorizNorm := 1.0 / (2.0 * ga.HorizSigmaLen * ga.HorizSigmaLen)
-	widthHorizNorm := 1.0 / (2.0 * ga.HorizSigmaWidth * ga.HorizSigmaWidth)
-
-	twoPiNorm := (2.0 * mat32.Pi) / ga.WaveLen
-	hCtrInc := (ga.FreqSize - 1) / (ga.NHoriz + 1)
-
-	fli := 0
-	for hi := 0; hi < ga.NHoriz; hi, fli = hi+1, fli+1 {
-		hCtrFreq := hCtrInc * (hi + 1)
-		//angF := float32(-2.0 * angInc)
-		for y := 0; y < ga.FreqSize; y++ {
-			var xf, yf, xfn, yfn float32
-			for x := 0; x < ga.TimeSize; x++ {
-				xf = float32(x) - ctrTime
-				yf = float32(y) - float32(hCtrFreq)
-				xfn = xf / radiusTime
-				yfn = yf / radiusFreq
-
-				dist := mat32.Hypot(xfn, yfn)
-				val := float32(0)
-				if !(ga.CircleEdge && dist > 1.0) {
-					nx := xfn*mat32.Cos(0) - yfn*mat32.Sin(0)
-					ny := yfn*mat32.Cos(0) + xfn*mat32.Sin(0)
-					gauss := mat32.Exp(-(widthHorizNorm*(nx*nx) + lenHorizNorm*(ny*ny)))
-					sinVal := mat32.Sin(twoPiNorm*ny + ga.PhaseOffset)
-					val = gauss * sinVal
-				}
-				filters.Set([]int{fli, y, x}, val)
-			}
+// ToTensor generates filters into the tensor passed by caller
+func ToTensor(specs []Filter, filters *etensor.Float32) { // i is filter index in tensor
+	nhf := 0 // number of horizontal filters
+	nvf := 0 // number of vertical filters
+	for _, f := range specs {
+		if f.Orientation == 0 {
+			nhf++
+		} else if f.Orientation == 90 {
+			nvf++
 		}
 	}
 
-	// fli should be ga.Horiz - 1 at this point
-	for ang := 1; ang < ga.NAng+1; ang, fli = ang+1, fli+1 {
-		angF := float32(-ang) * float32(angInc)
-		var xf, yf, xfn, yfn float32
-		for y := 0; y < ga.FreqSize; y++ {
-			for x := 0; x < ga.TimeSize; x++ {
-				xf = float32(x) - ctrTime
-				yf = float32(y) - ctrFreq
-				xfn = xf / radiusTime
-				yfn = yf / radiusFreq
+	sizeX := specs[0].SizeX
+	sizeY := specs[0].SizeY
+	radiusX := float32(sizeX / 2.0)
+	radiusY := float32(sizeY / 2.0)
+
+	// need filter center and count of horizontal and vertical filters to properly distribute them
+	ctrX := (float32(sizeX - 1)) / 2.0
+	ctrY := (float32(sizeY - 1)) / 2.0
+	hCtrInc := (sizeY - 1) / (nhf + 1)
+	vCtrInc := (sizeX - 1) / (nvf + 1)
+
+	hCnt := 0 // the current count of 0 degree filters generated
+	vCnt := 0 // the current count of 90 degree filters generated
+	for i, f := range specs {
+		f.Defaults()
+		twoPiNorm := (2.0 * mat32.Pi) / f.WaveLen
+		var lNorm float32
+		var wNorm float32
+		if f.Orientation == 0 {
+			lNorm = 1.0 / (2.0 * f.SigmaLength * f.SigmaLength)
+			wNorm = 1.0 / (2.0 * f.SigmaWidth * f.SigmaWidth)
+		} else {
+			l := f.SigmaLength * float32(f.SizeX)
+			w := f.SigmaWidth * float32(f.SizeY)
+			lNorm = 1.0 / (2.0 * l * l)
+			wNorm = 1.0 / (2.0 * w * w)
+		}
+
+		hPos := 0
+		vPos := 0
+		if f.Orientation == 0 {
+			hPos = hCtrInc * (hCnt + 1)
+			hCnt++
+		}
+		if f.Orientation == 90 {
+			vPos = vCtrInc * (vCnt + 1)
+			vCnt++
+		}
+
+		for y := 0; y < f.SizeY; y++ {
+			var xf, yf, xfn, yfn float32
+			for x := 0; x < f.SizeX; x++ {
+				xf = float32(x) - ctrX
+				yf = float32(y) - ctrY
+				if f.Orientation == 0 {
+					yf = float32(y) - float32(hPos)
+				}
+				if f.Orientation == 90 {
+					xf = float32(x) - float32(vPos)
+				}
+				xfn = xf / radiusX
+				yfn = yf / radiusY
 
 				dist := mat32.Hypot(xfn, yfn)
 				val := float32(0)
-				if !(ga.CircleEdge && dist > 1.0) {
-					nx := xfn*mat32.Cos(angF) - yfn*mat32.Sin(angF)
-					ny := yfn*mat32.Cos(angF) + xfn*mat32.Sin(angF)
-					gauss := mat32.Exp(-(lenNorm*(nx*nx) + widthNorm*(ny*ny)))
-					sinVal := mat32.Sin(twoPiNorm*ny + ga.PhaseOffset)
+				if !(f.CircleEdge && dist > 1.0) {
+					radians := f.Orientation * math.Pi / 180
+					nx := xfn*mat32.Cos(radians) - yfn*mat32.Sin(radians)
+					ny := yfn*mat32.Cos(radians) + xfn*mat32.Sin(radians)
+					gauss := mat32.Exp(-(wNorm*(nx*nx) + lNorm*(ny*ny)))
+					sinVal := mat32.Sin(twoPiNorm*ny + f.PhaseOffset)
 					val = gauss * sinVal
 				}
-				filters.Set([]int{fli, y, x}, val)
+				filters.Set([]int{i, y, x}, val)
 			}
 		}
 	}
 
 	// renorm each half
-	for fli := 0; fli < ga.NFilters; fli++ {
+	for i := 0; i < filters.Dim(0); i++ {
 		posSum := float32(0)
 		negSum := float32(0)
-		for y := 0; y < ga.FreqSize; y++ {
-			for x := 0; x < ga.TimeSize; x++ {
-				val := float32(filters.Value([]int{fli, y, x}))
+		for y := 0; y < sizeY; y++ {
+			for x := 0; x < sizeX; x++ {
+				val := float32(filters.Value([]int{i, y, x}))
 				if val > 0 {
 					posSum += val
 				} else if val < 0 {
@@ -145,43 +142,43 @@ func (ga *Params) RenderFilters(filters *etensor.Float32) {
 		}
 		posNorm := 1.0 / posSum
 		negNorm := -1.0 / negSum
-		for y := 0; y < ga.FreqSize; y++ {
-			for x := 0; x < ga.TimeSize; x++ {
-				val := filters.Value([]int{fli, y, x})
+		for y := 0; y < sizeY; y++ {
+			for x := 0; x < sizeX; x++ {
+				val := filters.Value([]int{i, y, x})
 				if val > 0.0 {
 					val *= posNorm
 				} else if val < 0.0 {
 					val *= negNorm
 				}
-				filters.Set([]int{fli, y, x}, val)
+				filters.Set([]int{i, y, x}, val)
 			}
 		}
 	}
 }
 
-// Conv processes input using filters that operate over an entire segment of samples
-func Conv(ch int, gbor Params, segmentSteps int, borderSteps int, rawOut *etensor.Float32, melFilterCount int, gborFilters *etensor.Float32, melData *etensor.Float32) {
+// Convolve processes input using filters that operate over an entire segment of samples
+func Convolve(ch int, segmentSteps int, borderSteps int, melFilterCount int, melData *etensor.Float32, filters FilterSet, strideX int, strideY int, gain float32, rawOut *etensor.Float32) {
 	// just set tMin to zero - any offset should be handled by the calling code
 	tMin := 0
-	tMax1 := rawOut.Shp[2] * gbor.TimeStride
-	tMax2 := melData.Shp[0] - gbor.TimeStride - 1
+	tMax1 := rawOut.Shp[2] * strideX
+	tMax2 := melData.Shp[0] - strideX - 1
 	tMax := int(mat32.Min32i(int32(tMax1), int32(tMax2)))
 
 	fMin := 0
-	fMax1 := rawOut.Shp[1] * gbor.FreqStride      // limit frequency strides so we don't overrun the output tensor
-	fMax2 := melData.Shp[1] - gbor.FreqStride - 1 // limit strides based on melData in frequency dimension
+	fMax1 := rawOut.Shp[1] * strideY      // limit frequency strides so we don't overrun the output tensor
+	fMax2 := melData.Shp[1] - strideY - 1 // limit strides based on melData in frequency dimension
 	fMax := int(mat32.Min32i(int32(fMax1), int32(fMax2)))
 
 	tIdx := 0
-	for s := tMin; s < tMax; s, tIdx = s+gbor.TimeStride, tIdx+1 {
+	for s := tMin; s < tMax; s, tIdx = s+strideX, tIdx+1 {
 		fIdx := 0
-		for flt := fMin; flt < fMax; flt, fIdx = flt+gbor.FreqStride, fIdx+1 {
-			nf := gbor.NFilters
+		for flt := fMin; flt < fMax; flt, fIdx = flt+strideY, fIdx+1 {
+			nf := filters.Filters.Dim(0)
 			for fi := int(0); fi < nf; fi++ {
 				fSum := float32(0.0)
-				for ff := int(0); ff < gbor.FreqSize; ff++ {
-					for ft := int(0); ft < gbor.TimeSize; ft++ {
-						fVal := gborFilters.Value([]int{fi, ff, ft})
+				for ff := int(0); ff < filters.SizeY; ff++ {
+					for ft := int(0); ft < filters.SizeX; ft++ {
+						fVal := filters.Filters.Value([]int{fi, ff, ft})
 						iVal := melData.Value([]int{s + ft, flt + ff, ch})
 						if mat32.IsNaN(iVal) {
 							iVal = .5
@@ -190,7 +187,7 @@ func Conv(ch int, gbor Params, segmentSteps int, borderSteps int, rawOut *etenso
 					}
 				}
 				pos := fSum >= 0.0
-				act := gbor.Gain * mat32.Abs(fSum)
+				act := gain * mat32.Abs(fSum)
 				if pos {
 					rawOut.SetFloat([]int{ch, fIdx, tIdx, 0, fi}, float64(act))
 					rawOut.SetFloat([]int{ch, fIdx, tIdx, 1, fi}, 0)
