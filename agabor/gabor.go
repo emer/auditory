@@ -63,14 +63,14 @@ func ToTensor(specs []Filter, set *FilterSet) { // i is filter index in tensor
 
 	sx := set.SizeX
 	sy := set.SizeY
-	radiusX := float32(sx / 2.0)
-	radiusY := float32(sy / 2.0)
+	radiusX := float32(sx) / 2.0
+	radiusY := float32(sy) / 2.0
 
 	// need filter center and count of horizontal and vertical filters to properly distribute them
 	ctrX := float32(sx-1) / 2.0
 	ctrY := float32(sy-1) / 2.0
-	hCtrInc := (sy - 1) / (nhf + 1)
-	vCtrInc := (sx - 1) / (nvf + 1)
+	hCtrInc := float32(sy-1) / float32(nhf+1)
+	vCtrInc := float32(sx-1) / float32(nvf+1)
 
 	hCnt := 0 // the current count of 0 degree filters generated
 	vCnt := 0 // the current count of 90 degree filters generated
@@ -89,14 +89,14 @@ func ToTensor(specs []Filter, set *FilterSet) { // i is filter index in tensor
 			wNorm = 1.0 / (2.0 * w * w)
 		}
 
-		hPos := 0
-		vPos := 0
+		hPos := float32(0)
+		vPos := float32(0)
 		if f.Orientation == 0 {
-			hPos = hCtrInc * (hCnt + 1)
+			hPos = hCtrInc * float32(hCnt+1)
 			hCnt++
 		}
 		if f.Orientation == 90 {
-			vPos = vCtrInc * (vCnt + 1)
+			vPos = vCtrInc * float32(vCnt+1)
 			vCnt++
 		}
 
