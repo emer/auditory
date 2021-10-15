@@ -27,7 +27,9 @@ type Filter struct {
 type FilterSet struct {
 	SizeX   int             `desc:"size of each filter in X"`
 	SizeY   int             `desc:"size of each filter in Y"`
-	Gain    float32         `desc:""`
+	StrideX int             `desc:"how far to move the filter in X each step"`
+	StrideY int             `desc:"how far to move the filter in Y each step"`
+	Gain    float32         `desc:"overall gain multiplier applied after gabor filtering -- only relevant if not using renormalization (otherwize it just gets renormed away)"`
 	Filters etensor.Float32 `desc:"actual gabor filters"`
 }
 
@@ -59,16 +61,16 @@ func ToTensor(specs []Filter, set *FilterSet) { // i is filter index in tensor
 		}
 	}
 
-	sizeX := set.SizeX
-	sizeY := set.SizeY
-	radiusX := float32(sizeX / 2.0)
-	radiusY := float32(sizeY / 2.0)
+	sx := set.SizeX
+	sy := set.SizeY
+	radiusX := float32(sx / 2.0)
+	radiusY := float32(sy / 2.0)
 
 	// need filter center and count of horizontal and vertical filters to properly distribute them
-	ctrX := (float32(sizeX - 1)) / 2.0
-	ctrY := (float32(sizeY - 1)) / 2.0
-	hCtrInc := (sizeY - 1) / (nhf + 1)
-	vCtrInc := (sizeX - 1) / (nvf + 1)
+	ctrX := float32(sx-1) / 2.0
+	ctrY := float32(sy-1) / 2.0
+	hCtrInc := (sy - 1) / (nhf + 1)
+	vCtrInc := (sx - 1) / (nvf + 1)
 
 	hCnt := 0 // the current count of 0 degree filters generated
 	vCnt := 0 // the current count of 90 degree filters generated
@@ -81,8 +83,8 @@ func ToTensor(specs []Filter, set *FilterSet) { // i is filter index in tensor
 			lNorm = 1.0 / (2.0 * f.SigmaLength * f.SigmaLength)
 			wNorm = 1.0 / (2.0 * f.SigmaWidth * f.SigmaWidth)
 		} else {
-			l := f.SigmaLength * float32(f.SizeX)
-			w := f.SigmaWidth * float32(f.SizeY)
+			l := f.SigmaLength * float32(sx)
+			w := f.SigmaWidth * float32(sy)
 			lNorm = 1.0 / (2.0 * l * l)
 			wNorm = 1.0 / (2.0 * w * w)
 		}
@@ -98,9 +100,9 @@ func ToTensor(specs []Filter, set *FilterSet) { // i is filter index in tensor
 			vCnt++
 		}
 
-		for y := 0; y < f.SizeY; y++ {
+		for y := 0; y < sy; y++ {
 			var xf, yf, xfn, yfn float32
-			for x := 0; x < f.SizeX; x++ {
+			for x := 0; x < sx; x++ {
 				xf = float32(x) - ctrX
 				yf = float32(y) - ctrY
 				if f.Orientation == 0 {
@@ -131,8 +133,8 @@ func ToTensor(specs []Filter, set *FilterSet) { // i is filter index in tensor
 	for i := 0; i < set.Filters.Dim(0); i++ {
 		posSum := float32(0)
 		negSum := float32(0)
-		for y := 0; y < sizeY; y++ {
-			for x := 0; x < sizeX; x++ {
+		for y := 0; y < sy; y++ {
+			for x := 0; x < sx; x++ {
 				val := float32(set.Filters.Value([]int{i, y, x}))
 				if val > 0 {
 					posSum += val
@@ -143,8 +145,8 @@ func ToTensor(specs []Filter, set *FilterSet) { // i is filter index in tensor
 		}
 		posNorm := 1.0 / posSum
 		negNorm := -1.0 / negSum
-		for y := 0; y < sizeY; y++ {
-			for x := 0; x < sizeX; x++ {
+		for y := 0; y < sy; y++ {
+			for x := 0; x < sx; x++ {
 				val := set.Filters.Value([]int{i, y, x})
 				if val > 0.0 {
 					val *= posNorm
@@ -158,22 +160,22 @@ func ToTensor(specs []Filter, set *FilterSet) { // i is filter index in tensor
 }
 
 // Convolve processes input using filters that operate over an entire segment of samples
-func Convolve(ch int, segmentSteps int, borderSteps int, melFilterCount int, melData *etensor.Float32, filters FilterSet, strideX int, strideY int, rawOut *etensor.Float32) {
+func Convolve(ch int, segmentSteps int, borderSteps int, melFilterCount int, melData *etensor.Float32, filters FilterSet, rawOut *etensor.Float32) {
 	// just set tMin to zero - any offset should be handled by the calling code
 	tMin := 0
-	tMax1 := rawOut.Shp[2] * strideX
-	tMax2 := melData.Shp[0] - strideX - 1
+	tMax1 := rawOut.Shp[2] * filters.StrideX
+	tMax2 := melData.Shp[0] - filters.StrideX - 1
 	tMax := int(mat32.Min32i(int32(tMax1), int32(tMax2)))
 
 	fMin := 0
-	fMax1 := rawOut.Shp[1] * strideY      // limit frequency strides so we don't overrun the output tensor
-	fMax2 := melData.Shp[1] - strideY - 1 // limit strides based on melData in frequency dimension
+	fMax1 := rawOut.Shp[1] * filters.StrideY      // limit frequency strides so we don't overrun the output tensor
+	fMax2 := melData.Shp[1] - filters.StrideY - 1 // limit strides based on melData in frequency dimension
 	fMax := int(mat32.Min32i(int32(fMax1), int32(fMax2)))
 
 	tIdx := 0
-	for s := tMin; s < tMax; s, tIdx = s+strideX, tIdx+1 {
+	for s := tMin; s < tMax; s, tIdx = s+filters.StrideX, tIdx+1 {
 		fIdx := 0
-		for flt := fMin; flt < fMax; flt, fIdx = flt+strideY, fIdx+1 {
+		for flt := fMin; flt < fMax; flt, fIdx = flt+filters.StrideY, fIdx+1 {
 			nf := filters.Filters.Dim(0)
 			for fi := int(0); fi < nf; fi++ {
 				fSum := float32(0.0)

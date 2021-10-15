@@ -149,8 +149,8 @@ func (sp *SndProcess) Config() {
 	sp.Segment = -1
 	sp.MoreSegments = true
 
-	sp.GaborSpecs = nil
-	spec := agabor.Filter{SizeX: 7, SizeY: 7, WaveLen: 2.0, Orientation: 0, SigmaWidth: 0.6, SigmaLength: 0.3, PhaseOffset: 0, CircleEdge: true}
+	sp.GaborSpecs = nil // in case there are some specs already
+	spec := agabor.Filter{SizeX: 12, SizeY: 7, WaveLen: 2.0, Orientation: 0, SigmaWidth: 0.6, SigmaLength: 0.3, PhaseOffset: 0, CircleEdge: true}
 	sp.GaborSpecs = append(sp.GaborSpecs, spec)
 	spec = agabor.Filter{SizeX: 7, SizeY: 7, WaveLen: 2.0, Orientation: 0, SigmaWidth: 0.3, SigmaLength: 0.1, PhaseOffset: 0, CircleEdge: true}
 	sp.GaborSpecs = append(sp.GaborSpecs, spec)
@@ -168,12 +168,15 @@ func (sp *SndProcess) Config() {
 	// filter size is assumed to be consistent and taken from first in the spec list
 	sp.GaborFilters.SizeX = sp.GaborSpecs[0].SizeX
 	sp.GaborFilters.SizeY = sp.GaborSpecs[0].SizeY
-	sp.GaborFilters.Gain = 0.5
+	sp.GaborFilters.StrideX = 1
+	sp.GaborFilters.StrideY = 1
+	sp.GaborFilters.Gain = 2
 	x := sp.GaborFilters.SizeX
 	y := sp.GaborFilters.SizeY
 	n := len(sp.GaborSpecs)
 	sp.GaborFilters.Filters.SetShape([]int{n, x, y}, nil, nil)
 	agabor.ToTensor(sp.GaborSpecs, &sp.GaborFilters)
+
 	tsrX := ((sp.Params.SegmentSteps - 1) / 2) + 1
 	tsrY := ((sp.Mel.FBank.NFilters - y - 1) / 2) + 1
 	sp.GaborTsr.SetShape([]int{sp.Sound.Channels(), tsrY, tsrX, 2, n}, nil, nil)
@@ -274,7 +277,7 @@ func (sp *SndProcess) ProcessStep(ch, step int) bool {
 // ApplyGabor convolves the gabor filters with the mel output
 func (sp *SndProcess) ApplyGabor() {
 	for ch := int(0); ch < sp.Sound.Channels(); ch++ {
-		agabor.Convolve(ch, sp.Params.SegmentSteps, sp.Params.BorderSteps, sp.Mel.FBank.NFilters, &sp.MelFBankSegment, sp.GaborFilters, 2, 2, &sp.GaborTsr)
+		agabor.Convolve(ch, sp.Params.SegmentSteps, sp.Params.BorderSteps, sp.Mel.FBank.NFilters, &sp.MelFBankSegment, sp.GaborFilters, &sp.GaborTsr)
 	}
 }
 
