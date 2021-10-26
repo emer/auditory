@@ -25,12 +25,13 @@ type Filter struct {
 
 // FilterSet, a struct holding a set of gabor filters stored as a tensor. Though individual filters can vary in size, when used as a set they should all have the same size.
 type FilterSet struct {
-	SizeX   int             `desc:"size of each filter in X"`
-	SizeY   int             `desc:"size of each filter in Y"`
-	StrideX int             `desc:"how far to move the filter in X each step"`
-	StrideY int             `desc:"how far to move the filter in Y each step"`
-	Gain    float32         `desc:"overall gain multiplier applied after gabor filtering -- only relevant if not using renormalization (otherwize it just gets renormed away)"`
-	Filters etensor.Float32 `desc:"actual gabor filters"`
+	SizeX      int             `desc:"size of each filter in X"`
+	SizeY      int             `desc:"size of each filter in Y"`
+	StrideX    int             `desc:"how far to move the filter in X each step"`
+	StrideY    int             `desc:"how far to move the filter in Y each step"`
+	Gain       float32         `desc:"overall gain multiplier applied after gabor filtering -- only relevant if not using renormalization (otherwize it just gets renormed away)"`
+	Distribute bool            `desc:"if multiple horiz or vertical distribute evenly"`
+	Filters    etensor.Float32 `desc:"actual gabor filters"`
 }
 
 // Defaults sets default values for any filter fields where 0 is not a reasonable value
@@ -50,15 +51,20 @@ func (f *Filter) Defaults() {
 }
 
 // ToTensor generates filters into the tensor passed by caller
-func ToTensor(specs []Filter, set *FilterSet) { // i is filter index in tensor
+func ToTensor(specs []Filter, set *FilterSet) { // i is filter index in
 	nhf := 0 // number of horizontal filters
 	nvf := 0 // number of vertical filters
-	for _, f := range specs {
-		if f.Orientation == 0 {
-			nhf++
-		} else if f.Orientation == 90 {
-			nvf++
+	if set.Distribute == true {
+		for _, f := range specs {
+			if f.Orientation == 0 {
+				nhf++
+			} else if f.Orientation == 90 {
+				nvf++
+			}
 		}
+	} else {
+		nhf = 1
+		nvf = 1
 	}
 
 	sx := set.SizeX
@@ -71,7 +77,7 @@ func ToTensor(specs []Filter, set *FilterSet) { // i is filter index in tensor
 	ctrY := float32(sy-1) / 2.0
 	hCtrInc := float32(sy-1) / float32(nhf+1)
 	vCtrInc := float32(sx-1) / float32(nvf+1)
-
+	//
 	hCnt := 0 // the current count of 0 degree filters generated
 	vCnt := 0 // the current count of 90 degree filters generated
 	for i, f := range specs {
@@ -91,13 +97,18 @@ func ToTensor(specs []Filter, set *FilterSet) { // i is filter index in tensor
 
 		hPos := float32(0)
 		vPos := float32(0)
-		if f.Orientation == 0 {
+		if set.Distribute == true {
+			if f.Orientation == 0 {
+				hPos = hCtrInc * float32(hCnt+1)
+				hCnt++
+			}
+			if f.Orientation == 90 {
+				vPos = vCtrInc * float32(vCnt+1)
+				vCnt++
+			}
+		} else {
 			hPos = hCtrInc * float32(hCnt+1)
-			hCnt++
-		}
-		if f.Orientation == 90 {
 			vPos = vCtrInc * float32(vCnt+1)
-			vCnt++
 		}
 
 		for y := 0; y < sy; y++ {
