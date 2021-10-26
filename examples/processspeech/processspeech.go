@@ -152,7 +152,7 @@ func (sp *SndProcess) Config() {
 	sp.GaborSpecs = nil // in case there are some specs already
 	spec := agabor.Filter{SizeX: 7, SizeY: 7, WaveLen: 2.0, Orientation: 0, SigmaWidth: 0.6, SigmaLength: 0.2, PhaseOffset: 0, CircleEdge: true}
 	sp.GaborSpecs = append(sp.GaborSpecs, spec)
-	spec = agabor.Filter{SizeX: 7, SizeY: 7, WaveLen: 2.0, Orientation: 0, SigmaWidth: 0.6, SigmaLength: 0.2, PhaseOffset: 0, CircleEdge: true}
+	spec = agabor.Filter{SizeX: 7, SizeY: 7, WaveLen: 2.0, Orientation: 0, SigmaWidth: 0.6, SigmaLength: 0.2, PhaseOffset: 1.5708, CircleEdge: true}
 	sp.GaborSpecs = append(sp.GaborSpecs, spec)
 	spec = agabor.Filter{SizeX: 7, SizeY: 7, WaveLen: 2.0, Orientation: 45, SigmaWidth: 0.3, SigmaLength: 0.6, PhaseOffset: 0, CircleEdge: true}
 	sp.GaborSpecs = append(sp.GaborSpecs, spec)
@@ -167,6 +167,7 @@ func (sp *SndProcess) Config() {
 	sp.GaborFilters.StrideX = 1
 	sp.GaborFilters.StrideY = 1
 	sp.GaborFilters.Gain = 2
+	sp.GaborFilters.Distribute = false // the 0 orientation filters will both be centered
 	x := sp.GaborFilters.SizeX
 	y := sp.GaborFilters.SizeY
 	n := len(sp.GaborSpecs)
