@@ -6,6 +6,7 @@ package agabor
 
 import (
 	"fmt"
+	"github.com/emer/etable/etable"
 	"github.com/emer/etable/etensor"
 	"github.com/goki/mat32"
 	"math"
@@ -31,7 +32,7 @@ type FilterSet struct {
 	StrideY    int             `desc:"how far to move the filter in Y each step"`
 	Gain       float32         `desc:"overall gain multiplier applied after gabor filtering -- only relevant if not using renormalization (otherwize it just gets renormed away)"`
 	Distribute bool            `desc:"if multiple horiz or vertical distribute evenly"`
-	Filters    etensor.Float32 `desc:"actual gabor filters"`
+	Filters    etensor.Float64 `desc:"actual gabor filters"`
 }
 
 // Defaults sets default values for any filter fields where 0 is not a reasonable value
@@ -126,14 +127,14 @@ func ToTensor(specs []Filter, set *FilterSet) { // i is filter index in
 				yfn = yf / radiusY
 
 				dist := mat32.Hypot(xfn, yfn)
-				val := float32(0)
+				val := float64(0)
 				if !(f.CircleEdge && dist > 1.0) {
 					radians := f.Orientation * math.Pi / 180
 					nx := xfn*mat32.Cos(radians) - yfn*mat32.Sin(radians)
 					ny := yfn*mat32.Cos(radians) + xfn*mat32.Sin(radians)
 					gauss := mat32.Exp(-(wNorm*(nx*nx) + lNorm*(ny*ny)))
 					sinVal := mat32.Sin(twoPiNorm*ny + f.PhaseOffset)
-					val = gauss * sinVal
+					val = float64(gauss * sinVal)
 				}
 				set.Filters.Set([]int{i, y, x}, val)
 			}
@@ -142,15 +143,15 @@ func ToTensor(specs []Filter, set *FilterSet) { // i is filter index in
 
 	// renorm each half
 	for i := 0; i < set.Filters.Dim(0); i++ {
-		posSum := float32(0)
-		negSum := float32(0)
+		posSum := float64(0)
+		negSum := float64(0)
 		for y := 0; y < sy; y++ {
 			for x := 0; x < sx; x++ {
 				val := float32(set.Filters.Value([]int{i, y, x}))
 				if val > 0 {
-					posSum += val
+					posSum += float64(val)
 				} else if val < 0 {
-					negSum += val
+					negSum += float64(val)
 				}
 			}
 		}
@@ -193,11 +194,11 @@ func Convolve(ch int, segmentSteps int, borderSteps int, melFilterCount int, mel
 				for ff := int(0); ff < filters.SizeY; ff++ {
 					for ft := int(0); ft < filters.SizeX; ft++ {
 						fVal := filters.Filters.Value([]int{fi, ff, ft})
-						iVal := melData.Value([]int{s + ft, flt + ff, ch})
-						if mat32.IsNaN(iVal) {
+						iVal := float64(melData.Value([]int{s + ft, flt + ff, ch}))
+						if math.IsNaN(iVal) {
 							iVal = .5
 						}
-						fSum += fVal * iVal
+						fSum += float32(fVal * iVal)
 					}
 				}
 				pos := fSum >= 0.0
@@ -212,4 +213,14 @@ func Convolve(ch int, segmentSteps int, borderSteps int, melFilterCount int, mel
 			}
 		}
 	}
+}
+
+// ToTable renders filters into the given etable.Table
+// This is useful for display and validation purposes.
+func (fs *FilterSet) ToTable(set FilterSet, tab *etable.Table) {
+	n := fs.Filters.Dim(0)
+	tab.SetFromSchema(etable.Schema{
+		{"Filter", etensor.FLOAT32, []int{1, fs.SizeX, fs.SizeY}, []string{"Filter", "Y", "X"}},
+	}, n)
+	tab.Cols[0].SetFloats(set.Filters.Values)
 }

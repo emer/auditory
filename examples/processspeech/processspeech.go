@@ -7,6 +7,7 @@ package main
 import (
 	"fmt"
 	"github.com/emer/auditory/agabor"
+	"github.com/emer/etable/etable"
 	"log"
 	"math"
 	"os"
@@ -68,22 +69,23 @@ func (sp *SndProcess) ParamDefaults() {
 type SndProcess struct {
 	Sound           sound.Wave
 	Params          Params
-	Signal          etensor.Float32 `inactive:"+" desc:" the full sound input obtained from the sound input - plus any added padding"`
-	Samples         etensor.Float32 `inactive:"+" desc:" a window's worth of raw sound input, one channel at a time"`
-	Dft             dft.Params      `view:"no-inline"`
-	Power           etensor.Float32 `view:"-" desc:" power of the dft, up to the nyquist limit frequency (1/2 input.WinSamples)"`
-	LogPower        etensor.Float32 `view:"-" desc:" log power of the dft, up to the nyquist liit frequency (1/2 input.WinSamples)"`
-	PowerSegment    etensor.Float32 `view:"no-inline" desc:" full segment's worth of power of the dft, up to the nyquist limit frequency (1/2 input.WinSamples)"`
-	LogPowerSegment etensor.Float32 `view:"no-inline" desc:" full segment's worth of log power of the dft, up to the nyquist limit frequency (1/2 input.WinSamples)"`
-	Mel             mel.Params      `view:"no-inline"`
-	MelFBank        etensor.Float32 `view:"no-inline" desc:" mel scale transformation of dft_power, using triangular filters, resulting in the mel filterbank output -- the natural log of this is typically applied"`
-	MelFBankSegment etensor.Float32 `view:"no-inline" desc:" full segment's worth of mel feature-bank output"`
-	MelFilters      etensor.Float32 `view:"no-inline" desc:" the actual filters"`
-	MfccDct         etensor.Float32 `view:"no-inline" desc:" discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
-	MfccDctSegment  etensor.Float32 `view:"no-inline" desc:" full segment's worth of discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
-	GaborSpecs      []agabor.Filter
+	Signal          etensor.Float32   `inactive:"+" desc:" the full sound input obtained from the sound input - plus any added padding"`
+	Samples         etensor.Float32   `inactive:"+" desc:" a window's worth of raw sound input, one channel at a time"`
+	Dft             dft.Params        `view:"no-inline"`
+	Power           etensor.Float32   `view:"-" desc:" power of the dft, up to the nyquist limit frequency (1/2 input.WinSamples)"`
+	LogPower        etensor.Float32   `view:"-" desc:" log power of the dft, up to the nyquist liit frequency (1/2 input.WinSamples)"`
+	PowerSegment    etensor.Float32   `view:"no-inline" desc:" full segment's worth of power of the dft, up to the nyquist limit frequency (1/2 input.WinSamples)"`
+	LogPowerSegment etensor.Float32   `view:"no-inline" desc:" full segment's worth of log power of the dft, up to the nyquist limit frequency (1/2 input.WinSamples)"`
+	Mel             mel.Params        `view:"no-inline"`
+	MelFBank        etensor.Float32   `view:"no-inline" desc:" mel scale transformation of dft_power, using triangular filters, resulting in the mel filterbank output -- the natural log of this is typically applied"`
+	MelFBankSegment etensor.Float32   `view:"no-inline" desc:" full segment's worth of mel feature-bank output"`
+	MelFilters      etensor.Float32   `view:"no-inline" desc:" the actual filters"`
+	MfccDct         etensor.Float32   `view:"no-inline" desc:" discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
+	MfccDctSegment  etensor.Float32   `view:"no-inline" desc:" full segment's worth of discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
+	GaborSpecs      []agabor.Filter   `view:" no-in line"`
 	GaborFilters    agabor.FilterSet  `viewif:"On=true" desc:"a set of gabor filters with same x and y dimensions"`
 	GaborTsr        etensor.Float32   `view:"no-inline" desc:" raw output of Gabor -- full segment's worth of gabor steps"`
+	GaborTab        etable.Table      `view:"no-inline" desc:"gabor filter table (view only)"`
 	Segment         int               `inactive:"+" desc:" the current segment (i.e. one segments worth of samples) - zero is first segment"`
 	FftCoefs        []complex128      `view:"-" desc:" discrete fourier transform (fft) output complex representation"`
 	Fft             *fourier.CmplxFFT `view:"-" desc:" struct for fast fourier transform"`
@@ -173,6 +175,7 @@ func (sp *SndProcess) Config() {
 	n := len(sp.GaborSpecs)
 	sp.GaborFilters.Filters.SetShape([]int{n, y, x}, nil, nil)
 	agabor.ToTensor(sp.GaborSpecs, &sp.GaborFilters)
+	sp.GaborFilters.ToTable(sp.GaborFilters, &sp.GaborTab) // note: view only, testing
 
 	tsrX := ((sp.Params.SegmentSteps - 1) / 2) + 1
 	tsrY := ((sp.Mel.FBank.NFilters - y - 1) / 2) + 1
