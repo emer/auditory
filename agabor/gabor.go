@@ -22,6 +22,7 @@ type Filter struct {
 	SigmaWidth  float32 `def:"0.6" desc:"gaussian sigma for the width dimension (in the direction of the sine waves) -- normalized as a function of filter size in relevant dimension"`
 	PhaseOffset float32 `def:"0" desc:"offset for the sine phase -- default is an asymmetric sine wave -- can make it into a symmetric cosine gabor by using PI/2 = 1.5708"`
 	CircleEdge  bool    `desc:"cut off the filter (to zero) outside a circle of diameter filter_size -- makes the filter more radially symmetric - no default - suggest using true"`
+	Circular    bool    `desc:"is the gabor circular, no orientation?"`
 }
 
 // FilterSet, a struct holding a set of gabor filters stored as a tensor. Though individual filters can vary in size, when used as a set they should all have the same size.
@@ -112,31 +113,54 @@ func ToTensor(specs []Filter, set *FilterSet) { // i is filter index in
 			vPos = vCtrInc * float32(vCnt+1)
 		}
 
-		for y := 0; y < sy; y++ {
-			var xf, yf, xfn, yfn float32
-			for x := 0; x < sx; x++ {
-				xf = float32(x) - ctrX
-				yf = float32(y) - ctrY
-				if f.Orientation == 0 {
-					yf = float32(y) - float32(hPos)
-				}
-				if f.Orientation == 90 {
-					xf = float32(x) - float32(vPos)
-				}
-				xfn = xf / radiusX
-				yfn = yf / radiusY
+		if f.Circular == false {
+			for y := 0; y < sy; y++ {
+				var xf, yf, xfn, yfn float32
+				for x := 0; x < sx; x++ {
+					xf = float32(x) - ctrX
+					yf = float32(y) - ctrY
+					if f.Orientation == 0 {
+						yf = float32(y) - float32(hPos)
+					}
+					if f.Orientation == 90 {
+						xf = float32(x) - float32(vPos)
+					}
+					xfn = xf / radiusX
+					yfn = yf / radiusY
 
-				dist := mat32.Hypot(xfn, yfn)
-				val := float64(0)
-				if !(f.CircleEdge && dist > 1.0) {
-					radians := f.Orientation * math.Pi / 180
-					nx := xfn*mat32.Cos(radians) - yfn*mat32.Sin(radians)
-					ny := yfn*mat32.Cos(radians) + xfn*mat32.Sin(radians)
-					gauss := mat32.Exp(-(wNorm*(nx*nx) + lNorm*(ny*ny)))
-					sinVal := mat32.Sin(twoPiNorm*ny + f.PhaseOffset)
-					val = float64(gauss * sinVal)
+					dist := mat32.Hypot(xfn, yfn)
+					val := float64(0)
+					if !(f.CircleEdge && dist > 1.0) {
+						radians := f.Orientation * math.Pi / 180
+						nx := xfn*mat32.Cos(radians) - yfn*mat32.Sin(radians)
+						ny := yfn*mat32.Cos(radians) + xfn*mat32.Sin(radians)
+						gauss := mat32.Exp(-(wNorm*(nx*nx) + lNorm*(ny*ny)))
+						sinVal := mat32.Sin(twoPiNorm*ny + f.PhaseOffset)
+						val = float64(gauss * sinVal)
+					}
+					set.Filters.Set([]int{i, y, x}, val)
 				}
-				set.Filters.Set([]int{i, y, x}, val)
+			}
+		} else { // circular
+			for y := 0; y < sy; y++ {
+				var xf, yf, xfn, yfn float32
+				for x := 0; x < sx; x++ {
+					xf = float32(x) - ctrX
+					yf = float32(y) - ctrY
+					xfn = xf / radiusX
+					yfn = yf / radiusY
+
+					// dist := mat32.Hypot(xfn, yfn)
+					val := float64(0)
+					nx := xfn * xfn
+					ny := yfn * yfn
+					gauss := mat32.Sqrt(float32(nx) + float32(ny))
+					sinVal := mat32.Sin(twoPiNorm * nx * ny)
+					fmt.Println(sinVal)
+					val = float64(gauss * sinVal)
+					set.Filters.Set([]int{i, y, x}, val)
+					fmt.Println(i, y, x, val)
+				}
 			}
 		}
 	}
@@ -215,6 +239,7 @@ func Convolve(ch int, segmentSteps int, borderSteps int, melFilterCount int, mel
 	}
 }
 
+// ToDo: don't renorm
 // ToTable renders filters into the given etable.Table
 // This is useful for display and validation purposes.
 func (fs *FilterSet) ToTable(set FilterSet, tab *etable.Table) {

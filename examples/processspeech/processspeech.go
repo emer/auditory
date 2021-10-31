@@ -162,6 +162,8 @@ func (sp *SndProcess) Config() {
 	sp.GaborSpecs = append(sp.GaborSpecs, spec)
 	spec = agabor.Filter{SizeX: 7, SizeY: 7, WaveLen: 2.0, Orientation: 135, SigmaWidth: 0.3, SigmaLength: 0.6, PhaseOffset: 0, CircleEdge: true}
 	sp.GaborSpecs = append(sp.GaborSpecs, spec)
+	// and a circular one
+	spec = agabor.Filter{SizeX: 7, SizeY: 7, WaveLen: 2.0, Orientation: 0, SigmaWidth: 0.3, SigmaLength: 0.3, PhaseOffset: 0, CircleEdge: false, Circular: true}
 
 	// filter size is assumed to be consistent and taken from first in the spec list
 	sp.GaborFilters.SizeX = sp.GaborSpecs[0].SizeX
@@ -174,7 +176,7 @@ func (sp *SndProcess) Config() {
 	y := sp.GaborFilters.SizeY
 	n := len(sp.GaborSpecs)
 	sp.GaborFilters.Filters.SetShape([]int{n, y, x}, nil, nil)
-	agabor.ToTensor(sp.GaborSpecs, &sp.GaborFilters)
+	agabor.ToTensor(sp.GaborSpecs, &sp.GaborFilters)       // true for renorm
 	sp.GaborFilters.ToTable(sp.GaborFilters, &sp.GaborTab) // note: view only, testing
 
 	tsrX := ((sp.Params.SegmentSteps - 1) / 2) + 1
