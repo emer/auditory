@@ -156,10 +156,8 @@ func ToTensor(specs []Filter, set *FilterSet) { // i is filter index in
 					ny := yfn * yfn
 					gauss := mat32.Sqrt(float32(nx) + float32(ny))
 					sinVal := mat32.Sin(twoPiNorm * nx * ny)
-					fmt.Println(sinVal)
 					val = float64(gauss * sinVal)
 					set.Filters.Set([]int{i, y, x}, val)
-					fmt.Println(i, y, x, val)
 				}
 			}
 		}
