@@ -18,11 +18,11 @@ type Filter struct {
 	SizeY       int     `desc:"size of the filter in Y, for audition this is the frequency domain, in terms of discrete frequency factors based on the FFT window and input sample rate"`
 	WaveLen     float32 `desc:"wavelength of the sine waves in normalized units, 1.5 and 2 are reasonable values"`
 	Orientation float32 `desc:"orientation of the gabor in degrees, e.g. 0, 45, 90, 135. Multiple of the same orientation will get evenly distributed with the filter matrix"`
-	SigmaLength float32 `def:"0.3" desc:"gaussian sigma for the length dimension (elongated axis perpendicular to the sine waves) -- normalized as a function of filter size in relevant dimension"`
 	SigmaWidth  float32 `def:"0.6" desc:"gaussian sigma for the width dimension (in the direction of the sine waves) -- normalized as a function of filter size in relevant dimension"`
+	SigmaLength float32 `def:"0.3" desc:"gaussian sigma for the length dimension (elongated axis perpendicular to the sine waves) -- normalized as a function of filter size in relevant dimension"`
 	PhaseOffset float32 `def:"0" desc:"offset for the sine phase -- default is an asymmetric sine wave -- can make it into a symmetric cosine gabor by using PI/2 = 1.5708"`
 	CircleEdge  bool    `desc:"cut off the filter (to zero) outside a circle of diameter filter_size -- makes the filter more radially symmetric - no default - suggest using true"`
-	Circular    bool    `desc:"is the gabor circular, no orientation?"`
+	Circular    bool    `desc:"is the gabor circular? orientation, phase, sigmalength and circleedge not used for circular gabor"`
 }
 
 // FilterSet, a struct holding a set of gabor filters stored as a tensor. Though individual filters can vary in size, when used as a set they should all have the same size.
@@ -33,7 +33,8 @@ type FilterSet struct {
 	StrideY    int             `desc:"how far to move the filter in Y each step"`
 	Gain       float32         `desc:"overall gain multiplier applied after gabor filtering -- only relevant if not using renormalization (otherwize it just gets renormed away)"`
 	Distribute bool            `desc:"if multiple horiz or vertical distribute evenly"`
-	Filters    etensor.Float64 `desc:"actual gabor filters"`
+	Filters    etensor.Float64 `view:"no-inline" desc:"actual gabor filters"`
+	Table      etable.Table    `view:"no-inline" desc:"simple gabor filter table (view only)"`
 }
 
 // Defaults sets default values for any filter fields where 0 is not a reasonable value
@@ -142,6 +143,7 @@ func ToTensor(specs []Filter, set *FilterSet) { // i is filter index in
 				}
 			}
 		} else { // circular
+			norm := 1.0 / (2.0 * f.SigmaWidth * f.SigmaWidth)
 			for y := 0; y < sy; y++ {
 				var xf, yf, xfn, yfn float32
 				for x := 0; x < sx; x++ {
@@ -150,10 +152,9 @@ func ToTensor(specs []Filter, set *FilterSet) { // i is filter index in
 					xfn = xf / radiusX
 					yfn = yf / radiusY
 
-					// dist := mat32.Hypot(xfn, yfn)
 					val := float64(0)
-					nx := xfn * xfn
-					ny := yfn * yfn
+					nx := xfn * xfn * norm
+					ny := yfn * yfn * norm
 					gauss := mat32.Sqrt(float32(nx) + float32(ny))
 					sinVal := mat32.Sin(twoPiNorm * nx * ny)
 					val = float64(gauss * sinVal)

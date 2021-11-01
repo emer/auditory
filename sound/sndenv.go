@@ -8,6 +8,7 @@ import (
 	"github.com/emer/auditory/agabor"
 	"github.com/emer/auditory/dft"
 	"github.com/emer/auditory/mel"
+	"github.com/emer/etable/etable"
 	"github.com/emer/etable/etensor"
 	"github.com/emer/leabra/fffb"
 	"github.com/emer/vision/kwta"
@@ -69,6 +70,7 @@ type SndEnv struct {
 	MfccDct         etensor.Float32   `view:"no-inline" desc:" discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
 	GaborSpecs      []agabor.Filter   `view:"no-inline" desc:" a set of gabor filter specifications, one spec per filter'"`
 	GaborFilters    agabor.FilterSet  `desc:"the actual gabor filters, the first spec determines the size of all filters in the set"`
+	GaborTab        etable.Table      `view:"no-inline" desc:"gabor filter table (view only)"`
 	GborPoolsX      int               `view:"+" desc:" this values is the number of neuron pools along the time dimension in the input layer"`
 	GborPoolsY      int               `view:"+" desc:" this values is the number of neuron pools along the freq dimension in the input layer"`
 	GborOutput      etensor.Float32   `view:"no-inline" desc:" raw output of Gabor -- full segment's worth of gabor steps"`
@@ -130,6 +132,7 @@ func (se *SndEnv) Init(msSilenceAdd, msSilenceRmStart, msSilenceRmEnd float64) (
 	se.GaborFilters.Filters.SetShape([]int{nfilters, se.GaborFilters.SizeY, se.GaborFilters.SizeX}, nil, nil)
 	se.NeighInhib.Defaults() // NeighInhib code not working yet - need to pass 4d tensor not 5d
 	agabor.ToTensor(se.GaborSpecs, &se.GaborFilters)
+	se.GaborFilters.ToTable(se.GaborFilters, &se.GaborTab) // note: view only, testing
 	se.Kwta.Defaults()
 	se.GborOutput.SetShape([]int{se.Sound.Channels(), se.GborPoolsY, se.GborPoolsX, 2, nfilters}, nil, []string{"chan", "freq", "time"})
 	se.GborOutput.SetMetaData("odd-row", "true")
