@@ -38,12 +38,20 @@ type FilterSet struct {
 }
 
 // Defaults sets default values for any filter fields where 0 is not a reasonable value
-func (f *Filter) Defaults() {
+func (f *Filter) Defaults(i int) {
+	if i == 0 && f.SizeX == 0 {
+		f.SizeX = 9
+		fmt.Println("filter spec missing value for SizeX - size must be set for the first spec in the set")
+	}
+	if i == 0 && f.SizeY == 0 {
+		f.SizeY = 9
+		fmt.Println("filter spec missing value for SizeY - size must be set for the first spec in the set")
+	}
 	if f.WaveLen == 0 {
 		f.WaveLen = 2
 		fmt.Println("filter spec missing value for WaveLen: setting to 2")
 	}
-	if f.SigmaLength == 0 {
+	if f.SigmaLength == 0 && f.Circular == false {
 		f.SigmaLength = 0.6
 		fmt.Println("filter spec missing value for SigmaLength: setting to 0.6")
 	}
@@ -84,7 +92,7 @@ func ToTensor(specs []Filter, set *FilterSet) { // i is filter index in
 	hCnt := 0 // the current count of 0 degree filters generated
 	vCnt := 0 // the current count of 90 degree filters generated
 	for i, f := range specs {
-		f.Defaults()
+		f.Defaults(i)
 		twoPiNorm := (2.0 * mat32.Pi) / f.WaveLen
 		var lNorm float32
 		var wNorm float32
