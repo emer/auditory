@@ -8,9 +8,9 @@ import (
 	"fmt"
 	"github.com/emer/auditory/agabor"
 	"github.com/emer/etable/etable"
+	"github.com/emer/etable/etview"
 	"log"
 	"math"
-	"os"
 	"strings"
 
 	"github.com/emer/auditory/dft"
@@ -67,11 +67,11 @@ func (sp *SndProcess) ParamDefaults() {
 // Aud encapsulates a specific auditory processing pipeline in
 // use in a given case -- can add / modify this as needed
 type SndProcess struct {
-	Sound           sound.Wave
 	Params          Params
-	Signal          etensor.Float32   `inactive:"+" desc:" the full sound input obtained from the sound input - plus any added padding"`
-	Samples         etensor.Float32   `inactive:"+" desc:" a window's worth of raw sound input, one channel at a time"`
-	Dft             dft.Params        `view:"no-inline"`
+	Sound           sound.Wave        `view:"no-inline"`
+	Signal          etensor.Float32   `view:"-" desc:" the full sound input obtained from the sound input - plus any added padding"`
+	Samples         etensor.Float32   `view:"-" desc:" a window's worth of raw sound input, one channel at a time"`
+	Dft             dft.Params        `view:"-" desc:" "`
 	Power           etensor.Float32   `view:"-" desc:" power of the dft, up to the nyquist limit frequency (1/2 input.WinSamples)"`
 	LogPower        etensor.Float32   `view:"-" desc:" log power of the dft, up to the nyquist liit frequency (1/2 input.WinSamples)"`
 	PowerSegment    etensor.Float32   `view:"no-inline" desc:" full segment's worth of power of the dft, up to the nyquist limit frequency (1/2 input.WinSamples)"`
@@ -80,43 +80,32 @@ type SndProcess struct {
 	MelFBank        etensor.Float32   `view:"no-inline" desc:" mel scale transformation of dft_power, using triangular filters, resulting in the mel filterbank output -- the natural log of this is typically applied"`
 	MelFBankSegment etensor.Float32   `view:"no-inline" desc:" full segment's worth of mel feature-bank output"`
 	MelFilters      etensor.Float32   `view:"no-inline" desc:" the actual filters"`
-	MfccDct         etensor.Float32   `view:"no-inline" desc:" discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
-	MfccDctSegment  etensor.Float32   `view:"no-inline" desc:" full segment's worth of discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
-	GaborSpecs      []agabor.Filter   `view:" no-in line"`
-	GaborFilters    agabor.FilterSet  `viewif:"On=true" desc:"a set of gabor filters with same x and y dimensions"`
+	MfccDct         etensor.Float32   `view:"-" desc:" discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
+	MfccDctSegment  etensor.Float32   `view:"-" desc:" full segment's worth of discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
+	GaborSpecs      []agabor.Filter   `view:" no-inline" desc:"array of params describing each gabor filter"`
+	GaborFilters    agabor.FilterSet  `view:"no-inline" desc:"a set of gabor filters with same x and y dimensions"`
 	GaborTsr        etensor.Float32   `view:"no-inline" desc:" raw output of Gabor -- full segment's worth of gabor steps"`
 	GaborTab        etable.Table      `view:"no-inline" desc:"gabor filter table (view only)"`
-	Segment         int               `inactive:"+" desc:" the current segment (i.e. one segments worth of samples) - zero is first segment"`
+	Segment         int               `inactive:"+" desc:"current segment of full sound (zero based)"`
 	FftCoefs        []complex128      `view:"-" desc:" discrete fourier transform (fft) output complex representation"`
 	Fft             *fourier.CmplxFFT `view:"-" desc:" struct for fast fourier transform"`
-	CurSndFile      gi.FileName       `view:"+" desc:" holds the name of the file to be loaded/processed"`
+	SndFile         gi.FileName       `view:"-" desc:" holds the full path & name of the file to be loaded/processed"`
 
 	// internal state - view:"-"
-	FirstStep    bool        `view:"-" desc:" if first frame to process -- turns off prv smoothing of dft power"`
-	ToolBar      *gi.ToolBar `view:"-" desc:"the master toolbar"`
-	MoreSegments bool        `view:"-" desc:" are there more samples to process"`
-	SndPath      string      `view:"-" desc:" use to resolve different working directories for IDE and command line execution"`
-	PrevSndFile  string      `view:"-" desc:" holds the name of the previous sound file loaded"`
-}
+	FirstStep    bool `view:"-" desc:" if first frame to process -- turns off prv smoothing of dft power"`
+	MoreSegments bool `view:"-" desc:" are there more samples to process"`
 
-func (sp *SndProcess) SetPath() {
-	// this code makes sure that the file is opened regardless of running from goland or terminal
-	// as the working directory will be different in the 2 environments
-	dir, err := os.Getwd()
-	if err != nil {
-		log.Fatal(err)
-	}
-	sp.SndPath = ""
-	if strings.HasSuffix(dir, "auditory") {
-		sp.SndPath = dir + "/examples/processspeech/sounds/"
-	} else {
-		sp.SndPath = dir + "/sounds/"
-	}
+	// gui
+	Win        *gi.Window         `view:"-" desc:"main GUI window"`
+	StructView *giv.StructView    `view:"-" desc:"the params viewer"`
+	ToolBar    *gi.ToolBar        `view:"-" desc:"the master toolbar"`
+	PowerGrid  *etview.TensorGrid `view:"-" desc:"power grid view for the current segment"`
+	MelGrid    *etview.TensorGrid `view:"-" desc:"melfbank grid view for the current segment"`
+	SndName    string             `view:"inactive" desc:"just the name, no path"`
 }
 
 func (sp *SndProcess) Config() {
 	sp.Params.SegmentMs = 100 // set param overrides here before calling config
-
 	sr := sp.Sound.SampleRate()
 	sp.Params.WinSamples = MSecToSamples(sp.Params.WinMs, sr)
 	sp.Params.StepSamples = MSecToSamples(sp.Params.StepMs, sr)
@@ -223,11 +212,14 @@ func (sp *SndProcess) LoadSound(snd *sound.Wave) {
 	}
 }
 
-// ProcessSoundFile loads a sound from file and intializes for a new sound
+// ProcessSound loads a sound from file and intializes for a new sound
 // if the sound is more than one segment long call ProcessSegment followed by ApplyGabor for each segment beyond the first
-func (sp *SndProcess) ProcessSoundFile(fn string) {
-	sp.PrevSndFile = string(sp.CurSndFile)
-	sp.CurSndFile = gi.FileName(fn)
+func (sp *SndProcess) ProcessSound(fn string) {
+	sp.SndFile = gi.FileName(fn)
+	full := string(sp.SndFile)
+	i := strings.LastIndex(full, "/")
+	sp.SndName = full[i+1 : len(full)]
+
 	err := sp.Sound.Load(fn)
 	if err != nil {
 		return
@@ -237,16 +229,19 @@ func (sp *SndProcess) ProcessSoundFile(fn string) {
 	sp.Pad(sp.Signal.Values)
 	sp.ProcessSegment()
 	sp.ApplyGabor()
-	sp.ToolBar.UpdateActions()
+	if sp.Win != nil {
+		vp := sp.Win.WinViewport2D()
+		if sp.ToolBar != nil {
+			sp.ToolBar.UpdateActions()
+		}
+		vp.SetNeedsFullRender()
+	}
 }
 
 // ProcessSegment processes the entire segment's input by processing a small overlapping set of samples on each pass
 func (sp *SndProcess) ProcessSegment() {
-	cf := string(sp.CurSndFile)
-	if strings.Compare(cf, sp.PrevSndFile) != 0 {
-		sp.ProcessSoundFile(string(sp.CurSndFile))
-	} else if sp.MoreSegments == false {
-		sp.ProcessSoundFile(string(sp.CurSndFile)) // start over - same file
+	if sp.MoreSegments == false {
+		sp.ProcessSound(string(sp.SndFile)) // start over - same file
 	} else {
 		moreSamples := true
 		sp.Segment++
@@ -374,11 +369,29 @@ func (sp *SndProcess) ConfigGui() *gi.Window {
 	sv := giv.AddNewStructView(split, "sv")
 	// parent gets signal when file chooser dialog is closed - connect to view updates on parent
 	sv.SetStruct(sp)
+	sp.StructView = sv
 
-	split.SetSplits(1)
+	tv := gi.AddNewTabView(split, "tv")
+	split.SetSplits(.3, .7)
+
+	tbar.AddAction(gi.ActOpts{Label: "Load Sound ", Icon: "step-fwd", Tooltip: "Open file dialog for choosing another sound file (must be .wav).", UpdateFunc: func(act *gi.Action) {
+		//act.SetActiveStateUpdt(sp.MoreSegments)
+	}}, win.This(), func(recv, send ki.Ki, sig int64, data interface{}) {
+		exts := ".wav"
+		giv.FileViewDialog(vp, string(sp.SndFile), exts, giv.DlgOpts{Title: "Open wav File", Prompt: "Open a .wav file to load sound for processing."}, nil,
+			win.This(), func(recv, send ki.Ki, sig int64, data interface{}) {
+				if sig == int64(gi.DialogAccepted) {
+					dlg, _ := send.Embed(gi.KiT_Dialog).(*gi.Dialog)
+					fn := giv.FileViewDialogValue(dlg)
+					sp.SndFile = gi.FileName(fn)
+					sp.ProcessSound(string(sp.SndFile))
+				}
+			})
+		vp.FullRender2DTree()
+	})
 
 	tbar.AddAction(gi.ActOpts{Label: "Update Gabor Filters", Icon: "step-fwd", Tooltip: "Updates the gabor filters if you change any of the gabor specs. Changes to gabor size require recompile.", UpdateFunc: func(act *gi.Action) {
-		act.SetActiveStateUpdt(sp.MoreSegments)
+		//act.SetActiveStateUpdt(sp.MoreSegments)
 	}}, win.This(), func(recv, send ki.Ki, sig int64, data interface{}) {
 		sp.ProcessSegment()
 		agabor.ToTensor(sp.GaborSpecs, &sp.GaborFilters)
@@ -387,12 +400,23 @@ func (sp *SndProcess) ConfigGui() *gi.Window {
 	})
 
 	tbar.AddAction(gi.ActOpts{Label: "Next Segment", Icon: "step-fwd", Tooltip: "Process the next segment of sound", UpdateFunc: func(act *gi.Action) {
-		act.SetActiveStateUpdt(sp.MoreSegments)
+		//act.SetActiveStateUpdt(sp.MoreSegments)
 	}}, win.This(), func(recv, send ki.Ki, sig int64, data interface{}) {
 		sp.ProcessSegment()
 		sp.ApplyGabor()
 		vp.FullRender2DTree()
 	})
+
+	pv := tv.AddNewTab(etview.KiT_TensorGrid, "Power").(*etview.TensorGrid)
+	pv.SetStretchMax()
+	sp.PowerGrid = pv
+	sp.LogPowerSegment.SetMetaData("grid-min", "10")
+	pv.SetTensor(&sp.LogPowerSegment)
+
+	mv := tv.AddNewTab(etview.KiT_TensorGrid, "MelFBank").(*etview.TensorGrid)
+	mv.SetStretchMax()
+	sp.MelGrid = mv
+	mv.SetTensor(&sp.MelFBankSegment)
 
 	// main menu
 	appnm := gi.AppName()
@@ -414,11 +438,10 @@ func (sp *SndProcess) ConfigGui() *gi.Window {
 var TheSP SndProcess
 
 func mainrun() {
-	TheSP.SetPath()
 	TheSP.ParamDefaults()
-	TheSP.CurSndFile = gi.FileName(TheSP.SndPath + "bug.wav")
-	TheSP.ProcessSoundFile(string(TheSP.CurSndFile))
-
 	win := TheSP.ConfigGui()
+	TheSP.Win = win
+	TheSP.SndFile = gi.FileName("sounds/bug.wav")
+	TheSP.ProcessSound(string(TheSP.SndFile))
 	win.StartEventLoop()
 }
