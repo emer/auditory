@@ -101,6 +101,7 @@ type SndProcess struct {
 	ToolBar    *gi.ToolBar        `view:"-" desc:"the master toolbar"`
 	PowerGrid  *etview.TensorGrid `view:"-" desc:"power grid view for the current segment"`
 	MelGrid    *etview.TensorGrid `view:"-" desc:"melfbank grid view for the current segment"`
+	GaborGrid  *etview.TensorGrid `view:"-" desc:"gabor grid view for the result of applying gabor filters to mel output"`
 	SndName    string             `view:"inactive" desc:"just the name, no path"`
 }
 
@@ -158,8 +159,8 @@ func (sp *SndProcess) Config() {
 	// filter size is assumed to be consistent and taken from first in the spec list
 	sp.GaborFilters.SizeX = sp.GaborSpecs[0].SizeX
 	sp.GaborFilters.SizeY = sp.GaborSpecs[0].SizeY
-	sp.GaborFilters.StrideX = 1
-	sp.GaborFilters.StrideY = 1
+	sp.GaborFilters.StrideX = 3
+	sp.GaborFilters.StrideY = 3
 	sp.GaborFilters.Gain = 2
 	sp.GaborFilters.Distribute = false // the 0 orientation filters will both be centered
 	x := sp.GaborFilters.SizeX
@@ -169,8 +170,10 @@ func (sp *SndProcess) Config() {
 	agabor.ToTensor(sp.GaborSpecs, &sp.GaborFilters)
 	sp.GaborFilters.ToTable(sp.GaborFilters, &sp.GaborTab) // note: view only, testing
 
-	tsrX := ((sp.Params.SegmentSteps - 1) / 2) + 1
-	tsrY := ((sp.Mel.FBank.NFilters - y - 1) / 2) + 1
+	tmp := sp.Params.SegmentSteps - sp.GaborFilters.SizeX
+	tsrX := tmp/sp.GaborFilters.StrideX + 1
+	tmp = sp.Mel.FBank.NFilters - sp.GaborFilters.SizeY
+	tsrY := tmp/sp.GaborFilters.StrideY + 1
 	sp.GaborTsr.SetShape([]int{sp.Sound.Channels(), tsrY, tsrX, 2, n}, nil, nil)
 	sp.GaborTsr.SetMetaData("odd-row", "true")
 	sp.GaborTsr.SetMetaData("grid-fill", ".9")
@@ -189,7 +192,6 @@ func (sp *SndProcess) Config() {
 	for i := 0; i < sp.Params.SegmentStepsTotal; i++ {
 		sp.Params.Steps[i] = sp.Params.StepSamples * (i - stepsBack)
 	}
-
 }
 
 // Initialize sets all the tensor result data to zeros
@@ -390,20 +392,20 @@ func (sp *SndProcess) ConfigGui() *gi.Window {
 		vp.FullRender2DTree()
 	})
 
+	tbar.AddAction(gi.ActOpts{Label: "Next Segment", Icon: "step-fwd", Tooltip: "Process the next segment of sound", UpdateFunc: func(act *gi.Action) {
+		//act.SetActiveStateUpdt(sp.MoreSegments)
+	}}, win.This(), func(recv, send ki.Ki, sig int64, data interface{}) {
+		sp.ProcessSegment()
+		sp.ApplyGabor()
+		vp.FullRender2DTree()
+	})
+
 	tbar.AddAction(gi.ActOpts{Label: "Update Gabor Filters", Icon: "step-fwd", Tooltip: "Updates the gabor filters if you change any of the gabor specs. Changes to gabor size require recompile.", UpdateFunc: func(act *gi.Action) {
 		//act.SetActiveStateUpdt(sp.MoreSegments)
 	}}, win.This(), func(recv, send ki.Ki, sig int64, data interface{}) {
 		sp.ProcessSegment()
 		agabor.ToTensor(sp.GaborSpecs, &sp.GaborFilters)
 		sp.GaborFilters.ToTable(sp.GaborFilters, &sp.GaborTab) // note: view only, testing
-		vp.FullRender2DTree()
-	})
-
-	tbar.AddAction(gi.ActOpts{Label: "Next Segment", Icon: "step-fwd", Tooltip: "Process the next segment of sound", UpdateFunc: func(act *gi.Action) {
-		//act.SetActiveStateUpdt(sp.MoreSegments)
-	}}, win.This(), func(recv, send ki.Ki, sig int64, data interface{}) {
-		sp.ProcessSegment()
-		sp.ApplyGabor()
 		vp.FullRender2DTree()
 	})
 
@@ -417,6 +419,11 @@ func (sp *SndProcess) ConfigGui() *gi.Window {
 	mv.SetStretchMax()
 	sp.MelGrid = mv
 	mv.SetTensor(&sp.MelFBankSegment)
+
+	//gv := tv.AddNewTab(etview.KiT_TensorGrid, "Gabor Filtering Result").(*etview.TensorGrid)
+	//gv.SetStretchMax()
+	//sp.GaborGrid = gv
+	//gv.SetTensor(&sp.GaborTsr)
 
 	// main menu
 	appnm := gi.AppName()
