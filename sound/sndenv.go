@@ -98,6 +98,7 @@ func (se *SndEnv) Defaults() {
 // Can also pass milliseconds of silence to prepend to start of signal if you want some random amount of silence
 // at start for variability
 func (se *SndEnv) Init(msSilenceAdd, msSilenceRmStart, msSilenceRmEnd float64) (err error, segments int) {
+	//fmt.Println("SndEnv:Init")
 	sr := se.Sound.SampleRate()
 	if sr <= 0 {
 		fmt.Println("sample rate <= 0")
@@ -111,6 +112,7 @@ func (se *SndEnv) Init(msSilenceAdd, msSilenceRmStart, msSilenceRmEnd float64) (
 	se.Params.SegmentStepsTotal = se.Params.SegmentSteps + 2*se.Params.BorderSteps
 	se.Params.StrideSamples = MSecToSamples(se.Params.StrideMs, sr)
 
+	// remove any silence at beginning of signal
 	if msSilenceRmStart >= 0 && msSilenceRmEnd > msSilenceRmStart {
 		st := MSecToSamples(float32(msSilenceRmStart), se.Sound.SampleRate())
 		end := MSecToSamples(float32(msSilenceRmEnd), se.Sound.SampleRate())
@@ -120,6 +122,7 @@ func (se *SndEnv) Init(msSilenceAdd, msSilenceRmStart, msSilenceRmEnd float64) (
 		copy(se.Signal.Values, tmp)
 	}
 
+	//fmt.Println(len(se.Signal.Values))
 	n := int((msSilenceAdd * float64(se.Params.StrideSamples)) / 100.0)
 	silence := make([]float32, n)
 	se.Signal.Values = append(silence, se.Signal.Values...)
@@ -163,9 +166,7 @@ func (se *SndEnv) Init(msSilenceAdd, msSilenceRmStart, msSilenceRmEnd float64) (
 	// so that the leading edge (right edge) is the same time point.
 	// This code does this by generating negative offsets for the start of the processing.
 	// Also see SndToWindow for the use of the step values
-	strides := int(se.Params.SegmentMs / se.Params.StrideMs)
-	stepsPerStride := int(se.Params.StrideMs / se.Params.StepMs)
-	stepsBack := stepsPerStride*(strides-1) + se.Params.BorderSteps
+	stepsBack := se.Params.BorderSteps
 	se.Params.Steps = make([]int, se.Params.SegmentStepsTotal)
 	for i := 0; i < se.Params.SegmentStepsTotal; i++ {
 		se.Params.Steps[i] = se.Params.StepSamples * (i - stepsBack)
@@ -273,6 +274,7 @@ func (se *SndEnv) SndToWindow(stepOffset int, ch int) error {
 		} else {
 			se.Window.Values = se.Signal.Values[start:end]
 		}
+		//fmt.Println("start / end in samples:", start, end)
 	} else {
 		// ToDo: implement
 		fmt.Printf("SndToWindow: else case not implemented - please report this issue")
