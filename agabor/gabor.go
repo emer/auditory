@@ -165,7 +165,7 @@ func ToTensor(specs []Filter, set *FilterSet) { // i is filter index in
 					ny := yfn * yfn * norm
 					gauss := mat32.Sqrt(float32(nx) + float32(ny))
 					sinVal := mat32.Sin(twoPiNorm * nx * ny)
-					val = float64(gauss * sinVal)
+					val = float64(-gauss * sinVal)
 					set.Filters.Set([]int{i, y, x}, val)
 				}
 			}
@@ -203,7 +203,7 @@ func ToTensor(specs []Filter, set *FilterSet) { // i is filter index in
 }
 
 // Convolve processes input using filters that operate over an entire segment of samples
-func Convolve(ch int, segmentSteps int, borderSteps int, melFilterCount int, melData *etensor.Float32, filters FilterSet, rawOut *etensor.Float32) {
+func Convolve(ch int, melFilterCount int, melData *etensor.Float32, filters FilterSet, rawOut *etensor.Float32) {
 	// just set tMin to zero - any offset should be handled by the calling code
 	tMin := 0
 	tMax1 := rawOut.Shp[2] * filters.StrideX
