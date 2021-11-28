@@ -79,6 +79,7 @@ type SndEnv struct {
 	ExtGi           etensor.Float32   `view:"no-inline" desc:"A1 simple extra Gi from neighbor inhibition tensor"`
 	NeighInhib      kwta.NeighInhib   `desc:"neighborhood inhibition for V1s -- each unit gets inhibition from same feature in nearest orthogonal neighbors -- reduces redundancy of feature code"`
 	Kwta            kwta.KWTA         `desc:"kwta parameters, using FFFB form"`
+	KwtaPool        bool              `desc:"if Kwta.On == true, call KwtaPool (true) or KwtaLayer (false)"`
 	FftCoefs        []complex128      `view:"-" desc:" discrete fourier transform (fft) output complex representation"`
 	Fft             *fourier.CmplxFFT `view:"-" desc:" struct for fast fourier transform"`
 
@@ -91,6 +92,8 @@ func (se *SndEnv) Defaults() {
 	se.FirstStep = true
 	se.ParamDefaults()
 	se.Mel.Defaults() // calls melfbank defaults
+	se.Kwta.Defaults()
+	se.KwtaPool = true
 }
 
 // Init sets various sound processing params based on default params and user overrides
@@ -98,7 +101,6 @@ func (se *SndEnv) Defaults() {
 // Can also pass milliseconds of silence to prepend to start of signal if you want some random amount of silence
 // at start for variability
 func (se *SndEnv) Init(msSilenceAdd, msSilenceRmStart, msSilenceRmEnd float64) (err error, segments int) {
-	//fmt.Println("SndEnv:Init")
 	sr := se.Sound.SampleRate()
 	if sr <= 0 {
 		fmt.Println("sample rate <= 0")
@@ -122,7 +124,6 @@ func (se *SndEnv) Init(msSilenceAdd, msSilenceRmStart, msSilenceRmEnd float64) (
 		copy(se.Signal.Values, tmp)
 	}
 
-	//fmt.Println(len(se.Signal.Values))
 	n := int((msSilenceAdd * float64(se.Params.StrideSamples)) / 100.0)
 	silence := make([]float32, n)
 	se.Signal.Values = append(silence, se.Signal.Values...)
@@ -136,7 +137,6 @@ func (se *SndEnv) Init(msSilenceAdd, msSilenceRmStart, msSilenceRmEnd float64) (
 	se.NeighInhib.Defaults() // NeighInhib code not working yet - need to pass 4d tensor not 5d
 	agabor.ToTensor(se.GaborSpecs, &se.GaborFilters)
 	se.GaborFilters.ToTable(se.GaborFilters, &se.GaborTab) // note: view only, testing
-	se.Kwta.Defaults()
 	se.GborOutput.SetShape([]int{se.Sound.Channels(), se.GborPoolsY, se.GborPoolsX, 2, nfilters}, nil, []string{"chan", "freq", "time"})
 	se.GborOutput.SetMetaData("odd-row", "true")
 	se.GborOutput.SetMetaData("grid-fill", ".9")
@@ -202,7 +202,11 @@ func (se *SndEnv) ApplyKwta(ch int) {
 	if se.Kwta.On {
 		rawSS := se.GborOutput.SubSpace([]int{ch}).(*etensor.Float32)
 		kwtaSS := se.GborKwta.SubSpace([]int{ch}).(*etensor.Float32)
-		se.Kwta.KWTAPool(rawSS, kwtaSS, &se.Inhibs, &se.ExtGi)
+		if se.KwtaPool == true {
+			se.Kwta.KWTAPool(rawSS, kwtaSS, &se.Inhibs, &se.ExtGi)
+		} else {
+			se.Kwta.KWTALayer(rawSS, kwtaSS, &se.ExtGi)
+		}
 	}
 }
 
