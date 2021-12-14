@@ -14,8 +14,6 @@ import (
 
 // Filter, a struct of gabor filter parameters
 type Filter struct {
-	SizeX       int     `desc:"size of the filter in X, for audition this is the time (horizontal) domain, in terms of steps of the underlying DFT filtering steps"`
-	SizeY       int     `desc:"size of the filter in Y, for audition this is the frequency domain, in terms of discrete frequency factors based on the FFT window and input sample rate"`
 	WaveLen     float32 `desc:"wavelength of the sine waves in normalized units, 1.5 and 2 are reasonable values"`
 	Orientation float32 `desc:"orientation of the gabor in degrees, e.g. 0, 45, 90, 135. Multiple of the same orientation will get evenly distributed with the filter matrix"`
 	SigmaWidth  float32 `def:"0.6" desc:"gaussian sigma for the width dimension (in the direction of the sine waves) -- normalized as a function of filter size in relevant dimension"`
@@ -39,14 +37,6 @@ type FilterSet struct {
 
 // Defaults sets default values for any filter fields where 0 is not a reasonable value
 func (f *Filter) Defaults(i int) {
-	if i == 0 && f.SizeX == 0 {
-		f.SizeX = 9
-		fmt.Println("filter spec missing value for SizeX - size must be set for the first spec in the set")
-	}
-	if i == 0 && f.SizeY == 0 {
-		f.SizeY = 9
-		fmt.Println("filter spec missing value for SizeY - size must be set for the first spec in the set")
-	}
 	if f.WaveLen == 0 {
 		f.WaveLen = 2
 		fmt.Println("filter spec missing value for WaveLen: setting to 2")

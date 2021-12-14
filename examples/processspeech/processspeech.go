@@ -141,28 +141,30 @@ func (sp *SndProcess) Config() {
 	sp.Segment = -1
 	sp.MoreSegments = true
 
-	sp.GaborSpecs = nil // in case there are some specs already
-	spec := agabor.Filter{SizeX: 7, SizeY: 7, WaveLen: 2.0, Orientation: 0, SigmaWidth: 0.6, SigmaLength: 0.2, PhaseOffset: 0, CircleEdge: true}
-	sp.GaborSpecs = append(sp.GaborSpecs, spec)
-	spec = agabor.Filter{SizeX: 7, SizeY: 7, WaveLen: 2.0, Orientation: 0, SigmaWidth: 0.6, SigmaLength: 0.2, PhaseOffset: 1.5708, CircleEdge: true}
-	sp.GaborSpecs = append(sp.GaborSpecs, spec)
-	spec = agabor.Filter{SizeX: 7, SizeY: 7, WaveLen: 2.0, Orientation: 45, SigmaWidth: 0.3, SigmaLength: 0.6, PhaseOffset: 0, CircleEdge: true}
-	sp.GaborSpecs = append(sp.GaborSpecs, spec)
-	spec = agabor.Filter{SizeX: 7, SizeY: 7, WaveLen: 2.0, Orientation: 90, SigmaWidth: 0.3, SigmaLength: 0.6, PhaseOffset: 0, CircleEdge: true}
-	sp.GaborSpecs = append(sp.GaborSpecs, spec)
-	spec = agabor.Filter{SizeX: 7, SizeY: 7, WaveLen: 2.0, Orientation: 135, SigmaWidth: 0.3, SigmaLength: 0.6, PhaseOffset: 0, CircleEdge: true}
-	sp.GaborSpecs = append(sp.GaborSpecs, spec)
-	// and a circular one - orientation, phase and sigmaLength will be ignored if specified
-	spec = agabor.Filter{SizeX: 7, SizeY: 7, WaveLen: 2.0, SigmaWidth: 0.5, Circular: true}
-	sp.GaborSpecs = append(sp.GaborSpecs, spec)
-
-	// filter size is assumed to be consistent and taken from first in the spec list
-	sp.GaborFilters.SizeX = sp.GaborSpecs[0].SizeX
-	sp.GaborFilters.SizeY = sp.GaborSpecs[0].SizeY
+	sp.GaborFilters.SizeX = 7
+	sp.GaborFilters.SizeY = 7
 	sp.GaborFilters.StrideX = 3
 	sp.GaborFilters.StrideY = 3
 	sp.GaborFilters.Gain = 2
 	sp.GaborFilters.Distribute = false // the 0 orientation filters will both be centered
+
+	// the specifics for each filter
+	sp.GaborSpecs = nil // in case there are some specs already
+	spec := agabor.Filter{WaveLen: 2.0, Orientation: 0, SigmaWidth: 0.6, SigmaLength: 0.2, PhaseOffset: 0, CircleEdge: true}
+	sp.GaborSpecs = append(sp.GaborSpecs, spec)
+	spec = agabor.Filter{WaveLen: 2.0, Orientation: 0, SigmaWidth: 0.6, SigmaLength: 0.2, PhaseOffset: 1.5708, CircleEdge: true}
+	sp.GaborSpecs = append(sp.GaborSpecs, spec)
+	spec = agabor.Filter{WaveLen: 2.0, Orientation: 45, SigmaWidth: 0.3, SigmaLength: 0.6, PhaseOffset: 0, CircleEdge: true}
+	sp.GaborSpecs = append(sp.GaborSpecs, spec)
+	spec = agabor.Filter{WaveLen: 2.0, Orientation: 90, SigmaWidth: 0.3, SigmaLength: 0.6, PhaseOffset: 0, CircleEdge: true}
+	sp.GaborSpecs = append(sp.GaborSpecs, spec)
+	spec = agabor.Filter{WaveLen: 2.0, Orientation: 135, SigmaWidth: 0.3, SigmaLength: 0.6, PhaseOffset: 0, CircleEdge: true}
+	sp.GaborSpecs = append(sp.GaborSpecs, spec)
+	// and a circular one - orientation, phase and sigmaLength will be ignored if specified
+	spec = agabor.Filter{WaveLen: 2.0, SigmaWidth: 0.5, Circular: true}
+	sp.GaborSpecs = append(sp.GaborSpecs, spec)
+
+	// filter size is assumed to be consistent and taken from first in the spec list
 	x := sp.GaborFilters.SizeX
 	y := sp.GaborFilters.SizeY
 	n := len(sp.GaborSpecs)
@@ -170,9 +172,9 @@ func (sp *SndProcess) Config() {
 	agabor.ToTensor(sp.GaborSpecs, &sp.GaborFilters)
 	sp.GaborFilters.ToTable(sp.GaborFilters, &sp.GaborTab) // note: view only, testing
 
-	tmp := sp.Params.SegmentSteps - sp.GaborFilters.SizeX
+	tmp := sp.Params.SegmentSteps - x
 	tsrX := tmp/sp.GaborFilters.StrideX + 1
-	tmp = sp.Mel.FBank.NFilters - sp.GaborFilters.SizeY
+	tmp = sp.Mel.FBank.NFilters - y
 	tsrY := tmp/sp.GaborFilters.StrideY + 1
 	sp.GaborTsr.SetShape([]int{sp.Sound.Channels(), tsrY, tsrX, 2, n}, nil, nil)
 	sp.GaborTsr.SetMetaData("odd-row", "true")
