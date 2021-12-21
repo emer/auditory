@@ -129,9 +129,6 @@ func (se *SndEnv) Init(msSilenceAdd, msSilenceRmStart, msSilenceRmEnd float64) (
 	se.Signal.Values = append(silence, se.Signal.Values...)
 	se.Signal.Values = se.Pad(se.Signal.Values)
 
-	// filter size is assumed to be consistent and taken from first in the spec list
-	se.GaborFilters.SizeX = se.GaborSpecs[0].SizeX
-	se.GaborFilters.SizeY = se.GaborSpecs[0].SizeY
 	nfilters := len(se.GaborSpecs)
 	se.GaborFilters.Filters.SetShape([]int{nfilters, se.GaborFilters.SizeY, se.GaborFilters.SizeX}, nil, nil)
 	se.NeighInhib.Defaults() // NeighInhib code not working yet - need to pass 4d tensor not 5d

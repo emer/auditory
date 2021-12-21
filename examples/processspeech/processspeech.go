@@ -142,23 +142,23 @@ func (sp *SndProcess) Config() {
 	sp.MoreSegments = true
 
 	sp.GaborSpecs = nil // in case there are some specs already
-	spec := agabor.Filter{SizeX: 7, SizeY: 7, WaveLen: 2.0, Orientation: 0, SigmaWidth: 0.6, SigmaLength: 0.2, PhaseOffset: 0, CircleEdge: true}
+	spec := agabor.Filter{WaveLen: 2.0, Orientation: 0, SigmaWidth: 0.6, SigmaLength: 0.2, PhaseOffset: 0, CircleEdge: true}
 	sp.GaborSpecs = append(sp.GaborSpecs, spec)
-	spec = agabor.Filter{SizeX: 7, SizeY: 7, WaveLen: 2.0, Orientation: 0, SigmaWidth: 0.6, SigmaLength: 0.2, PhaseOffset: 1.5708, CircleEdge: true}
+	spec = agabor.Filter{WaveLen: 2.0, Orientation: 0, SigmaWidth: 0.6, SigmaLength: 0.2, PhaseOffset: 1.5708, CircleEdge: true}
 	sp.GaborSpecs = append(sp.GaborSpecs, spec)
-	spec = agabor.Filter{SizeX: 7, SizeY: 7, WaveLen: 2.0, Orientation: 45, SigmaWidth: 0.3, SigmaLength: 0.6, PhaseOffset: 0, CircleEdge: true}
+	spec = agabor.Filter{WaveLen: 2.0, Orientation: 45, SigmaWidth: 0.3, SigmaLength: 0.6, PhaseOffset: 0, CircleEdge: true}
 	sp.GaborSpecs = append(sp.GaborSpecs, spec)
-	spec = agabor.Filter{SizeX: 7, SizeY: 7, WaveLen: 2.0, Orientation: 90, SigmaWidth: 0.3, SigmaLength: 0.6, PhaseOffset: 0, CircleEdge: true}
+	spec = agabor.Filter{WaveLen: 2.0, Orientation: 90, SigmaWidth: 0.3, SigmaLength: 0.6, PhaseOffset: 0, CircleEdge: true}
 	sp.GaborSpecs = append(sp.GaborSpecs, spec)
-	spec = agabor.Filter{SizeX: 7, SizeY: 7, WaveLen: 2.0, Orientation: 135, SigmaWidth: 0.3, SigmaLength: 0.6, PhaseOffset: 0, CircleEdge: true}
+	spec = agabor.Filter{WaveLen: 2.0, Orientation: 135, SigmaWidth: 0.3, SigmaLength: 0.6, PhaseOffset: 0, CircleEdge: true}
 	sp.GaborSpecs = append(sp.GaborSpecs, spec)
 	// and a circular one - orientation, phase and sigmaLength will be ignored if specified
-	spec = agabor.Filter{SizeX: 7, SizeY: 7, WaveLen: 2.0, SigmaWidth: 0.5, Circular: true}
+	spec = agabor.Filter{WaveLen: 2.0, SigmaWidth: 0.5, Circular: true}
 	sp.GaborSpecs = append(sp.GaborSpecs, spec)
 
 	// filter size is assumed to be consistent and taken from first in the spec list
-	sp.GaborFilters.SizeX = sp.GaborSpecs[0].SizeX
-	sp.GaborFilters.SizeY = sp.GaborSpecs[0].SizeY
+	sp.GaborFilters.SizeX = 7
+	sp.GaborFilters.SizeY = 7
 	sp.GaborFilters.StrideX = 3
 	sp.GaborFilters.StrideY = 3
 	sp.GaborFilters.Gain = 2
