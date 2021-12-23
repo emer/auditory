@@ -7,97 +7,76 @@
 //
 package timit
 
-var Phones = []string{"iy", "ih", "eh", "ae", "ix", "ax", "ah", "uw", "ux", "uh", "ao", "aa", "ey",
+var PhoneList = []string{"iy", "ih", "eh", "ae", "ix", "ax", "ah", "uw", "ux", "uh", "ao", "aa", "ey",
 	"ay", "oy", "aw", "ow", "l", "el", "r", "y", "w", "er", "axr", "m", "em", "n", "nx", "en", "ng",
 	"eng", "ch", "jh", "dh", "b", "d", "dx", "g", "p", "t", "k", "z", "zh", "v", "f", "th", "s", "sh",
 	"hh", "hv", "cl", "pcl", "tcl", "kcl", "qcl", "vcl", "bcl", "dcl", "gcl", "epi", "sil", "h#", "#h", "pau"}
 
-func PhoneLookup(s string) (x int) {
-	switch s {
-	case "iy":
-		x = 0
-	case "ih":
-		x = 1
-	case "eh":
-		x = 2
-	case "ae":
-		x = 3
-	case "ix":
-		x = 4
-	case "ah", "ax", "ax-h":
-		x = 5
-	case "uw", "ux":
-		x = 6
-	case "hu":
-		x = 7
-	case "ao", "aa":
-		x = 8
-	case "ey":
-		x = 9
-	case "ay":
-		x = 10
-	case "oy":
-		x = 11
-	case "aw":
-		x = 12
-	case "ow":
-		x = 13
-	case "l", "el":
-		x = 14
-	case "r":
-		x = 15
-	case "y":
-		x = 16
-	case "w":
-		x = 17
-	case "er", "axr":
-		x = 18
-	case "m", "em":
-		x = 19
-	case "n", "en", "nx":
-		x = 20
-	case "ng", "eng":
-		x = 21
-	case "ch":
-		x = 22
-	case "jh":
-		x = 23
-	case "dh":
-		x = 24
-	case "b":
-		x = 25
-	case "d":
-		x = 26
-	case "dx":
-		x = 27
-	case "g":
-		x = 28
-	case "p":
-		x = 29
-	case "t":
-		x = 30
-	case "k":
-		x = 31
-	case "z":
-		x = 32
-	case "zh", "sh":
-		x = 33
-	case "v":
-		x = 34
-	case "f":
-		x = 35
-	case "th":
-		x = 36
-	case "s":
-		x = 37
-	case "hh", "hv":
-		x = 38
-	case "pcl", "tcl", "kcl", "bcl", "dcl", "gcl", "h#", "pau", "epi":
-		x = 39
-	case "q": // discard
-		x = 40
-	default:
-		x = -1
-	}
-	return x
+var Phones = map[string]int{
+	"iy":   0,
+	"ih":   1,
+	"eh":   2,
+	"ae":   3,
+	"ix":   4,
+	"ah":   5,
+	"ax":   5,
+	"ax-h": 5,
+	"uw":   6,
+	"ux":   6,
+	"hu":   7,
+	"ao":   8,
+	"aa":   8,
+	"ey":   9,
+	"ay":   10,
+	"oy":   11,
+	"aw":   12,
+	"ow":   13,
+	"l":    14,
+	"el":   14,
+	"r":    15,
+	"y":    16,
+	"w":    17,
+	"er":   18,
+	"axr":  18,
+	"m":    19,
+	"em":   19,
+	"n":    20,
+	"en":   20,
+	"nx":   20,
+	"ng":   21,
+	"eng":  21,
+	"ch":   22,
+	"jh":   23,
+	"dh":   24,
+	"b":    25,
+	"d":    26,
+	"dx":   27,
+	"g":    28,
+	"p":    29,
+	"t":    30,
+	"k":    31,
+	"z":    32,
+	"zh":   33,
+	"sh":   33,
+	"v":    34,
+	"f":    35,
+	"th":   36,
+	"s":    37,
+	"hh":   38,
+	"hv":   38,
+	"pcl":  39,
+	"tcl":  39,
+	"kcl":  39,
+	"bcl":  39,
+	"dcl":  39,
+	"gcl":  39,
+	"h#":   39,
+	"pau":  39,
+	"epi":  39,
+	"q":    40,
+}
+
+func PhoneLookup(s string) (val int, ok bool) {
+	val, ok = Phones[s]
+	return val, ok
 }
