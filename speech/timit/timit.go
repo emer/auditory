@@ -1,4 +1,4 @@
-// Phones of the TIMIT database. For recognition testing the full set of 61 is typically
+// Package timit Phones of the TIMIT database. For recognition testing the full set of 61 is typically
 // reduced to 39 with confusable sounds folded into a group, e.g. "sh" and "zh"
 // See Speaker-Independent Phone Recognition Using Hidden Markov Models, Kai-Fu Lee and Hsiao-Wuen Hon
 // in IEEE Transactions on Acoustics, Speech and Signal Processing, Vol 37, 1989 for the original
@@ -6,6 +6,16 @@
 // Many later studies use the 39 phone set
 //
 package timit
+
+import (
+	"bufio"
+	"log"
+	"os"
+	"strconv"
+	"strings"
+
+	"github.com/emer/auditory/speech"
+)
 
 var PhoneList = []string{"iy", "ih", "eh", "ae", "ix", "ax", "ah", "uw", "ux", "uh", "ao", "aa", "ey",
 	"ay", "oy", "aw", "ow", "l", "el", "r", "y", "w", "er", "axr", "m", "em", "n", "nx", "en", "ng",
@@ -79,4 +89,53 @@ var Phones = map[string]int{
 func PhoneLookup(s string) (val int, ok bool) {
 	val, ok = Phones[s]
 	return val, ok
+}
+
+// LoadTimitSeqsTimes loads the timing and transcription data for timit files
+func LoadTranscriptionAndTimes(fn string) ([]speech.SpeechUnit, error) {
+	//fmt.Println("LoadTimitSeqsAndTimes")
+	var units []speech.SpeechUnit
+
+	// load the sound start/end times shipped with the TIMIT database
+	fp, err := os.Open(fn)
+	if err != nil {
+		log.Println(err)
+		log.Println("Make sure you have the sound files rsyncd to ccn_images directory and a link (ln -s) to ccn_images in your sim working directory")
+		return units, err
+	}
+	defer fp.Close() // we will be done with the file within this function
+
+	scanner := bufio.NewScanner(fp)
+	scanner.Split(bufio.ScanLines)
+
+	i := 0
+	for scanner.Scan() {
+		t := scanner.Text()
+		if t == "" {
+			break
+		}
+		if strings.Contains(t, "h#") { // silence at start or silence at end
+			if len(units) == 0 { // starting silence
+				continue
+			} else { // silence at end
+				cvs := strings.Fields(t)
+				f, _ := strconv.ParseFloat(cvs[0], 64)
+				units[i-1].End = f
+				break // we're done!
+			}
+		}
+		cvt := new(speech.SpeechUnit)
+		units = append(units, *cvt)
+		cvs := strings.Fields(t)
+		f, err := strconv.ParseFloat(cvs[0], 64)
+		if err == nil {
+			units[i].Start = f
+		}
+		if len(units) > 1 {
+			units[i-1].End = units[i].Start
+		}
+		units[i].Name = cvs[1] //
+		i++
+	}
+	return units, nil
 }
