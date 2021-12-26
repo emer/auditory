@@ -80,3 +80,29 @@ func LoadTimes(fn string, names []string) ([]speech.SpeechUnit, error) {
 	}
 	return units, nil
 }
+
+// IdxFmSnd returns the slice index of the snd if found.
+// id is ignored if the corpus doesn't have subsets of sounds
+func IdxFmSnd(s string, id string) (val int, ok bool) {
+	val = -1
+	ok = false
+	for i, cv := range CVs {
+		if s == cv {
+			val = i
+			ok = true
+		}
+	}
+	return val, ok
+}
+
+// SndFmIdx returns the sound if found in the slice of sounds of the corpus.
+// id is ignored if the corpus doesn't have subsets of sounds
+func SndFmIdx(idx int, id string) (cv string, ok bool) {
+	cv = ""
+	ok = false
+	if idx >= 0 && idx < len(CVs) {
+		cv = CVs[idx]
+		ok = true
+	}
+	return cv, ok
+}

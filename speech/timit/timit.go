@@ -86,11 +86,6 @@ var Phones = map[string]int{
 	"q":    40,
 }
 
-func PhoneLookup(s string) (val int, ok bool) {
-	val, ok = Phones[s]
-	return val, ok
-}
-
 // LoadTimitSeqsTimes loads the timing and transcription data for timit files
 func LoadTranscriptionAndTimes(fn string) ([]speech.SpeechUnit, error) {
 	//fmt.Println("LoadTimitSeqsAndTimes")
@@ -138,4 +133,25 @@ func LoadTranscriptionAndTimes(fn string) ([]speech.SpeechUnit, error) {
 		i++
 	}
 	return units, nil
+}
+
+// IdxFmSnd returns the slice index of the snd if found.
+// id is ignored if the corpus doesn't have subsets of sounds
+func IdxFmSnd(s string, id string) (v int, ok bool) {
+	v, ok = Phones[s]
+	return v, ok
+}
+
+// SndFromIndex returns the sound if found in the map of sounds of the corpus.
+// id is ignored if the corpus doesn't have subsets of sounds
+func SndFmIdx(idx int, id string) (phone string, ok bool) {
+	phone = ""
+	ok = false
+	for k, v := range Phones {
+		if v == idx {
+			phone = k
+			ok = true
+		}
+	}
+	return
 }

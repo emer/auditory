@@ -6,6 +6,7 @@ package synthcvs
 
 import (
 	"bufio"
+	"fmt"
 	"github.com/emer/auditory/speech"
 	"log"
 	"os"
@@ -84,4 +85,60 @@ func LoadTimes(fn string, names []string) ([]speech.SpeechUnit, error) {
 		} // handles case where there may be lines after last line of start, end, name
 	}
 	return units, nil
+}
+
+// IdxFmSnd returns the slice index of the snd if found.
+// id is ignored if the corpus doesn't have subsets of sounds
+func IdxFmSnd(s string, id string) (val int, ok bool) {
+	val = -1
+	ok = false
+	var cvs []string
+	switch id {
+	case "I":
+		cvs = CVs_I
+	case "III":
+		cvs = CVs_III
+	case "IV":
+		cvs = CVs_IV
+	case "V":
+		cvs = CVs_V
+	case "VI":
+		cvs = CVs_VI
+	default:
+		fmt.Println("IndexFromCV: Error - fell through CV switch")
+	}
+	for i, cv := range cvs {
+		if s == cv {
+			val = i
+			ok = true
+		}
+	}
+	return val, ok
+}
+
+// SndFromIndex returns the sound if found in the slice of sounds of the corpus.
+// id is ignored if the corpus doesn't have subsets of sounds
+func SndFmIdx(idx int, id string) (cv string, ok bool) {
+	cv = ""
+	ok = false
+	var cvs []string
+	switch id {
+	case "I":
+		cvs = CVs_I
+	case "III":
+		cvs = CVs_III
+	case "IV":
+		cvs = CVs_IV
+	case "V":
+		cvs = CVs_V
+	case "VI":
+		cvs = CVs_VI
+	default:
+		fmt.Println("CVFromIndex: Error - fell through CV switch")
+	}
+	if idx >= 0 && idx < len(cvs) {
+		cv = cvs[idx]
+		ok = true
+	}
+	return cv, ok
 }

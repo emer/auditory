@@ -9,3 +9,11 @@ type SpeechUnit struct {
 	AEnd   float64 `desc:"end time of this unit in a particular sequence in milliseconds, adjusted for random start silence and any offset in audio"`
 	Type   string  `desc:"optional info - type of unit, phone, phoneme, word, CV (consonsant-vowel), etc"`
 }
+
+// SpeechSequence a sequence of speech units, for example a sequence of phones or words
+type SpeechSequence struct {
+	File     string       `desc:""`
+	ID       string       `desc:"an id to use if the corpus has subsets"`
+	Sequence string       `desc:"the full sequence of CVs, Phones, Words or whatever the unit"`
+	Units    []SpeechUnit `desc:"the units of the sequence"`
+}
