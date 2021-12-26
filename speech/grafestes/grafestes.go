@@ -17,6 +17,8 @@ import (
 )
 
 var CVs = []string{"ti", "do", "ga", "mo", "may", "bu", "pi", "ku"}
+var CVsPerWord = 2 // The graf-estes experiment used 2 syllable words
+var CVsPerPos = 4  // The graf-estes experiment had 4 cv possibilities per syllable position
 
 // LoadCVSeq reads in a list of cv strings for decoding a particular sequence and returns a slice of strings
 func LoadTranscription(fn string) ([]string, error) {
@@ -90,9 +92,10 @@ func IdxFmSnd(s string, id string) (val int, ok bool) {
 		if s == cv {
 			val = i
 			ok = true
+			return
 		}
 	}
-	return val, ok
+	return
 }
 
 // SndFmIdx returns the sound if found in the slice of sounds of the corpus.
@@ -103,6 +106,7 @@ func SndFmIdx(idx int, id string) (cv string, ok bool) {
 	if idx >= 0 && idx < len(CVs) {
 		cv = CVs[idx]
 		ok = true
+		return
 	}
-	return cv, ok
+	return
 }

@@ -139,7 +139,7 @@ func LoadTranscriptionAndTimes(fn string) ([]speech.SpeechUnit, error) {
 // id is ignored if the corpus doesn't have subsets of sounds
 func IdxFmSnd(s string, id string) (v int, ok bool) {
 	v, ok = Phones[s]
-	return v, ok
+	return
 }
 
 // SndFromIndex returns the sound if found in the map of sounds of the corpus.
@@ -151,6 +151,7 @@ func SndFmIdx(idx int, id string) (phone string, ok bool) {
 		if v == idx {
 			phone = k
 			ok = true
+			return
 		}
 	}
 	return
