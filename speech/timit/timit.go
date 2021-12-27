@@ -17,10 +17,15 @@ import (
 	"github.com/emer/auditory/speech"
 )
 
-var PhoneList = []string{"iy", "ih", "eh", "ae", "ix", "ax", "ah", "uw", "ux", "uh", "ao", "aa", "ey",
+var PhoneList = []string{"iy", "ih", "eh", "ae", "ix", "ah", "ax", "ax-h", "uw", "ux", "uh", "ao", "aa", "ey",
 	"ay", "oy", "aw", "ow", "l", "el", "r", "y", "w", "er", "axr", "m", "em", "n", "nx", "en", "ng",
 	"eng", "ch", "jh", "dh", "b", "d", "dx", "g", "p", "t", "k", "z", "zh", "v", "f", "th", "s", "sh",
 	"hh", "hv", "cl", "pcl", "tcl", "kcl", "qcl", "vcl", "bcl", "dcl", "gcl", "epi", "sil", "h#", "#h", "pau"}
+
+var PhoneCats = []string{"iy", "ih", "eh", "ae", "ix", "ah", "uw", "uh", "ao", "ey",
+	"ay", "oy", "aw", "ow", "l", "r", "y", "w", "er", "m", "n", "ng",
+	"ch", "jh", "dh", "b", "d", "dx", "g", "p", "t", "k", "z", "zh", "v", "f", "th", "s",
+	"hh", "pcl", "q"}
 
 var Phones = map[string]int{
 	"iy":   0,
@@ -33,7 +38,7 @@ var Phones = map[string]int{
 	"ax-h": 5,
 	"uw":   6,
 	"ux":   6,
-	"hu":   7,
+	"uh":   7,
 	"ao":   8,
 	"aa":   8,
 	"ey":   9,
@@ -51,8 +56,8 @@ var Phones = map[string]int{
 	"m":    19,
 	"em":   19,
 	"n":    20,
-	"en":   20,
 	"nx":   20,
+	"en":   20,
 	"ng":   21,
 	"eng":  21,
 	"ch":   22,
@@ -86,7 +91,37 @@ var Phones = map[string]int{
 	"q":    40,
 }
 
-// LoadTimitSeqsTimes loads the timing and transcription data for timit files
+// ReMap handles the mapping of mulitple sounds to a single category as some sounds are highly confusable
+// and the research community follows a protocol of condensing the full set of phones down to 39, see comment at top of file.
+// id is ignored if the corpus doesn't have subsets of sounds
+//func ReMap(s string, id string) (v int, ok bool) {
+//	v, ok = Phones[s]
+//	return
+//}
+
+// IdxFmSnd returns the slice index of the snd if found.
+// id is ignored if the corpus doesn't have subsets of sounds
+func IdxFmSnd(s string, id string) (v int, ok bool) {
+	v, ok = Phones[s]
+	return
+}
+
+// SndFmIdx returns the sound if found in the map of sounds of the corpus.
+// id is ignored if the corpus doesn't have subsets of sounds
+func SndFmIdx(idx int, id string) (phone string, ok bool) {
+	phone = ""
+	ok = false
+	for k, v := range Phones {
+		if v == idx {
+			phone = k
+			ok = true
+			return
+		}
+	}
+	return
+}
+
+// LoadTranscriptionAndTimes loads the timing and transcription data for timit files
 func LoadTranscriptionAndTimes(fn string) ([]speech.SpeechUnit, error) {
 	//fmt.Println("LoadTimitSeqsAndTimes")
 	var units []speech.SpeechUnit
@@ -133,26 +168,4 @@ func LoadTranscriptionAndTimes(fn string) ([]speech.SpeechUnit, error) {
 		i++
 	}
 	return units, nil
-}
-
-// IdxFmSnd returns the slice index of the snd if found.
-// id is ignored if the corpus doesn't have subsets of sounds
-func IdxFmSnd(s string, id string) (v int, ok bool) {
-	v, ok = Phones[s]
-	return
-}
-
-// SndFromIndex returns the sound if found in the map of sounds of the corpus.
-// id is ignored if the corpus doesn't have subsets of sounds
-func SndFmIdx(idx int, id string) (phone string, ok bool) {
-	phone = ""
-	ok = false
-	for k, v := range Phones {
-		if v == idx {
-			phone = k
-			ok = true
-			return
-		}
-	}
-	return
 }
