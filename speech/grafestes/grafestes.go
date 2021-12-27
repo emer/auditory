@@ -20,7 +20,7 @@ var CVs = []string{"ti", "do", "ga", "mo", "may", "bu", "pi", "ku"}
 var CVsPerWord = 2 // The graf-estes experiment used 2 syllable words
 var CVsPerPos = 4  // The graf-estes experiment had 4 cv possibilities per syllable position
 
-// LoadCVSeq reads in a list of cv strings for decoding a particular sequence and returns a slice of strings
+// LoadTranscription reads in a list of cv strings for decoding a particular sequence and returns a slice of strings
 func LoadTranscription(fn string) ([]string, error) {
 	//fmt.Println
 	var names []string

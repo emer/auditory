@@ -27,7 +27,7 @@ var CVs_VI = []string{"da", "ti", "nu", "lo", "ku", "no", "pi", "du", "mi", "pu"
 var CVsPerWord = 3 // The saffran, et al experiment used 3 syllable words
 var CVsPerPos = 4  // The saffran, et al experiment had 4 cv possibilities per syllable position
 
-// LoadCVSeq reads in a list of cv strings for decoding a particular sequence and returns a slice of strings
+// LoadTranscription reads in a list of cv strings for decoding a particular sequence and returns a slice of strings
 func LoadTranscription(fn string) ([]string, error) {
 	//fmt.Println
 	var names []string
@@ -120,7 +120,7 @@ func IdxFmSnd(s string, id string) (val int, ok bool) {
 	return
 }
 
-// SndFromIndex returns the sound if found in the slice of sounds of the corpus.
+// SndFmIdx returns the sound if found in the slice of sounds of the corpus.
 // id is ignored if the corpus doesn't have subsets of sounds
 func SndFmIdx(idx int, id string) (cv string, ok bool) {
 	cv = ""
