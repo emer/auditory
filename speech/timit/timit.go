@@ -125,8 +125,14 @@ func SndFmIdx(idx int, id string) (phone string, ok bool) {
 	return
 }
 
-// LoadTranscriptionAndTimes loads the timing and transcription data for timit files
-func LoadTranscriptionAndTimes(fn string) ([]speech.SpeechUnit, error) {
+// LoadTranscription is a "no op" for timit, LoadTimes does the work of both
+func LoadTranscription(fn string) ([]string, error) {
+	var names []string
+	return names, nil
+}
+
+// LoadTimes loads both the timing and transcription data for timit files so the names slice is unused
+func LoadTimes(fn string, names []string) ([]speech.SpeechUnit, error) {
 	//fmt.Println("LoadTimitSeqsAndTimes")
 	var units []speech.SpeechUnit
 
