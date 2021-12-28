@@ -1,3 +1,7 @@
+// Copyright (c) 2021, The Emergent Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
 // Package grafestes contains the consonant vowel names and timing information for the sound sequences used for the
 // research reported in "Listening Through Voices: Infant Statistical Word Segmentation Across Multiple Speakers",
 // Katherine Graf Estes & Lew-Williams, 2015.

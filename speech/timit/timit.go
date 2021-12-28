@@ -1,3 +1,7 @@
+// Copyright (c) 2021, The Emergent Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
 // Package timit Phones of the TIMIT database. For recognition testing the full set of 61 is typically
 // reduced to 39 with confusable sounds folded into a group, e.g. "sh" and "zh"
 // See Speaker-Independent Phone Recognition Using Hidden Markov Models, Kai-Fu Lee and Hsiao-Wuen Hon

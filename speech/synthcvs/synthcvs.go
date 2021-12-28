@@ -1,3 +1,7 @@
+// Copyright (c) 2021, The Emergent Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
 // Package synthcvs contains consonant vowel names and timing information for the synthesized speech generated
 // with gnuspeech. These sounds are similar to the ones used by Saffran, Aslin & Newport,
 // "Statistical Learning by 8-Month-Old Infants", 1996
