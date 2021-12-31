@@ -64,7 +64,7 @@ func (sp *SndProcess) ParamDefaults() {
 	sp.Params.BorderSteps = 6
 }
 
-// Aud encapsulates a specific auditory processing pipeline in
+// SndProcess encapsulates a specific auditory processing pipeline in
 // use in a given case -- can add / modify this as needed
 type SndProcess struct {
 	Params          Params
