@@ -7,8 +7,8 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/emer/auditory/sound"
 
+	"github.com/emer/auditory/sound"
 	_ "github.com/emer/etable/etview" // include to get gui views
 	"github.com/goki/gi/gi"
 	"github.com/goki/gi/gimain"
