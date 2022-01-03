@@ -17,5 +17,12 @@ Auditory is the our repository for audition processing code in Go (golang) focus
 **sound**
 - sound.go contains code for loading a wav file into a buffer and then converting to a floating point tensor. There are functions for trimming and padding.
 - sndenv.go is a higher level api that has code to process a sound in segments calling the sound code, mel code and gabor code
+- playwav.go can be called to play a wav file
 
-11/13/20 - Important fix to example code (processspeech.go). The mel InitFilters call was passing WindowSamples/2 rather than WindowSamples. The effect was to cut off the upper half of frequencies in the mel output.
+**speech**
+- speech package has structs for SpeechSequence and SpeechUnit
+- packages for specific sound sets (corpora) include code to load these sound files with timing information and lookup code.
+  - Package timit Phones of the TIMIT database. See Speaker-Independent Phone Recognition Using Hidden Markov Models, Kai-Fu Lee and Hsiao-Wuen Hon in IEEE Transactions on Acoustics, Speech and Signal Processing, Vol 37, 1989
+  - Package grafestes contains the consonant vowel names and timing information for the sound sequences used for the research reported in "Listening Through Voices: Infant Statistical Word Segmentation Across Multiple Speakers", Katherine Graf Estes & Lew-Williams, 2015.
+  - Package synthcvs contains consonant vowel names and timing information for the synthesized speech generated with gnuspeech. These sounds are similar to the ones used by Saffran, Aslin & Newport, "Statistical Learning by 8-Month-Old Infants", 1996
+
