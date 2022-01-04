@@ -21,11 +21,13 @@ import (
 	"github.com/emer/auditory/speech"
 )
 
+// PhoneList is the full list of phones. Some phones get folded together and the reduced set is the PhoneCats variable.
 var PhoneList = []string{"iy", "ih", "eh", "ae", "ix", "ah", "ax", "ax-h", "uw", "ux", "uh", "ao", "aa", "ey",
 	"ay", "oy", "aw", "ow", "l", "el", "r", "y", "w", "er", "axr", "m", "em", "n", "nx", "en", "ng",
 	"eng", "ch", "jh", "dh", "b", "d", "dx", "g", "p", "t", "k", "z", "zh", "v", "f", "th", "s", "sh",
 	"hh", "hv", "cl", "pcl", "tcl", "kcl", "qcl", "vcl", "bcl", "dcl", "gcl", "epi", "sil", "h#", "#h", "pau"}
 
+// PhoneCats and PhoneMap must maintain same order!
 var PhoneCats = []string{"iy", "ih", "eh", "ae", "ix", "ah", "uw", "uh", "ao", "ey",
 	"ay", "oy", "aw", "ow", "l", "r", "y", "w", "er", "m", "n", "ng",
 	"ch", "jh", "dh", "b", "d", "dx", "g", "p", "t", "k", "z", "zh", "v", "f", "th", "s",
@@ -94,14 +96,6 @@ var Phones = map[string]int{
 	"epi":  39,
 	"q":    40,
 }
-
-// ReMap handles the mapping of mulitple sounds to a single category as some sounds are highly confusable
-// and the research community follows a protocol of condensing the full set of phones down to 39, see comment at top of file.
-// id is ignored if the corpus doesn't have subsets of sounds
-//func ReMap(s string, id string) (v int, ok bool) {
-//	v, ok = Phones[s]
-//	return
-//}
 
 // IdxFmSnd returns the slice index of the snd if found.
 // id is ignored if the corpus doesn't have subsets of sounds
