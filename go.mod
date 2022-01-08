@@ -11,6 +11,7 @@ require (
 	github.com/goki/gi v1.2.15
 	github.com/goki/ki v1.1.4
 	github.com/goki/mat32 v1.0.9
+	github.com/hajimehoshi/ebiten/v2 v2.1.4
+	github.com/hajimehoshi/oto v1.0.0
 	gonum.org/v1/gonum v0.9.3
-	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
 )
