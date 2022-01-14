@@ -20,4 +20,5 @@ type SpeechSequence struct {
 	ID       string       `desc:"an id to use if the corpus has subsets"`
 	Sequence string       `desc:"the full sequence of CVs, Phones, Words or whatever the unit"`
 	Units    []SpeechUnit `desc:"the units of the sequence"`
+	Silence  float64      `desc:"milliseconds of silence added at start of sequence to add variability"`
 }
