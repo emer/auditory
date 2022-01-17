@@ -148,16 +148,6 @@ func LoadTimes(fn string, names []string) ([]speech.SpeechUnit, error) {
 		if t == "" {
 			break
 		}
-		if strings.Contains(t, "h#") { // silence at start or silence at end
-			if len(units) == 0 { // starting silence
-				continue
-			} else { // silence at end
-				cvs := strings.Fields(t)
-				f, _ := strconv.ParseFloat(cvs[0], 64)
-				units[i-1].End = f
-				break // we're done!
-			}
-		}
 		cvt := new(speech.SpeechUnit)
 		units = append(units, *cvt)
 		cvs := strings.Fields(t)
