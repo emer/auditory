@@ -30,7 +30,7 @@ type FilterSet struct {
 	StrideX    int             `desc:"how far to move the filter in X each step"`
 	StrideY    int             `desc:"how far to move the filter in Y each step"`
 	Gain       float32         `desc:"overall gain multiplier applied after gabor filtering -- only relevant if not using renormalization (otherwize it just gets renormed away)"`
-	Distribute bool            `desc:"if multiple horiz or vertical distribute evenly"`
+	Distribute bool            `desc:"if true, multiple horiz or vertical gabors with same orientation will be distributed evenly"`
 	Filters    etensor.Float64 `view:"no-inline" desc:"actual gabor filters"`
 	Table      etable.Table    `view:"no-inline" desc:"simple gabor filter table (view only)"`
 }
@@ -84,17 +84,8 @@ func ToTensor(specs []Filter, set *FilterSet) { // i is filter index in
 	for i, f := range specs {
 		f.Defaults(i)
 		twoPiNorm := (2.0 * mat32.Pi) / f.WaveLen
-		var lNorm float32
-		var wNorm float32
-		if f.Orientation == 0 {
-			lNorm = 1.0 / (2.0 * f.SigmaLength * f.SigmaLength)
-			wNorm = 1.0 / (2.0 * f.SigmaWidth * f.SigmaWidth)
-		} else {
-			l := f.SigmaLength * float32(sx)
-			w := f.SigmaWidth * float32(sy)
-			lNorm = 1.0 / (2.0 * l * l)
-			wNorm = 1.0 / (2.0 * w * w)
-		}
+		lNorm := 1.0 / (2.0 * f.SigmaLength * f.SigmaLength)
+		wNorm := 1.0 / (2.0 * f.SigmaWidth * f.SigmaWidth)
 
 		hPos := float32(0)
 		vPos := float32(0)
@@ -205,17 +196,17 @@ func Convolve(ch int, melFilterCount int, melData *etensor.Float32, filters Filt
 	fMax2 := melData.Shp[1] - filters.StrideY - 1 // limit strides based on melData in frequency dimension
 	fMax := int(mat32.Min32i(int32(fMax1), int32(fMax2)))
 
-	tIdx := 0
-	for s := tMin; s < tMax; s, tIdx = s+filters.StrideX, tIdx+1 {
-		fIdx := 0
-		for flt := fMin; flt < fMax; flt, fIdx = flt+filters.StrideY, fIdx+1 {
+	tOut := 0                                                      // write output to this index in output tensor for the time dimension (x)
+	for t := tMin; t < tMax; t, tOut = t+filters.StrideX, tOut+1 { // t is where we are at in time domain, x axis
+		fOut := 0                                                      // write output to this index in output tensor for the frequency dimension (y)
+		for f := fMin; f < fMax; f, fOut = f+filters.StrideY, fOut+1 { // f is where we are at in frequency domain, y axis
 			nf := filters.Filters.Dim(0)
 			for fi := int(0); fi < nf; fi++ {
 				fSum := float32(0.0)
-				for ff := int(0); ff < filters.SizeY; ff++ {
-					for ft := int(0); ft < filters.SizeX; ft++ {
-						fVal := filters.Filters.Value([]int{fi, ff, ft})
-						iVal := float64(melData.Value([]int{s + ft, flt + ff, ch}))
+				for fy := int(0); fy < filters.SizeY; fy++ {
+					for fx := int(0); fx < filters.SizeX; fx++ {
+						fVal := filters.Filters.Value([]int{fi, fy, fx})
+						iVal := float64(melData.Value([]int{t + fx, f + fy, ch}))
 						if math.IsNaN(iVal) {
 							iVal = .5
 						}
@@ -225,12 +216,13 @@ func Convolve(ch int, melFilterCount int, melData *etensor.Float32, filters Filt
 				pos := fSum >= 0.0
 				act := filters.Gain * mat32.Abs(fSum)
 				if pos {
-					rawOut.SetFloat([]int{ch, fIdx, tIdx, 0, fi}, float64(act))
-					rawOut.SetFloat([]int{ch, fIdx, tIdx, 1, fi}, 0)
+					rawOut.SetFloat([]int{ch, fOut, tOut, 0, fi}, float64(act))
+					rawOut.SetFloat([]int{ch, fOut, tOut, 1, fi}, 0)
 				} else {
-					rawOut.SetFloat([]int{ch, fIdx, tIdx, 0, fi}, 0)
-					rawOut.SetFloat([]int{ch, fIdx, tIdx, 1, fi}, float64(act))
+					rawOut.SetFloat([]int{ch, fOut, tOut, 0, fi}, 0)
+					rawOut.SetFloat([]int{ch, fOut, tOut, 1, fi}, float64(act))
 				}
+				//fmt.Println("tOut, fOut, fSum", tOut, fOut, fSum)
 			}
 		}
 	}
