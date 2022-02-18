@@ -145,7 +145,6 @@ func (se *SndEnv) Init(msSilenceAdd, msSilenceRmStart, msSilenceRmEnd float64) (
 	se.GborKwta.CopyMetaData(&se.GborOutput)
 	se.ExtGi.SetShape([]int{se.GborPoolsY, se.GborPoolsX, 2, nfilters}, nil, nil) // passed in for each channel
 
-	se.Mel.FBank.NFilters = 39
 	winSamplesHalf := se.Params.WinSamples/2 + 1
 	se.Dft.Initialize(se.Params.WinSamples)
 	se.Mel.InitFilters(se.Params.WinSamples, se.Sound.SampleRate(), &se.MelFilters) // call after non-default values are set!
