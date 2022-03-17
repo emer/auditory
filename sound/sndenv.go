@@ -7,6 +7,7 @@ package sound
 import (
 	"errors"
 	"fmt"
+	"log"
 	"math"
 
 	"github.com/emer/auditory/agabor"
@@ -75,8 +76,10 @@ type SndEnv struct {
 	GaborSpecs      []agabor.Filter   `view:"no-inline" desc:" a set of gabor filter specifications, one spec per filter'"`
 	GaborFilters    agabor.FilterSet  `desc:"the actual gabor filters, the first spec determines the size of all filters in the set"`
 	GaborTab        etable.Table      `view:"no-inline" desc:"gabor filter table (view only)"`
-	GborPoolsX      int               `view:"+" desc:" this values is the number of neuron pools along the time dimension in the input layer"`
-	GborPoolsY      int               `view:"+" desc:" this values is the number of neuron pools along the freq dimension in the input layer"`
+	GborOutPoolsX   int               `view:"+" desc:" the number of neuron pools along the time dimension in the input layer"`
+	GborOutUnitsX   int               `view:"+" desc:" the number of neurons in a pool (typically the number of gabor filters) along the time dimension in the input layer"`
+	GborOutPoolsY   int               `view:"+" desc:" the number of neuron pools along the frequency dimension in the input layer"`
+	GborOutUnitsY   int               `view:"+" desc:" the number of neurons in a pool along the frequency dimension in the input layer"`
 	GborOutput      etensor.Float32   `view:"no-inline" desc:" raw output of Gabor -- full segment's worth of gabor steps"`
 	GborKwta        etensor.Float32   `view:"no-inline" desc:" post-kwta output of full segment's worth of gabor steps"`
 	Inhibs          fffb.Inhibs       `view:"no-inline" desc:"inhibition values for A1 KWTA"`
@@ -138,12 +141,20 @@ func (se *SndEnv) Init(msSilenceAdd, msSilenceRmStart, msSilenceRmEnd float64) (
 	se.NeighInhib.Defaults() // NeighInhib code not working yet - need to pass 4d tensor not 5d
 	agabor.ToTensor(se.GaborSpecs, &se.GaborFilters)
 	se.GaborFilters.ToTable(se.GaborFilters, &se.GaborTab) // note: view only, testing
-	se.GborOutput.SetShape([]int{se.Sound.Channels(), se.GborPoolsY, se.GborPoolsX, 2, nfilters}, nil, []string{"chan", "freq", "time"})
+	if se.GborOutPoolsX == 0 && se.GborOutPoolsY == 0 {    // 2D
+		se.GborOutput.SetShape([]int{se.Sound.Channels(), se.GborOutUnitsY, se.GborOutUnitsX}, nil, []string{"chan", "freq", "time"})
+	} else if se.GborOutPoolsX > 0 && se.GborOutPoolsY > 0 { // 4D
+		se.GborOutput.SetShape([]int{se.Sound.Channels(), se.GborOutPoolsY, se.GborOutPoolsX, se.GborOutUnitsY, se.GborOutUnitsX}, nil, []string{"chan", "freq", "time"})
+	} else {
+		log.Println("GborOutPoolsX & GborOutPoolsY must both be == 0 or > 0 (i.e. 2D or 4D)")
+		return
+	}
 	se.GborOutput.SetMetaData("odd-row", "true")
 	se.GborOutput.SetMetaData("grid-fill", ".9")
 	se.GborKwta.CopyShapeFrom(&se.GborOutput)
 	se.GborKwta.CopyMetaData(&se.GborOutput)
-	se.ExtGi.SetShape([]int{se.GborPoolsY, se.GborPoolsX, 2, nfilters}, nil, nil) // passed in for each channel
+	//se.ExtGi.SetShape([]int{se.GborPoolsY, se.GborPoolsX, 2, nfilters}, nil, nil) // passed in for each channel
+	se.ExtGi.SetShape([]int{26, nfilters}, nil, nil) // passed in for each channel
 
 	se.Mel.FBank.NFilters = 39
 	winSamplesHalf := se.Params.WinSamples/2 + 1
@@ -290,7 +301,7 @@ func (se *SndEnv) SndToWindow(stepOffset int, ch int) error {
 // ApplyGabor convolves the gabor filters with the mel output
 func (se *SndEnv) ApplyGabor() (tsr *etensor.Float32) {
 	for ch := int(0); ch < se.Sound.Channels(); ch++ {
-		agabor.Convolve(ch, se.Mel.FBank.NFilters, &se.MelFBankSegment, se.GaborFilters, &se.GborOutput)
+		agabor.Convolve(ch, &se.MelFBankSegment, se.GaborFilters, &se.GborOutput)
 		//if se.NeighInhib.On {
 		//	se.NeighInhib.Inhib4(&se.GborOutput, &se.ExtGi)
 		//} else {

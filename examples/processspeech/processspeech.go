@@ -277,7 +277,7 @@ func (sp *SndProcess) ProcessStep(ch, step int) bool {
 // ApplyGabor convolves the gabor filters with the mel output
 func (sp *SndProcess) ApplyGabor() {
 	for ch := int(0); ch < sp.Sound.Channels(); ch++ {
-		agabor.Convolve(ch, sp.Mel.FBank.NFilters, &sp.MelFBankSegment, sp.GaborFilters, &sp.GaborTsr)
+		agabor.Convolve(ch, &sp.MelFBankSegment, sp.GaborFilters, &sp.GaborTsr)
 	}
 }
 

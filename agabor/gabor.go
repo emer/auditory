@@ -9,6 +9,7 @@ import (
 	"github.com/emer/etable/etable"
 	"github.com/emer/etable/etensor"
 	"github.com/goki/mat32"
+	"log"
 	"math"
 )
 
@@ -193,22 +194,44 @@ func ToTensor(specs []Filter, set *FilterSet) { // i is filter index in
 }
 
 // Convolve processes input using filters that operate over an entire segment of samples
-func Convolve(ch int, melFilterCount int, melData *etensor.Float32, filters FilterSet, rawOut *etensor.Float32) {
-	// just set tMin to zero - any offset should be handled by the calling code
-	tMin := 0
-	tMax1 := rawOut.Shp[2] * filters.StrideX
-	tMax2 := melData.Shp[0] - filters.StrideX - 1
-	tMax := int(mat32.Min32i(int32(tMax1), int32(tMax2)))
+func Convolve(ch int, melData *etensor.Float32, filters FilterSet, rawOut *etensor.Float32) {
+	if melData.Dim(0) < filters.SizeX {
+		log.Println("Gabor filter width can not be larger than the width of the mel matrix")
+		return
+	}
 
-	fMin := 0
-	fMax1 := rawOut.Shp[1] * filters.StrideY      // limit frequency strides so we don't overrun the output tensor
-	fMax2 := melData.Shp[1] - filters.StrideY - 1 // limit strides based on melData in frequency dimension
-	fMax := int(mat32.Min32i(int32(fMax1), int32(fMax2)))
+	tMax := 1
+	fMax := 1
+	if rawOut.NumDims() == 3 {
+		x := melData.Dim(0) - filters.SizeX
+		if x == 0 || x < filters.StrideX {
+			// leave tMax equal to 1
+		} else {
+			tMax = x / (filters.StrideX - 1)
+		}
+		y := melData.Dim(1) - filters.SizeY
+		if y == 0 || y < filters.StrideY {
+			// leave fMax equal to 1
+		} else {
+			fMax = y / (filters.StrideY - 1)
+		}
+	} else if rawOut.NumDims() == 5 {
+		tMax1 := rawOut.Shp[2] * filters.StrideX
+		tMax2 := melData.Shp[0] - filters.StrideX - 1
+		tMax = int(mat32.Min32i(int32(tMax1), int32(tMax2)))
+
+		fMax1 := rawOut.Shp[1] * filters.StrideY      // limit frequency strides so we don't overrun the output tensor
+		fMax2 := melData.Shp[1] - filters.StrideY - 1 // limit strides based on melData in frequency dimension
+		fMax = int(mat32.Min32i(int32(fMax1), int32(fMax2)))
+	} else {
+		log.Println("The output tensor should have 3 or 5 dimensions (1 for number of channels plus 2 or 4 for 2D or 4D result")
+		return
+	}
 
 	tIdx := 0
-	for s := tMin; s < tMax; s, tIdx = s+filters.StrideX, tIdx+1 {
+	for s := 0; s < tMax; s, tIdx = s+filters.StrideX, tIdx+1 {
 		fIdx := 0
-		for flt := fMin; flt < fMax; flt, fIdx = flt+filters.StrideY, fIdx+1 {
+		for flt := 0; flt < fMax; flt, fIdx = flt+filters.StrideY, fIdx+1 {
 			nf := filters.Filters.Dim(0)
 			for fi := int(0); fi < nf; fi++ {
 				fSum := float32(0.0)
@@ -224,12 +247,24 @@ func Convolve(ch int, melFilterCount int, melData *etensor.Float32, filters Filt
 				}
 				pos := fSum >= 0.0
 				act := filters.Gain * mat32.Abs(fSum)
-				if pos {
-					rawOut.SetFloat([]int{ch, fIdx, tIdx, 0, fi}, float64(act))
-					rawOut.SetFloat([]int{ch, fIdx, tIdx, 1, fi}, 0)
+				if rawOut.NumDims() == 3 {
+					if pos {
+						rawOut.SetFloat([]int{ch, flt + 0, fi}, float64(act))
+						rawOut.SetFloat([]int{ch, flt + 1, fi}, 0)
+					} else {
+						rawOut.SetFloat([]int{ch, flt + 0, fi}, 0)
+						rawOut.SetFloat([]int{ch, flt + 1, fi}, float64(act))
+					}
+				} else if rawOut.NumDims() == 5 {
+					if pos {
+						rawOut.SetFloat([]int{ch, fIdx, tIdx, 0, fi}, float64(act))
+						rawOut.SetFloat([]int{ch, fIdx, tIdx, 1, fi}, 0)
+					} else {
+						rawOut.SetFloat([]int{ch, fIdx, tIdx, 0, fi}, 0)
+						rawOut.SetFloat([]int{ch, fIdx, tIdx, 1, fi}, float64(act))
+					}
 				} else {
-					rawOut.SetFloat([]int{ch, fIdx, tIdx, 0, fi}, 0)
-					rawOut.SetFloat([]int{ch, fIdx, tIdx, 1, fi}, float64(act))
+					log.Println("The output tensor should have 3 or 5 dimensions (1 for number of channels plus 2 or 4 for 2D or 4D result")
 				}
 			}
 		}
