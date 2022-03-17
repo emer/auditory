@@ -141,32 +141,35 @@ func (sp *SndProcess) Config() {
 	sp.Segment = -1
 	sp.MoreSegments = true
 
-	sp.GaborSpecs = nil // in case there are some specs already
-	spec := agabor.Filter{WaveLen: 2.0, Orientation: 0, SigmaWidth: 0.6, SigmaLength: 0.2, PhaseOffset: 0, CircleEdge: true}
-	sp.GaborSpecs = append(sp.GaborSpecs, spec)
-	spec = agabor.Filter{WaveLen: 2.0, Orientation: 0, SigmaWidth: 0.6, SigmaLength: 0.2, PhaseOffset: 1.5708, CircleEdge: true}
-	sp.GaborSpecs = append(sp.GaborSpecs, spec)
-	spec = agabor.Filter{WaveLen: 2.0, Orientation: 45, SigmaWidth: 0.3, SigmaLength: 0.6, PhaseOffset: 0, CircleEdge: true}
-	sp.GaborSpecs = append(sp.GaborSpecs, spec)
-	spec = agabor.Filter{WaveLen: 2.0, Orientation: 90, SigmaWidth: 0.3, SigmaLength: 0.6, PhaseOffset: 0, CircleEdge: true}
-	sp.GaborSpecs = append(sp.GaborSpecs, spec)
-	spec = agabor.Filter{WaveLen: 2.0, Orientation: 135, SigmaWidth: 0.3, SigmaLength: 0.6, PhaseOffset: 0, CircleEdge: true}
-	sp.GaborSpecs = append(sp.GaborSpecs, spec)
-	// and a circular one - orientation, phase and sigmaLength will be ignored if specified
-	spec = agabor.Filter{WaveLen: 2.0, SigmaWidth: 0.5, Circular: true}
-	sp.GaborSpecs = append(sp.GaborSpecs, spec)
-
-	// filter size is assumed to be consistent and taken from first in the spec list
-	sp.GaborFilters.SizeX = 7
-	sp.GaborFilters.SizeY = 7
+	sp.GaborFilters.SizeX = 15
+	sp.GaborFilters.SizeY = 15
 	sp.GaborFilters.StrideX = 3
 	sp.GaborFilters.StrideY = 3
 	sp.GaborFilters.Gain = 2
 	sp.GaborFilters.Distribute = false // the 0 orientation filters will both be centered
-	x := sp.GaborFilters.SizeX
-	y := sp.GaborFilters.SizeY
-	n := len(sp.GaborSpecs)
-	sp.GaborFilters.Filters.SetShape([]int{n, y, x}, nil, nil)
+
+	// for orientation 0 (horiz) length is height as you view the filter
+	sp.GaborSpecs = nil // in case there are some specs already
+
+	i := 0
+	var w float32
+	var l float32
+	orient := []float32{0, 45, 90, 135}
+	wavelen := []float32{2.0}
+	phase := []float32{0, 1.5708}
+
+	for _, or := range orient {
+		for _, wl := range wavelen {
+			for _, ph := range phase {
+				for i, w, l = 0, 0.25, 0.25; i < 2; i, w, l = i+1, w+w*2, l+l*2 {
+					spec := agabor.Filter{WaveLen: wl, Orientation: or, SigmaWidth: w, SigmaLength: l, PhaseOffset: ph, CircleEdge: true}
+					sp.GaborSpecs = append(sp.GaborSpecs, spec)
+				}
+			}
+		}
+	}
+
+	sp.GaborFilters.Filters.SetShape([]int{len(sp.GaborSpecs), sp.GaborFilters.SizeY, sp.GaborFilters.SizeX}, nil, nil)
 	agabor.ToTensor(sp.GaborSpecs, &sp.GaborFilters)
 	sp.GaborFilters.ToTable(sp.GaborFilters, &sp.GaborTab) // note: view only, testing
 
@@ -174,7 +177,7 @@ func (sp *SndProcess) Config() {
 	tsrX := tmp/sp.GaborFilters.StrideX + 1
 	tmp = sp.Mel.FBank.NFilters - sp.GaborFilters.SizeY
 	tsrY := tmp/sp.GaborFilters.StrideY + 1
-	sp.GaborTsr.SetShape([]int{sp.Sound.Channels(), tsrY, tsrX, 2, n}, nil, nil)
+	sp.GaborTsr.SetShape([]int{sp.Sound.Channels(), tsrY, tsrX, 2, len(sp.GaborSpecs)}, nil, nil)
 	sp.GaborTsr.SetMetaData("odd-row", "true")
 	sp.GaborTsr.SetMetaData("grid-fill", ".9")
 
