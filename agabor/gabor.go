@@ -256,14 +256,17 @@ func Convolve(ch int, melData *etensor.Float32, filters FilterSet, rawOut *etens
 						rawOut.SetFloat([]int{ch, flt + 1, fi}, float64(act))
 					}
 				} else if rawOut.NumDims() == 5 {
-					if pos {
-						rawOut.SetFloat([]int{ch, fIdx, tIdx, 0, fi}, float64(act))
-						rawOut.SetFloat([]int{ch, fIdx, tIdx, 1, fi}, 0)
-					} else {
-						rawOut.SetFloat([]int{ch, fIdx, tIdx, 0, fi}, 0)
-						rawOut.SetFloat([]int{ch, fIdx, tIdx, 1, fi}, float64(act))
-					}
-				} else {
+					// EXPERIMENT
+					rawOut.SetFloat([]int{ch, fIdx, tIdx, 0, fi}, float64(act))
+					rawOut.SetFloat([]int{ch, fIdx, tIdx, 1, fi}, float64(act))
+					//if pos {
+					//	rawOut.SetFloat([]int{ch, fIdx, tIdx, 0, fi}, float64(act))
+					//	rawOut.SetFloat([]int{ch, fIdx, tIdx, 1, fi}, 0)
+					//} else {
+					//	rawOut.SetFloat([]int{ch, fIdx, tIdx, 0, fi}, 0)
+					//	rawOut.SetFloat([]int{ch, fIdx, tIdx, 1, fi}, float64(act))
+					//}
+
 					log.Println("The output tensor should have 3 or 5 dimensions (1 for number of channels plus 2 or 4 for 2D or 4D result")
 				}
 			}
