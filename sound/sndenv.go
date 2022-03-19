@@ -143,8 +143,10 @@ func (se *SndEnv) Init(msSilenceAdd, msSilenceRmStart, msSilenceRmEnd float64) (
 	se.GaborFilters.ToTable(se.GaborFilters, &se.GaborTab) // note: view only, testing
 	if se.GborOutPoolsX == 0 && se.GborOutPoolsY == 0 {    // 2D
 		se.GborOutput.SetShape([]int{se.Sound.Channels(), se.GborOutUnitsY, se.GborOutUnitsX}, nil, []string{"chan", "freq", "time"})
+		se.ExtGi.SetShape([]int{se.GborOutUnitsY, nfilters}, nil, nil) // passed in for each channel
 	} else if se.GborOutPoolsX > 0 && se.GborOutPoolsY > 0 { // 4D
 		se.GborOutput.SetShape([]int{se.Sound.Channels(), se.GborOutPoolsY, se.GborOutPoolsX, se.GborOutUnitsY, se.GborOutUnitsX}, nil, []string{"chan", "freq", "time"})
+		se.ExtGi.SetShape([]int{se.GborOutPoolsY, se.GborOutPoolsX, 2, nfilters}, nil, nil) // passed in for each channel
 	} else {
 		log.Println("GborOutPoolsX & GborOutPoolsY must both be == 0 or > 0 (i.e. 2D or 4D)")
 		return
@@ -153,8 +155,6 @@ func (se *SndEnv) Init(msSilenceAdd, msSilenceRmStart, msSilenceRmEnd float64) (
 	se.GborOutput.SetMetaData("grid-fill", ".9")
 	se.GborKwta.CopyShapeFrom(&se.GborOutput)
 	se.GborKwta.CopyMetaData(&se.GborOutput)
-	//se.ExtGi.SetShape([]int{se.GborPoolsY, se.GborPoolsX, 2, nfilters}, nil, nil) // passed in for each channel
-	se.ExtGi.SetShape([]int{26, nfilters}, nil, nil) // passed in for each channel
 
 	winSamplesHalf := se.Params.WinSamples/2 + 1
 	se.Dft.Initialize(se.Params.WinSamples)

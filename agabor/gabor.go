@@ -207,21 +207,21 @@ func Convolve(ch int, melData *etensor.Float32, filters FilterSet, rawOut *etens
 		if x == 0 || x < filters.StrideX {
 			// leave tMax equal to 1
 		} else {
-			tMax = x / (filters.StrideX - 1)
+			tMax = x + 1
 		}
 		y := melData.Dim(1) - filters.SizeY
 		if y == 0 || y < filters.StrideY {
 			// leave fMax equal to 1
 		} else {
-			fMax = y / (filters.StrideY - 1)
+			fMax = y + 1
 		}
 	} else if rawOut.NumDims() == 5 {
 		tMax1 := rawOut.Shp[2] * filters.StrideX
-		tMax2 := melData.Shp[0] - filters.StrideX - 1
+		tMax2 := melData.Shp[0] - filters.StrideX
 		tMax = int(mat32.Min32i(int32(tMax1), int32(tMax2)))
 
-		fMax1 := rawOut.Shp[1] * filters.StrideY      // limit frequency strides so we don't overrun the output tensor
-		fMax2 := melData.Shp[1] - filters.StrideY - 1 // limit strides based on melData in frequency dimension
+		fMax1 := rawOut.Shp[1] * filters.StrideY  // limit frequency strides so we don't overrun the output tensor
+		fMax2 := melData.Shp[1] - filters.StrideY // limit strides based on melData in frequency dimension
 		fMax = int(mat32.Min32i(int32(fMax1), int32(fMax2)))
 	} else {
 		log.Println("The output tensor should have 3 or 5 dimensions (1 for number of channels plus 2 or 4 for 2D or 4D result")
@@ -229,16 +229,16 @@ func Convolve(ch int, melData *etensor.Float32, filters FilterSet, rawOut *etens
 	}
 
 	tIdx := 0
-	for s := 0; s < tMax; s, tIdx = s+filters.StrideX, tIdx+1 {
+	for t := 0; t < tMax; t, tIdx = t+filters.StrideX, tIdx+1 { // t for time
 		fIdx := 0
-		for flt := 0; flt < fMax; flt, fIdx = flt+filters.StrideY, fIdx+1 {
-			nf := filters.Filters.Dim(0)
-			for fi := int(0); fi < nf; fi++ {
+		for f := 0; f < fMax; f, fIdx = f+filters.StrideY, fIdx+1 { // f for frequency
+			nf := filters.Filters.Dim(0)         // number of filters
+			for flt := int(0); flt < nf; flt++ { // which filter
 				fSum := float32(0.0)
-				for ff := int(0); ff < filters.SizeY; ff++ {
-					for ft := int(0); ft < filters.SizeX; ft++ {
-						fVal := filters.Filters.Value([]int{fi, ff, ft})
-						iVal := float64(melData.Value([]int{s + ft, flt + ff, ch}))
+				for ff := int(0); ff < filters.SizeY; ff++ { // size of gabor filter in Y (frequency)
+					for ft := int(0); ft < filters.SizeX; ft++ { // size of gabor filter in X (time)
+						fVal := filters.Filters.Value([]int{flt, ff, ft})
+						iVal := float64(melData.Value([]int{t + ft, f + ff, ch}))
 						if math.IsNaN(iVal) {
 							iVal = .5
 						}
@@ -248,25 +248,23 @@ func Convolve(ch int, melData *etensor.Float32, filters FilterSet, rawOut *etens
 				pos := fSum >= 0.0
 				act := filters.Gain * mat32.Abs(fSum)
 				if rawOut.NumDims() == 3 {
+					y := fIdx * 2 // we are populating 2 rows, off-center and on-center, thus we need to jump by 2 when populating the output tensor
 					if pos {
-						rawOut.SetFloat([]int{ch, flt + 0, fi}, float64(act))
-						rawOut.SetFloat([]int{ch, flt + 1, fi}, 0)
+						rawOut.SetFloat([]int{ch, y, flt}, float64(act))
+						rawOut.SetFloat([]int{ch, y + 1, flt}, 0)
 					} else {
-						rawOut.SetFloat([]int{ch, flt + 0, fi}, 0)
-						rawOut.SetFloat([]int{ch, flt + 1, fi}, float64(act))
+						rawOut.SetFloat([]int{ch, y, flt}, 0)
+						rawOut.SetFloat([]int{ch, y + 1, flt}, float64(act))
 					}
-				} else if rawOut.NumDims() == 5 {
-					// EXPERIMENT
-					rawOut.SetFloat([]int{ch, fIdx, tIdx, 0, fi}, float64(act))
-					rawOut.SetFloat([]int{ch, fIdx, tIdx, 1, fi}, float64(act))
-					//if pos {
-					//	rawOut.SetFloat([]int{ch, fIdx, tIdx, 0, fi}, float64(act))
-					//	rawOut.SetFloat([]int{ch, fIdx, tIdx, 1, fi}, 0)
-					//} else {
-					//	rawOut.SetFloat([]int{ch, fIdx, tIdx, 0, fi}, 0)
-					//	rawOut.SetFloat([]int{ch, fIdx, tIdx, 1, fi}, float64(act))
-					//}
-
+				} else if rawOut.NumDims() == 5 { // in the 4D case we have pools no need for the multiplication we have in the 2D setting of the output tensor
+					if pos {
+						rawOut.SetFloat([]int{ch, fIdx, tIdx, 0, flt}, float64(act))
+						rawOut.SetFloat([]int{ch, fIdx, tIdx, 1, flt}, 0)
+					} else {
+						rawOut.SetFloat([]int{ch, fIdx, tIdx, 0, flt}, 0)
+						rawOut.SetFloat([]int{ch, fIdx, tIdx, 1, flt}, float64(act))
+					}
+				} else {
 					log.Println("The output tensor should have 3 or 5 dimensions (1 for number of channels plus 2 or 4 for 2D or 4D result")
 				}
 			}
