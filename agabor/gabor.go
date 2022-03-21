@@ -87,15 +87,8 @@ func ToTensor(specs []Filter, set *FilterSet) { // i is filter index in
 		twoPiNorm := (2.0 * mat32.Pi) / f.WaveLen
 		var lNorm float32
 		var wNorm float32
-		if f.Orientation == 0 {
-			lNorm = 1.0 / (2.0 * f.SigmaLength * f.SigmaLength)
-			wNorm = 1.0 / (2.0 * f.SigmaWidth * f.SigmaWidth)
-		} else {
-			l := f.SigmaLength * float32(sx)
-			w := f.SigmaWidth * float32(sy)
-			lNorm = 1.0 / (2.0 * l * l)
-			wNorm = 1.0 / (2.0 * w * w)
-		}
+		lNorm = 1.0 / (2.0 * f.SigmaLength * f.SigmaLength)
+		wNorm = 1.0 / (2.0 * f.SigmaWidth * f.SigmaWidth)
 
 		hPos := float32(0)
 		vPos := float32(0)
