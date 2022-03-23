@@ -131,10 +131,12 @@ func (se *SndEnv) Init(msSilenceAdd, msSilenceRmStart, msSilenceRmEnd float64) (
 		copy(se.Signal.Values, tmp)
 	}
 
-	n := int((msSilenceAdd * float64(se.Params.StrideSamples)) / 100.0)
-	silence := make([]float32, n)
-	se.Signal.Values = append(silence, se.Signal.Values...)
-	se.Signal.Values = se.Pad(se.Signal.Values)
+	if msSilenceAdd > 0 {
+		n := int((msSilenceAdd * float64(se.Params.StrideSamples)) / 100.0)
+		silence := make([]float32, n)
+		se.Signal.Values = append(silence, se.Signal.Values...)
+		se.Signal.Values = se.Pad(se.Signal.Values)
+	}
 
 	nfilters := len(se.GaborSpecs)
 	se.GaborFilters.Filters.SetShape([]int{nfilters, se.GaborFilters.SizeY, se.GaborFilters.SizeX}, nil, nil)
