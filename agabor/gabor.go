@@ -15,6 +15,7 @@ import (
 
 // Filter, a struct of gabor filter parameters
 type Filter struct {
+	Off         bool    `desc:"filter on or off"`
 	WaveLen     float32 `desc:"wavelength of the sine waves in normalized units, 1.5 and 2 are reasonable values"`
 	Orientation float32 `desc:"orientation of the gabor in degrees, e.g. 0, 45, 90, 135. Multiple of the same orientation will get evenly distributed with the filter matrix"`
 	SigmaWidth  float32 `def:"0.6" desc:"gaussian sigma for the width dimension (in the direction of the sine waves) -- normalized as a function of filter size in relevant dimension"`
@@ -43,21 +44,28 @@ func (f *Filter) Defaults(i int) {
 		fmt.Println("filter spec missing value for WaveLen: setting to 2")
 	}
 	if f.SigmaLength == 0 && f.Circular == false {
-		f.SigmaLength = 0.6
-		fmt.Println("filter spec missing value for SigmaLength: setting to 0.6")
+		f.SigmaLength = 0.5
+		fmt.Println("filter spec missing value for SigmaLength: setting to 0.5")
 	}
 	if f.SigmaWidth == 0 {
-		f.SigmaWidth = 0.3
-		fmt.Println("filter spec missing value for SigmaWidth: setting to 0.3")
+		f.SigmaWidth = 0.5
+		fmt.Println("filter spec missing value for SigmaWidth: setting to 0.5")
 	}
 }
 
 // ToTensor generates filters into the tensor passed by caller
 func ToTensor(specs []Filter, set *FilterSet) { // i is filter index in
+	// create reduced set of just the active specs
+	var active []Filter
+	for _, spec := range specs {
+		if spec.Off == false {
+			active = append(active, spec)
+		}
+	}
 	nhf := 0 // number of horizontal filters
 	nvf := 0 // number of vertical filters
 	if set.Distribute == true {
-		for _, f := range specs {
+		for _, f := range active {
 			if f.Orientation == 0 {
 				nhf++
 			} else if f.Orientation == 90 {
@@ -82,7 +90,8 @@ func ToTensor(specs []Filter, set *FilterSet) { // i is filter index in
 	//
 	hCnt := 0 // the current count of 0 degree filters generated
 	vCnt := 0 // the current count of 90 degree filters generated
-	for i, f := range specs {
+
+	for i, f := range active {
 		f.Defaults(i)
 		twoPiNorm := (2.0 * mat32.Pi) / f.WaveLen
 		var lNorm float32
