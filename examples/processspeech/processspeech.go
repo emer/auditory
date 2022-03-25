@@ -169,8 +169,10 @@ func (sp *SndProcess) Config() {
 		}
 	}
 
-	sp.GaborFilters.Filters.SetShape([]int{len(sp.GaborSpecs), sp.GaborFilters.SizeY, sp.GaborFilters.SizeX}, nil, nil)
-	agabor.ToTensor(sp.GaborSpecs, &sp.GaborFilters)
+	// only create the active (i.e. not Off) filters
+	active := agabor.Active(sp.GaborSpecs)
+	sp.GaborFilters.Filters.SetShape([]int{len(active), sp.GaborFilters.SizeY, sp.GaborFilters.SizeX}, nil, nil)
+	agabor.ToTensor(active, &sp.GaborFilters)
 	sp.GaborFilters.ToTable(sp.GaborFilters, &sp.GaborTab) // note: view only, testing
 
 	tmp := sp.Params.SegmentSteps - sp.GaborFilters.SizeX
@@ -407,7 +409,8 @@ func (sp *SndProcess) ConfigGui() *gi.Window {
 		//act.SetActiveStateUpdt(sp.MoreSegments)
 	}}, win.This(), func(recv, send ki.Ki, sig int64, data interface{}) {
 		sp.ProcessSegment()
-		agabor.ToTensor(sp.GaborSpecs, &sp.GaborFilters)
+		active := agabor.Active(sp.GaborSpecs)
+		agabor.ToTensor(active, &sp.GaborFilters)
 		sp.GaborFilters.ToTable(sp.GaborFilters, &sp.GaborTab) // note: view only, testing
 		vp.FullRender2DTree()
 	})
