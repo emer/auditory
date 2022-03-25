@@ -55,17 +55,10 @@ func (f *Filter) Defaults(i int) {
 
 // ToTensor generates filters into the tensor passed by caller
 func ToTensor(specs []Filter, set *FilterSet) { // i is filter index in
-	// create reduced set of just the active specs
-	var active []Filter
-	for _, spec := range specs {
-		if spec.Off == false {
-			active = append(active, spec)
-		}
-	}
 	nhf := 0 // number of horizontal filters
 	nvf := 0 // number of vertical filters
 	if set.Distribute == true {
-		for _, f := range active {
+		for _, f := range specs {
 			if f.Orientation == 0 {
 				nhf++
 			} else if f.Orientation == 90 {
@@ -91,7 +84,7 @@ func ToTensor(specs []Filter, set *FilterSet) { // i is filter index in
 	hCnt := 0 // the current count of 0 degree filters generated
 	vCnt := 0 // the current count of 90 degree filters generated
 
-	for i, f := range active {
+	for i, f := range specs {
 		f.Defaults(i)
 		twoPiNorm := (2.0 * mat32.Pi) / f.WaveLen
 		var lNorm float32
@@ -283,4 +276,14 @@ func (fs *FilterSet) ToTable(set FilterSet, tab *etable.Table) {
 		{"Filter", etensor.FLOAT32, []int{1, fs.SizeX, fs.SizeY}, []string{"Filter", "Y", "X"}},
 	}, n)
 	tab.Cols[0].SetFloats(set.Filters.Values)
+}
+
+// create reduced set of just the active specs
+func Active(specs []Filter) (active []Filter) {
+	for _, spec := range specs {
+		if spec.Off == false {
+			active = append(active, spec)
+		}
+	}
+	return active
 }
