@@ -56,10 +56,6 @@ var KiT_Sim = kit.Types.AddType(&App{}, AppProps)
 
 // TheApp is the overall state for this simulation
 var TheApp App
-var ParamsEdit *giv.StructView
-var SndsTable *giv.SliceView
-var UserStruct *giv.StructView
-var GaborSlice *giv.SliceView
 
 func (ss *App) New() {
 }
@@ -69,9 +65,9 @@ func (ss *App) New() {
 
 // User holds data (or points to other fields) the user will likely want to access quickly and edit frequently
 type User struct {
-	SegmentStart    int `desc:"the start of the audio segment, in milliseconds, that we will be processing"`
-	SegmentEnd      int `desc:"the end of the audio segment, in milliseconds, that we will be processing"`
-	SegmentDuration int `desc:"segment duration, in milliseconds, to step if stepping through sound sequence"`
+	SegmentStart    int `view:"inline" desc:"the start of the audio segment, in milliseconds, that we will be processing"`
+	SegmentEnd      int `view:"inline" desc:"the end of the audio segment, in milliseconds, that we will be processing"`
+	SegmentDuration int `view:"inline" desc:"segment duration, in milliseconds, to step if stepping through sound sequence"`
 }
 
 // Params defines the sound input parameters for auditory processing
@@ -80,18 +76,18 @@ type Params struct {
 	StepMs      float32 `def:"5,10,12.5" desc:"input step -- number of milliseconds worth of sound that the input is stepped along to obtain the next window sample"`
 	SegmentMs   float32 `def:"100" desc:"length of full segment's worth of input -- total number of milliseconds to accumulate into a complete segment -- must be a multiple of StepMs -- input will be SegmentMs / StepMs = SegmentSteps wide in the X axis, and number of filters in the Y axis"`
 	StrideMs    float32 `def:"100" desc:"how far to move on each trial"`
-	BorderSteps int     `def:"6" view:"+" desc:"overlap with previous segment"`
-	Channel     int     `viewif:"Channels=1" desc:"specific channel to process, if input has multiple channels, and we only process one of them (-1 = process all)"`
-	PadValue    float32
+	BorderSteps int     `def:"0" desc:"overlap with previous segment"`
+	Channel     int     `view:"-" desc:"specific channel to process, if input has multiple channels, and we only process one of them (-1 = process all)"`
+	PadValue    float32 `view:"-"`
 
 	// these are calculated
-	WinSamples        int   `inactive:"+" desc:"number of samples to process each step"`
-	StepSamples       int   `inactive:"+" desc:"number of samples to step input by"`
-	SegmentSamples    int   `inactive:"+" desc:"number of samples in a segment"`
-	StrideSamples     int   `inactive:"+" desc:"number of samples converted from StrideMS"`
-	SegmentSteps      int   `inactive:"+" desc:"number of steps in a segment"`
-	SegmentStepsTotal int   `inactive:"+" desc:"SegmentSteps plus steps overlapping next segment or for padding if no next segment"`
-	Steps             []int `inactive:"+" desc:"pre-calculated start position for each step"`
+	WinSamples        int   `view:"-" desc:"number of samples to process each step"`
+	StepSamples       int   `view:"-" desc:"number of samples to step input by"`
+	SegmentSamples    int   `view:"-" desc:"number of samples in a segment"`
+	StrideSamples     int   `view:"-" desc:"number of samples converted from StrideMS"`
+	SegmentSteps      int   `view:"-" desc:"number of steps in a segment"`
+	SegmentStepsTotal int   `view:"-" desc:"SegmentSteps plus steps overlapping next segment or for padding if no next segment"`
+	Steps             []int `view:"-" desc:"pre-calculated start position for each step"`
 }
 
 type App struct {
@@ -103,8 +99,8 @@ type App struct {
 	SndFileName string `desc:"name of the open sound file"`
 	SndFilePath string `desc:"path to the open sound file"`
 
-	UserVals User `desc:" sound processing values and matrices for the short duration pathway"`
-	Params   Params
+	UserVals User            `view:"inline" desc:"sound processing values and matrices for the short duration pathway"`
+	Params   Params          `view:"inline" desc:"fundamental processing parameters"`
 	Sound    sound.Wave      `view:"no-inline"`
 	Signal   etensor.Float32 `view:"-" desc:" the full sound input obtained from the sound input - plus any added padding"`
 	Samples  etensor.Float32 `view:"-" desc:" a window's worth of raw sound input, one channel at a time"`
@@ -117,16 +113,15 @@ type App struct {
 	LogPower        etensor.Float32 `view:"-" desc:" log power of the dft, up to the nyquist liit frequency (1/2 input.WinSamples)"`
 	PowerSegment    etensor.Float32 `view:"no-inline" desc:" full segment's worth of power of the dft, up to the nyquist limit frequency (1/2 input.WinSamples)"`
 	LogPowerSegment etensor.Float32 `view:"no-inline" desc:" full segment's worth of log power of the dft, up to the nyquist limit frequency (1/2 input.WinSamples)"`
-	Mel             mel.Params      `view:"no-inline"`
+	Mel             mel.Params      `view:"inline"`
 	MelFBank        etensor.Float32 `view:"no-inline" desc:" mel scale transformation of dft_power, using triangular filters, resulting in the mel filterbank output -- the natural log of this is typically applied"`
 	MelFBankSegment etensor.Float32 `view:"no-inline" desc:" full segment's worth of mel feature-bank output"`
 	MelFilters      etensor.Float32 `view:"no-inline" desc:" the actual filters"`
 	MfccDct         etensor.Float32 `view:"-" desc:" discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
 	MfccDctSegment  etensor.Float32 `view:"-" desc:" full segment's worth of discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
 
-	GaborSpecs []agabor.Filter  `view:" no-inline" desc:"array of params describing each gabor filter"`
-	GaborSet   agabor.FilterSet `view:"no-inline" desc:"a set of gabor filters with same x and y dimensions"`
-	//GaborTsr   etensor.Float32   `view:"no-inline" desc:" raw output of Gabor -- full segment's worth of gabor steps"`
+	GaborSpecs []agabor.Filter   `view:"inline" desc:"array of params describing each gabor filter"`
+	GaborSet   agabor.FilterSet  `view:"inline" desc:"a set of gabor filters with same x and y dimensions"`
 	GaborTab   etable.Table      `view:"no-inline" desc:"gabor filter table (view only)"`
 	GborOutput etensor.Float32   `view:"no-inline" desc:" raw output of Gabor -- full segment's worth of gabor steps"`
 	GborKwta   etensor.Float32   `view:"no-inline" desc:" post-kwta output of full segment's worth of gabor steps"`
@@ -141,7 +136,7 @@ type App struct {
 	// internal state - view:"-"
 	FirstStep bool `view:"-" desc:" if first frame to process -- turns off prv smoothing of dft power"`
 
-	Output etensor.Float32 `view:"no-inline" desc:" raw output of gabor convolution"`
+	//Output etensor.Float32 `view:"no-inline" desc:" raw output of gabor convolution"`
 
 	SpeechSeq speech.SpeechSequence
 	CurUnits  []string `desc:"names of units in the current audio segment"`
@@ -154,8 +149,9 @@ type App struct {
 	SndIdx       int         `view:"-" desc:"the index into the soundlist of the sound from last trial"`
 
 	GUI          egui.GUI           `view:"-" desc:"manages all the gui elements"`
-	PowerGrid    *etview.TensorGrid `view:"-" desc:"power grid view for the current segment"`
+	PowerGrid    *etview.TensorGrid `view:"+" desc:"power grid view for the current segment"`
 	MelFBankGrid *etview.TensorGrid `view:"-" desc:"melfbank grid view for the current segment"`
+	GaborOutGrid *etview.TensorGrid `view:"+" desc:"result of convolving gabor filters with audio segment"`
 }
 
 // Init
@@ -163,20 +159,20 @@ func (ap *App) Init() {
 	ap.ParamDefaults()
 	ap.Mel.Defaults()
 	ap.InitGabors()
-
-	ap.GaborSet.Filters.SetShape([]int{len(ap.GaborSpecs), ap.GaborSet.SizeY, ap.GaborSet.SizeX}, nil, nil)
+	active := agabor.Active(ap.GaborSpecs)
+	ap.GaborSet.Filters.SetShape([]int{len(active), ap.GaborSet.SizeY, ap.GaborSet.SizeX}, nil, nil)
 	ap.GenGabors()
 }
 
 // ParamDefaults initializes the Input
 func (ap *App) ParamDefaults() {
 	ap.Params.WinMs = 25.0
-	ap.Params.StepMs = 5.0
-	ap.Params.SegmentMs = 90.0
+	ap.Params.StepMs = 10.0
+	ap.Params.SegmentMs = 100.0
 	ap.Params.Channel = 0
 	ap.Params.PadValue = 0.0
 	ap.Params.StrideMs = 100.0
-	ap.Params.BorderSteps = 6
+	ap.Params.BorderSteps = 0
 }
 
 // Config configures all the elements using the standard functions
@@ -216,56 +212,36 @@ func (ap *App) InitGabors() {
 	}
 }
 
-func (se *App) InitSnd() (err error, segments int) {
-	sr := se.Sound.SampleRate()
+func (ap *App) InitProcess() (err error, segments int) {
+	if ap.Sound.Buf == nil {
+		return errors.New("Load a sound and try again"), 0
+	}
+	sr := ap.Sound.SampleRate()
 	if sr <= 0 {
 		fmt.Println("sample rate <= 0")
 		err = errors.New("sample rate <= 0")
 		return err, 0
 	}
-	se.Params.WinSamples = sound.MSecToSamples(se.Params.WinMs, sr)
-	se.Params.StepSamples = sound.MSecToSamples(se.Params.StepMs, sr)
-	se.Params.SegmentSamples = sound.MSecToSamples(se.Params.SegmentMs, sr)
-	se.Params.SegmentSteps = int(math.Round(float64(se.Params.SegmentMs / se.Params.StepMs)))
-	se.Params.SegmentStepsTotal = se.Params.SegmentSteps + 2*se.Params.BorderSteps
-	se.Params.StrideSamples = sound.MSecToSamples(se.Params.StrideMs, sr)
+	ap.Params.WinSamples = sound.MSecToSamples(ap.Params.WinMs, sr)
+	ap.Params.StepSamples = sound.MSecToSamples(ap.Params.StepMs, sr)
+	ap.Params.SegmentSamples = sound.MSecToSamples(ap.Params.SegmentMs, sr)
+	ap.Params.SegmentSteps = int(math.Round(float64(ap.Params.SegmentMs / ap.Params.StepMs)))
+	ap.Params.SegmentStepsTotal = ap.Params.SegmentSteps + 2*ap.Params.BorderSteps
+	ap.Params.StrideSamples = sound.MSecToSamples(ap.Params.StrideMs, sr)
 
-	//specs := agabor.Active(se.GaborSpecs)
-	//
-	//nfilters := len(specs)
-	//se.GaborFilters.Filters.SetShape([]int{nfilters, se.GaborFilters.SizeY, se.GaborFilters.SizeX}, nil, nil)
-	//se.NeighInhib.Defaults() // NeighInhib code not working yet - need to pass 4d tensor not 5d
-	////agabor.ToTensor(se.GaborSpecs, &se.GaborFilters)
-	//agabor.ToTensor(specs, &se.GaborFilters)
-	//se.GaborFilters.ToTable(se.GaborFilters, &se.GaborTab) // note: view only, testing
-	//if se.GborOutPoolsX == 0 && se.GborOutPoolsY == 0 {    // 2D
-	//	se.GborOutput.SetShape([]int{se.Sound.Channels(), se.GborOutUnitsY, se.GborOutUnitsX}, nil, []string{"chan", "freq", "time"})
-	//	se.ExtGi.SetShape([]int{se.GborOutUnitsY, nfilters}, nil, nil) // passed in for each channel
-	//} else if se.GborOutPoolsX > 0 && se.GborOutPoolsY > 0 { // 4D
-	//	se.GborOutput.SetShape([]int{se.Sound.Channels(), se.GborOutPoolsY, se.GborOutPoolsX, se.GborOutUnitsY, se.GborOutUnitsX}, nil, []string{"chan", "freq", "time"})
-	//	se.ExtGi.SetShape([]int{se.GborOutPoolsY, se.GborOutPoolsX, 2, nfilters}, nil, nil) // passed in for each channel
-	//} else {
-	//	log.Println("GborOutPoolsX & GborOutPoolsY must both be == 0 or > 0 (i.e. 2D or 4D)")
-	//	return
-	//}
-	//se.GborOutput.SetMetaData("odd-row", "true")
-	//se.GborOutput.SetMetaData("grid-fill", ".9")
-	//se.GborKwta.CopyShapeFrom(&se.GborOutput)
-	//se.GborKwta.CopyMetaData(&se.GborOutput)
-
-	winSamplesHalf := se.Params.WinSamples/2 + 1
-	se.Dft.Initialize(se.Params.WinSamples)
-	se.Mel.InitFilters(se.Params.WinSamples, se.Sound.SampleRate(), &se.MelFilters) // call after non-default values are set!
-	se.Window.SetShape([]int{se.Params.WinSamples}, nil, nil)
-	se.Power.SetShape([]int{winSamplesHalf}, nil, nil)
-	se.LogPower.CopyShapeFrom(&se.Power)
-	se.PowerSegment.SetShape([]int{se.Params.SegmentStepsTotal, winSamplesHalf, se.Sound.Channels()}, nil, nil)
-	if se.Dft.CompLogPow {
-		se.LogPowerSegment.CopyShapeFrom(&se.PowerSegment)
+	winSamplesHalf := ap.Params.WinSamples/2 + 1
+	ap.Dft.Initialize(ap.Params.WinSamples)
+	ap.Mel.InitFilters(ap.Params.WinSamples, ap.Sound.SampleRate(), &ap.MelFilters) // call after non-default values are set!
+	ap.Window.SetShape([]int{ap.Params.WinSamples}, nil, nil)
+	ap.Power.SetShape([]int{winSamplesHalf}, nil, nil)
+	ap.LogPower.CopyShapeFrom(&ap.Power)
+	ap.PowerSegment.SetShape([]int{ap.Params.SegmentStepsTotal, winSamplesHalf, ap.Sound.Channels()}, nil, nil)
+	if ap.Dft.CompLogPow {
+		ap.LogPowerSegment.CopyShapeFrom(&ap.PowerSegment)
 	}
 
-	se.FftCoefs = make([]complex128, se.Params.WinSamples)
-	se.Fft = fourier.NewCmplxFFT(len(se.FftCoefs))
+	ap.FftCoefs = make([]complex128, ap.Params.WinSamples)
+	ap.Fft = fourier.NewCmplxFFT(len(ap.FftCoefs))
 
 	// 2 reasons for this code
 	// 1 - the amount of signal handed to the fft has a "border" (some extra signal) to avoid edge effects.
@@ -274,24 +250,24 @@ func (se *App) InitSnd() (err error, segments int) {
 	// so that the leading edge (right edge) is the same time point.
 	// This code does this by generating negative offsets for the start of the processing.
 	// Also see SndToWindow for the use of the step values
-	stepsBack := se.Params.BorderSteps
-	se.Params.Steps = make([]int, se.Params.SegmentStepsTotal)
-	for i := 0; i < se.Params.SegmentStepsTotal; i++ {
-		se.Params.Steps[i] = se.Params.StepSamples * (i - stepsBack)
+	stepsBack := ap.Params.BorderSteps
+	ap.Params.Steps = make([]int, ap.Params.SegmentStepsTotal)
+	for i := 0; i < ap.Params.SegmentStepsTotal; i++ {
+		ap.Params.Steps[i] = ap.Params.StepSamples * (i - stepsBack)
 	}
 
-	se.MelFBank.SetShape([]int{se.Mel.FBank.NFilters}, nil, nil)
-	se.MelFBankSegment.SetShape([]int{se.Params.SegmentStepsTotal, se.Mel.FBank.NFilters, se.Sound.Channels()}, nil, nil)
-	if se.Mel.CompMfcc {
-		se.MfccDctSegment.CopyShapeFrom(&se.MelFBankSegment)
-		se.MfccDct.SetShape([]int{se.Mel.FBank.NFilters}, nil, nil)
+	ap.MelFBank.SetShape([]int{ap.Mel.FBank.NFilters}, nil, nil)
+	ap.MelFBankSegment.SetShape([]int{ap.Params.SegmentStepsTotal, ap.Mel.FBank.NFilters, ap.Sound.Channels()}, nil, nil)
+	if ap.Mel.MFCC {
+		ap.MfccDctSegment.CopyShapeFrom(&ap.MelFBankSegment)
+		ap.MfccDct.SetShape([]int{ap.Mel.FBank.NFilters}, nil, nil)
 	}
 
-	siglen := len(se.Signal.Values) - se.Params.SegmentSamples*se.Sound.Channels()
-	siglen = siglen / se.Sound.Channels()
-	se.SegCnt = siglen/se.Params.StrideSamples + 1 // add back the first segment subtracted at from siglen calculation
-	se.Segment = -1
-	return nil, se.SegCnt
+	siglen := len(ap.Signal.Values) - ap.Params.SegmentSamples*ap.Sound.Channels()
+	siglen = siglen / ap.Sound.Channels()
+	ap.SegCnt = siglen/ap.Params.StrideSamples + 1 // add back the first segment subtracted at from siglen calculation
+	ap.Segment = -1
+	return nil, ap.SegCnt
 }
 
 // LoadSnd
@@ -320,7 +296,7 @@ func (ap *App) LoadSnd(path string) {
 	} else {
 		fmt.Println("NextSound: ap.Corpus no match")
 	}
-	ap.InitSnd()
+	//ap.InitProcess()
 
 	if ap.SpeechSeq.Units == nil {
 		fmt.Println("AdjSeqTimes: SpeechSeq.Units is nil. Some problem with loading file transcription and timing data")
@@ -424,6 +400,130 @@ func (ap *App) SndFmIdx(idx int) (snd string, ok bool) {
 	return
 }
 
+// ProcessSegment processes the entire segment's input by processing a small overlapping set of samples on each pass
+func (ap *App) ProcessSegment() {
+	ap.Power.SetZeros()
+	ap.LogPower.SetZeros()
+	ap.PowerSegment.SetZeros()
+	ap.LogPowerSegment.SetZeros()
+	ap.MelFBankSegment.SetZeros()
+	ap.MfccDctSegment.SetZeros()
+	for ch := int(0); ch < ap.Sound.Channels(); ch++ {
+		for s := 0; s < int(ap.Params.SegmentStepsTotal); s++ {
+			err := ap.ProcessStep(ch, s)
+			if err != nil {
+				break
+			}
+		}
+	}
+	//fmt.Printf("total length = %v, remaining = %v\n", len(ap.Signal.Values), remaining)
+}
+
+// ProcessStep processes a step worth of sound input from current input_pos, and increment input_pos by input.step_samples
+// Process the data by doing a fourier transform and computing the power spectrum, then apply mel filters to get the frequency
+// bands that mimic the non-linear human perception of sound
+func (ap *App) ProcessStep(ch int, step int) error {
+	offset := ap.Params.Steps[step]
+	start := sound.MSecToSamples(float32(ap.UserVals.SegmentStart), ap.Sound.SampleRate()) + offset
+	err := ap.SndToWindow(start, ch)
+	if err == nil {
+		ap.Fft.Reset(ap.Params.WinSamples)
+		ap.Dft.Filter(int(ch), int(step), &ap.Window, ap.FirstStep, ap.Params.WinSamples, ap.FftCoefs, ap.Fft, &ap.Power, &ap.LogPower, &ap.PowerSegment, &ap.LogPowerSegment)
+		ap.Mel.Filter(int(ch), int(step), &ap.Window, &ap.MelFilters, &ap.Power, &ap.MelFBankSegment, &ap.MelFBank, &ap.MfccDctSegment, &ap.MfccDct)
+		ap.FirstStep = false
+	}
+	return err
+}
+
+// SndToWindow gets sound from the signal (i.e. the slice of input values) at given position and channel, into Window
+func (ap *App) SndToWindow(start, ch int) error {
+	if ap.Signal.NumDims() == 1 {
+		//start := ap.Segment*int(ap.Params.StrideSamples) + stepOffset // segments start at zero
+		end := start + ap.Params.WinSamples
+		if end > len(ap.Signal.Values) {
+			return errors.New("SndToWindow: end beyond signal length!!")
+		}
+		var pad []float32
+		if start < 0 && end <= 0 {
+			pad = make([]float32, end-start)
+			ap.Window.Values = pad[0:]
+		} else if start < 0 && end > 0 {
+			pad = make([]float32, 0-start)
+			ap.Window.Values = pad[0:]
+			ap.Window.Values = append(ap.Window.Values, ap.Signal.Values[0:end]...)
+		} else {
+			ap.Window.Values = ap.Signal.Values[start:end]
+		}
+		//fmt.Println("start / end in samples:", start, end)
+	} else {
+		// ToDo: implement
+		fmt.Printf("SndToWindow: else case not implemented - please report this issue")
+	}
+	return nil
+}
+
+func (ap *App) GenGabors() {
+	agabor.ToTensor(ap.GaborSpecs, &ap.GaborSet)
+}
+
+// ApplyGabor convolves the gabor filters with the mel output
+func (ap *App) ApplyGabor() (tsr *etensor.Float32) {
+	y1 := ap.MelFBank.Dim(0)
+	y2 := ap.GaborSet.SizeY
+	y := float32(y1 - y2)
+	sy := (int(mat32.Floor(y/float32(ap.GaborSet.StrideY))) + 1) * 2 // double - two rows, off-center and on-center
+
+	if ap.UserVals.SegmentEnd > ap.UserVals.SegmentStart {
+		ap.UserVals.SegmentDuration = ap.UserVals.SegmentEnd - ap.UserVals.SegmentStart
+	}
+	if ap.UserVals.SegmentDuration <= 0 {
+		ap.UserVals.SegmentDuration = int(ap.Params.SegmentMs)
+	}
+	x1 := float32(ap.UserVals.SegmentDuration)
+	x2 := float32(ap.GaborSet.SizeX)
+	x := float32(x1 - x2)
+	active := agabor.Active(ap.GaborSpecs)
+	sx := (int(mat32.Floor(x/float32(ap.GaborSet.StrideX))) + 1) * len(active)
+
+	ap.GborOutput.SetShape([]int{ap.Sound.Channels(), sy, sx}, nil, []string{"chan", "freq", "time"})
+	ap.ExtGi.SetShape([]int{sy, ap.GaborSet.Filters.Dim(0)}, nil, nil) // passed in for each channel
+	ap.GborOutput.SetMetaData("odd-row", "true")
+	ap.GborOutput.SetMetaData("grid-fill", ".9")
+	ap.GborKwta.CopyShapeFrom(&ap.GborOutput)
+	ap.GborKwta.CopyMetaData(&ap.GborOutput)
+
+	for ch := int(0); ch < ap.Sound.Channels(); ch++ {
+		agabor.Convolve(ch, &ap.MelFBankSegment, ap.GaborSet, &ap.GborOutput)
+		//if ap.NeighInhib.On {
+		//	ap.NeighInhib.Inhib4(&ap.GborOutput, &ap.ExtGi)
+		//} else {
+		//	ap.ExtGi.SetZeros()
+		//}
+
+		if ap.Kwta.On {
+			ap.ApplyKwta(ch)
+			tsr = &ap.GborKwta
+		} else {
+			tsr = &ap.GborOutput
+		}
+	}
+	return tsr
+}
+
+// ApplyKwta runs the kwta algorithm on the raw activations
+func (ap *App) ApplyKwta(ch int) {
+	ap.GborKwta.CopyFrom(&ap.GborOutput)
+	if ap.Kwta.On {
+		rawSS := ap.GborOutput.SubSpace([]int{ch}).(*etensor.Float32)
+		kwtaSS := ap.GborKwta.SubSpace([]int{ch}).(*etensor.Float32)
+		if ap.KwtaPool == true {
+			ap.Kwta.KWTAPool(rawSS, kwtaSS, &ap.Inhibs, &ap.ExtGi)
+		} else {
+			ap.Kwta.KWTALayer(rawSS, kwtaSS, &ap.ExtGi)
+		}
+	}
+}
+
 // ConfigGui configures the GoGi gui interface for this simulation,
 func (ap *App) ConfigGui() *gi.Window {
 	gi.SetAppName("Gabor View")
@@ -431,60 +531,12 @@ func (ap *App) ConfigGui() *gi.Window {
 
 	ap.GUI.Win = gi.NewMainWindow("gb", "Gabor View", 1600, 1200)
 	ap.GUI.ViewPort = ap.GUI.Win.Viewport
-
 	ap.GUI.ViewPort.UpdateStart()
 
 	mfr := ap.GUI.Win.SetMainFrame()
 
-	// the StructView will also show the Graph Toolbar which is main actions..
-	userview := giv.AddNewStructView(mfr, "userview")
-	userview.Viewport = ap.GUI.ViewPort
-	userview.SetProp("height", "4.5em")
-	userview.SetStruct(&ap.UserVals)
-	UserStruct = userview
-
-	gbview := giv.AddNewSliceView(mfr, "gbview")
-	gbview.Viewport = ap.GUI.ViewPort
-	gbview.SetSlice(&ap.GaborSpecs)
-	GaborSlice = gbview
-
 	ap.GUI.ToolBar = gi.AddNewToolBar(mfr, "tbar")
 	ap.GUI.ToolBar.SetStretchMaxWidth()
-
-	split := gi.AddNewSplitView(mfr, "split")
-	split.Dim = mat32.Y
-	split.SetStretchMax()
-
-	ap.GUI.StructView = giv.AddNewStructView(mfr, "sv")
-	ap.GUI.StructView.SetStruct(ap)
-
-	snds := giv.AddNewSliceView(mfr, "snds")
-	snds.Viewport = ap.GUI.ViewPort
-	snds.SetSlice(&ap.SpeechSeq.Units)
-	snds.NoAdd = true
-	snds.NoDelete = true
-	snds.SetInactiveState(true)
-	SndsTable = snds
-
-	ap.GUI.TabView = gi.AddNewTabView(split, "tv")
-	//
-	//gui.NetView = gui.TabView.AddNewTab(netview.KiT_NetView, "NetView").(*netview.NetView)
-	//gui.NetView.Var = "Act"
-
-	//split.SetSplits(.3, .7)
-
-	// sound rostral
-	tg := ap.GUI.TabView.AddNewTab(etview.KiT_TensorGrid, "MelFBank").(*etview.TensorGrid)
-	tg.SetStretchMax()
-	ap.MelFBankGrid = tg
-	tg.SetTensor(&ap.MelFBankSegment)
-
-	// sound caudal
-	tg = ap.GUI.TabView.AddNewTab(etview.KiT_TensorGrid, "Power").(*etview.TensorGrid)
-	tg.SetStretchMax()
-	ap.PowerGrid = tg
-	ap.LogPowerSegment.SetMetaData("grid-min", "10")
-	tg.SetTensor(&ap.LogPowerSegment)
 
 	ap.GUI.AddToolbarItem(egui.ToolbarItem{Label: "Init", Icon: "update",
 		Tooltip: "Initialize everything including network weights, and start over.  Also applies current params.",
@@ -522,18 +574,12 @@ func (ap *App) ConfigGui() *gi.Window {
 		Tooltip: "Process the next segment of audio using the SegStart and SegEnd params. Then apply the gabors to the Mel output",
 		Active:  egui.ActiveStopped,
 		Func: func() {
-			ap.InitSnd()
-			ap.ProcessSegment()
-			ap.GUI.UpdateWindow()
-		},
-	})
-
-	ap.GUI.AddToolbarItem(egui.ToolbarItem{Label: "Next Segment", Icon: "update",
-		Tooltip: "Process the next segment of audio using the current parameters.",
-		Active:  egui.ActiveStopped,
-		Func: func() {
-			ap.ProcessSegment()
-			ap.GUI.UpdateWindow()
+			err, _ := ap.InitProcess()
+			if err == nil {
+				ap.ProcessSegment()
+				ap.ApplyGabor()
+				ap.GUI.UpdateWindow()
+			}
 		},
 	})
 
@@ -546,6 +592,59 @@ func (ap *App) ConfigGui() *gi.Window {
 		},
 	})
 
+	//
+	//ap.GUI.AddToolbarItem(egui.ToolbarItem{Label: "Next Segment", Icon: "update",
+	//	Tooltip: "Process the next segment of audio using the current parameters.",
+	//	Active:  egui.ActiveStopped,
+	//	Func: func() {
+	//		ap.ProcessSegment()
+	//		ap.GUI.UpdateWindow()
+	//	},
+	//})
+	//
+
+	split := gi.AddNewSplitView(mfr, "split")
+	split.Dim = mat32.Y
+	split.SetStretchMax()
+
+	ap.GUI.StructView = giv.AddNewStructView(split, "app")
+	ap.GUI.StructView.SetStruct(ap)
+
+	snds := giv.AddNewSliceView(split, "snds")
+	snds.Viewport = ap.GUI.ViewPort
+	snds.SetSlice(&ap.SpeechSeq.Units)
+	snds.NoAdd = true
+	snds.NoDelete = true
+	snds.SetInactiveState(true)
+
+	specs := giv.AddNewTableView(split, "specs")
+	specs.Viewport = ap.GUI.ViewPort
+	specs.SetSlice(&ap.GaborSpecs)
+
+	tv := gi.AddNewTabView(split, "tv")
+	split.SetSplits(.3, .2, .2, .3)
+
+	tg := tv.AddNewTab(etview.KiT_TensorGrid, "Gabors").(*etview.TensorGrid)
+	tg.SetStretchMax()
+	//ap.LogPowerSegment.SetMetaData("grid-min", "10")
+	tg.SetTensor(&ap.GaborSet.Filters)
+
+	tg = tv.AddNewTab(etview.KiT_TensorGrid, "Power").(*etview.TensorGrid)
+	tg.SetStretchMax()
+	ap.PowerGrid = tg
+	ap.LogPowerSegment.SetMetaData("grid-min", "10")
+	tg.SetTensor(&ap.LogPowerSegment)
+
+	tg = tv.AddNewTab(etview.KiT_TensorGrid, "Mel").(*etview.TensorGrid)
+	tg.SetStretchMax()
+	ap.MelFBankGrid = tg
+	tg.SetTensor(&ap.MelFBankSegment)
+
+	tg = tv.AddNewTab(etview.KiT_TensorGrid, "Gabor Result").(*etview.TensorGrid)
+	tg.SetStretchMax()
+	ap.GaborOutGrid = tg
+	tg.SetTensor(&ap.GborOutput)
+
 	ap.GUI.FinalizeGUI(false)
 	return ap.GUI.Win
 }
@@ -555,138 +654,4 @@ var AppProps = ki.Props{}
 
 func (ap *App) CmdArgs() {
 
-}
-
-// ProcessSegment processes the entire segment's input by processing a small overlapping set of samples on each pass
-func (se *App) ProcessSegment() (moreSegments bool) {
-	moreSegments = true
-	se.Power.SetZeros()
-	se.LogPower.SetZeros()
-	se.PowerSegment.SetZeros()
-	se.LogPowerSegment.SetZeros()
-	se.MelFBankSegment.SetZeros()
-	se.MfccDctSegment.SetZeros()
-	//moreSamples := true
-	se.Segment++
-	//fmt.Printf("Segment: %d\n", se.Segment)
-	for ch := int(0); ch < se.Sound.Channels(); ch++ {
-		for s := 0; s < int(se.Params.SegmentStepsTotal); s++ {
-			err := se.ProcessStep(ch, s)
-			if err != nil {
-				break
-			}
-		}
-	}
-	remaining := len(se.Signal.Values) - (se.Segment+1)*se.Params.StrideSamples
-	//fmt.Printf("total length = %v, remaining = %v\n", len(se.Signal.Values), remaining)
-	if remaining < se.Params.SegmentSamples {
-		moreSegments = false
-		//fmt.Printf("Last Segment for %v: %d\n", se.SndFileCur, se.Segment)
-	}
-	se.ApplyGabor()
-	return moreSegments
-}
-
-// ProcessStep processes a step worth of sound input from current input_pos, and increment input_pos by input.step_samples
-// Process the data by doing a fourier transform and computing the power spectrum, then apply mel filters to get the frequency
-// bands that mimic the non-linear human perception of sound
-func (se *App) ProcessStep(ch int, step int) error {
-	offset := se.Params.Steps[step]
-	err := se.SndToWindow(offset, ch)
-	if err == nil {
-		se.Fft.Reset(se.Params.WinSamples)
-		se.Dft.Filter(int(ch), int(step), &se.Window, se.FirstStep, se.Params.WinSamples, se.FftCoefs, se.Fft, &se.Power, &se.LogPower, &se.PowerSegment, &se.LogPowerSegment)
-		se.Mel.Filter(int(ch), int(step), &se.Window, &se.MelFilters, &se.Power, &se.MelFBankSegment, &se.MelFBank, &se.MfccDctSegment, &se.MfccDct)
-		se.FirstStep = false
-	}
-	return err
-}
-
-// SndToWindow gets sound from the signal (i.e. the slice of input values) at given position and channel, into Window
-func (se *App) SndToWindow(stepOffset int, ch int) error {
-	if se.Signal.NumDims() == 1 {
-		start := se.Segment*int(se.Params.StrideSamples) + stepOffset // segments start at zero
-		end := start + se.Params.WinSamples
-		if end > len(se.Signal.Values) {
-			return errors.New("SndToWindow: end beyond signal length!!")
-		}
-		var pad []float32
-		if start < 0 && end <= 0 {
-			pad = make([]float32, end-start)
-			se.Window.Values = pad[0:]
-		} else if start < 0 && end > 0 {
-			pad = make([]float32, 0-start)
-			se.Window.Values = pad[0:]
-			se.Window.Values = append(se.Window.Values, se.Signal.Values[0:end]...)
-		} else {
-			se.Window.Values = se.Signal.Values[start:end]
-		}
-		//fmt.Println("start / end in samples:", start, end)
-	} else {
-		// ToDo: implement
-		fmt.Printf("SndToWindow: else case not implemented - please report this issue")
-	}
-	return nil
-}
-
-func (ap *App) GenGabors() {
-	agabor.ToTensor(ap.GaborSpecs, &ap.GaborSet)
-}
-
-// ApplyGabor convolves the gabor filters with the mel output
-func (se *App) ApplyGabor() (tsr *etensor.Float32) {
-	y1 := se.MelFBank.Dim(0)
-	y2 := se.GaborSet.SizeY
-	y := float32(y1 - y2)
-	sy := (int(mat32.Floor(y/float32(se.GaborSet.StrideY))) + 1) * 2 // double - two rows, off-center and on-center
-
-	if se.UserVals.SegmentEnd > se.UserVals.SegmentStart {
-		se.UserVals.SegmentDuration = se.UserVals.SegmentEnd - se.UserVals.SegmentStart
-	}
-	if se.UserVals.SegmentDuration <= 0 {
-		se.UserVals.SegmentDuration = int(se.Params.SegmentMs)
-	}
-	x1 := float32(se.UserVals.SegmentDuration)
-	x2 := float32(se.GaborSet.SizeX)
-	x := float32(x1 - x2)
-	active := agabor.Active(se.GaborSpecs)
-	sx := (int(mat32.Floor(x/float32(se.GaborSet.StrideX))) + 1) * len(active)
-
-	se.GborOutput.SetShape([]int{se.Sound.Channels(), sy, sx}, nil, []string{"chan", "freq", "time"})
-	se.ExtGi.SetShape([]int{sy, se.GaborSet.Filters.Dim(0)}, nil, nil) // passed in for each channel
-	se.GborOutput.SetMetaData("odd-row", "true")
-	se.GborOutput.SetMetaData("grid-fill", ".9")
-	se.GborKwta.CopyShapeFrom(&se.GborOutput)
-	se.GborKwta.CopyMetaData(&se.GborOutput)
-
-	for ch := int(0); ch < se.Sound.Channels(); ch++ {
-		agabor.Convolve(ch, &se.MelFBankSegment, se.GaborSet, &se.GborOutput)
-		//if se.NeighInhib.On {
-		//	se.NeighInhib.Inhib4(&se.GborOutput, &se.ExtGi)
-		//} else {
-		//	se.ExtGi.SetZeros()
-		//}
-
-		if se.Kwta.On {
-			se.ApplyKwta(ch)
-			tsr = &se.GborKwta
-		} else {
-			tsr = &se.GborOutput
-		}
-	}
-	return tsr
-}
-
-// ApplyKwta runs the kwta algorithm on the raw activations
-func (se *App) ApplyKwta(ch int) {
-	se.GborKwta.CopyFrom(&se.GborOutput)
-	if se.Kwta.On {
-		rawSS := se.GborOutput.SubSpace([]int{ch}).(*etensor.Float32)
-		kwtaSS := se.GborKwta.SubSpace([]int{ch}).(*etensor.Float32)
-		if se.KwtaPool == true {
-			se.Kwta.KWTAPool(rawSS, kwtaSS, &se.Inhibs, &se.ExtGi)
-		} else {
-			se.Kwta.KWTALayer(rawSS, kwtaSS, &se.ExtGi)
-		}
-	}
 }
