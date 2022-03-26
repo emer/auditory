@@ -12,8 +12,6 @@ import (
 	"github.com/emer/auditory/speech/synthcvs"
 	"github.com/emer/auditory/speech/timit"
 	"github.com/emer/emergent/egui"
-	"github.com/emer/emergent/evec"
-	"github.com/emer/etable/etable"
 	"github.com/emer/etable/etensor"
 	"github.com/emer/etable/etview"
 	"github.com/emer/leabra/fffb"
@@ -65,48 +63,41 @@ func (ss *App) New() {
 
 // User holds data (or points to other fields) the user will likely want to access quickly and edit frequently
 type User struct {
-	SegmentStart    int `view:"inline" desc:"the start of the audio segment, in milliseconds, that we will be processing"`
-	SegmentEnd      int `view:"inline" desc:"the end of the audio segment, in milliseconds, that we will be processing"`
-	SegmentDuration int `view:"inline" desc:"segment duration, in milliseconds, to step if stepping through sound sequence"`
+	Start *float32 `view:"inline" desc:"the start of the audio segment, in milliseconds, that we will be processing"`
+	End   *float32 `view:"inline" desc:"the end of the audio segment, in milliseconds, that we will be processing"`
 }
 
 // Params defines the sound input parameters for auditory processing
 type Params struct {
-	WinMs       float32 `def:"25" desc:"input window -- number of milliseconds worth of sound to filter at a time"`
-	StepMs      float32 `def:"5,10,12.5" desc:"input step -- number of milliseconds worth of sound that the input is stepped along to obtain the next window sample"`
-	SegmentMs   float32 `def:"100" desc:"length of full segment's worth of input -- total number of milliseconds to accumulate into a complete segment -- must be a multiple of StepMs -- input will be SegmentMs / StepMs = SegmentSteps wide in the X axis, and number of filters in the Y axis"`
-	StrideMs    float32 `def:"100" desc:"how far to move on each trial"`
-	BorderSteps int     `def:"0" desc:"overlap with previous segment"`
-	Channel     int     `view:"-" desc:"specific channel to process, if input has multiple channels, and we only process one of them (-1 = process all)"`
-	PadValue    float32 `view:"-"`
+	WinMs        float32 `def:"25" desc:"input window -- number of milliseconds worth of sound to filter at a time"`
+	StepMs       float32 `def:"10" desc:"input step -- number of milliseconds worth of sound that the input is stepped along to obtain the next window sample"`
+	SegmentStart float32 `desc:"start of sound segment in milliseconds"`
+	SegmentEnd   float32 `desc:"end of sound segment in milliseconds"`
+	BorderSteps  int     `view:"-" def:"0" desc:"overlap with previous segment"`
+	Channel      int     `view:"-" desc:"specific channel to process, if input has multiple channels, and we only process one of them (-1 = process all)"`
+	PadValue     float32 `view:"-"`
 
 	// these are calculated
 	WinSamples        int   `view:"-" desc:"number of samples to process each step"`
 	StepSamples       int   `view:"-" desc:"number of samples to step input by"`
-	SegmentSamples    int   `view:"-" desc:"number of samples in a segment"`
-	StrideSamples     int   `view:"-" desc:"number of samples converted from StrideMS"`
 	SegmentSteps      int   `view:"-" desc:"number of steps in a segment"`
 	SegmentStepsTotal int   `view:"-" desc:"SegmentSteps plus steps overlapping next segment or for padding if no next segment"`
 	Steps             []int `view:"-" desc:"pre-calculated start position for each step"`
 }
 
 type App struct {
-	Nm          string `view:"-" desc:"name of this environment"`
-	Dsc         string `view:"-" desc:"description of this environment"`
-	Corpus      string `desc:"the set of sound files"`
-	InitDir     string `desc:"initial directory for file open dialog"`
-	SndFile     string `view:"-" desc:"full path of open sound file"`
-	SndFileName string `desc:"name of the open sound file"`
-	SndFilePath string `desc:"path to the open sound file"`
+	Nm      string `view:"-" desc:"name of this environment"`
+	Dsc     string `view:"-" desc:"description of this environment"`
+	Corpus  string `desc:"the set of sound files"`
+	SndName string `desc:"name of the open sound file"`
+	SndPath string `desc:"path to the open sound file"`
+	SndFile string `view:"-" desc:"full path of open sound file"`
 
-	UserVals User            `view:"inline" desc:"sound processing values and matrices for the short duration pathway"`
-	Params   Params          `view:"inline" desc:"fundamental processing parameters"`
-	Sound    sound.Wave      `view:"no-inline"`
-	Signal   etensor.Float32 `view:"-" desc:" the full sound input obtained from the sound input - plus any added padding"`
-	Samples  etensor.Float32 `view:"-" desc:" a window's worth of raw sound input, one channel at a time"`
-	SegCnt   int             `desc:"the number of segments in this sound file (based on current segment size)"`
-	Window   etensor.Float32 `inactive:"+" desc:" [Input.WinSamples] the raw sound input, one channel at a time"`
-	Segment  int             `inactive:"+" desc:"current segment of full sound (zero based)"`
+	GUI    egui.GUI        `view:"-" desc:"manages all the gui elements"`
+	Params Params          `view:"inline" desc:"fundamental processing parameters"`
+	Sound  sound.Wave      `view:"no-inline"`
+	Signal etensor.Float32 `view:"-" desc:" the full sound input obtained from the sound input - plus any added padding"`
+	Window etensor.Float32 `view:"-" desc:" [Input.WinSamples] the raw sound input, one channel at a time"`
 
 	Dft             dft.Params      `view:"-" desc:" "`
 	Power           etensor.Float32 `view:"-" desc:" power of the dft, up to the nyquist limit frequency (1/2 input.WinSamples)"`
@@ -120,38 +111,24 @@ type App struct {
 	MfccDct         etensor.Float32 `view:"-" desc:" discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
 	MfccDctSegment  etensor.Float32 `view:"-" desc:" full segment's worth of discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
 
-	GaborSpecs []agabor.Filter   `view:"inline" desc:"array of params describing each gabor filter"`
+	GaborSpecs []agabor.Filter   `view:"no-inline" desc:"array of params describing each gabor filter"`
 	GaborSet   agabor.FilterSet  `view:"inline" desc:"a set of gabor filters with same x and y dimensions"`
-	GaborTab   etable.Table      `view:"no-inline" desc:"gabor filter table (view only)"`
 	GborOutput etensor.Float32   `view:"no-inline" desc:" raw output of Gabor -- full segment's worth of gabor steps"`
 	GborKwta   etensor.Float32   `view:"no-inline" desc:" post-kwta output of full segment's worth of gabor steps"`
 	Inhibs     fffb.Inhibs       `view:"no-inline" desc:"inhibition values for A1 KWTA"`
 	ExtGi      etensor.Float32   `view:"no-inline" desc:"A1 simple extra Gi from neighbor inhibition tensor"`
 	NeighInhib kwta.NeighInhib   `desc:"neighborhood inhibition for V1s -- each unit gets inhibition from same feature in nearest orthogonal neighbors -- reduces redundancy of feature code"`
 	Kwta       kwta.KWTA         `desc:"kwta parameters, using FFFB form"`
-	KwtaPool   bool              `desc:"if Kwta.On == true, call KwtaPool (true) or KwtaLayer (false)"`
 	FftCoefs   []complex128      `view:"-" desc:" discrete fourier transform (fft) output complex representation"`
 	Fft        *fourier.CmplxFFT `view:"-" desc:" struct for fast fourier transform"`
 
-	// internal state - view:"-"
-	FirstStep bool `view:"-" desc:" if first frame to process -- turns off prv smoothing of dft power"`
-
-	//Output etensor.Float32 `view:"no-inline" desc:" raw output of gabor convolution"`
-
 	SpeechSeq speech.SpeechSequence
 	CurUnits  []string `desc:"names of units in the current audio segment"`
-	// ToDo: maybe this should be calculated from based on filters?? Avoids mismatch!!
-	OutputDims evec.Vec2i `desc:"X and Y dimensions of the output matrix (i.e. result after convolution"`
 
 	// internal state - view:"-"
 	ToolBar      *gi.ToolBar `view:"-" desc:" the master toolbar"`
 	MoreSegments bool        `view:"-" desc:" are there more samples to process"`
-	SndIdx       int         `view:"-" desc:"the index into the soundlist of the sound from last trial"`
-
-	GUI          egui.GUI           `view:"-" desc:"manages all the gui elements"`
-	PowerGrid    *etview.TensorGrid `view:"+" desc:"power grid view for the current segment"`
-	MelFBankGrid *etview.TensorGrid `view:"-" desc:"melfbank grid view for the current segment"`
-	GaborOutGrid *etview.TensorGrid `view:"+" desc:"result of convolving gabor filters with audio segment"`
+	FirstStep    bool        `view:"-" desc:" if first frame to process -- turns off prv smoothing of dft power"`
 }
 
 // Init
@@ -168,10 +145,8 @@ func (ap *App) Init() {
 func (ap *App) ParamDefaults() {
 	ap.Params.WinMs = 25.0
 	ap.Params.StepMs = 10.0
-	ap.Params.SegmentMs = 100.0
 	ap.Params.Channel = 0
 	ap.Params.PadValue = 0.0
-	ap.Params.StrideMs = 100.0
 	ap.Params.BorderSteps = 0
 }
 
@@ -179,9 +154,9 @@ func (ap *App) ParamDefaults() {
 func (ap *App) Config() {
 	ap.Corpus = "TIMIT"
 	if ap.Corpus == "TIMIT" {
-		ap.InitDir = "/Users/rohrlich/ccn_images/sound/timit/TIMIT/TRAIN/"
+		ap.SndPath = "/Users/rohrlich/ccn_images/sound/timit/TIMIT/TRAIN/"
 	} else {
-		ap.InitDir = "~"
+		ap.SndPath = "~"
 	}
 }
 
@@ -224,10 +199,11 @@ func (ap *App) InitProcess() (err error, segments int) {
 	}
 	ap.Params.WinSamples = sound.MSecToSamples(ap.Params.WinMs, sr)
 	ap.Params.StepSamples = sound.MSecToSamples(ap.Params.StepMs, sr)
-	ap.Params.SegmentSamples = sound.MSecToSamples(ap.Params.SegmentMs, sr)
-	ap.Params.SegmentSteps = int(math.Round(float64(ap.Params.SegmentMs / ap.Params.StepMs)))
+
+	//ap.Params.SegmentSamples = sound.MSecToSamples(ap.Params.SegmentMs, sr)
+	segmentMs := ap.Params.SegmentEnd - ap.Params.SegmentStart
+	ap.Params.SegmentSteps = int(math.Round(float64(segmentMs / ap.Params.StepMs)))
 	ap.Params.SegmentStepsTotal = ap.Params.SegmentSteps + 2*ap.Params.BorderSteps
-	ap.Params.StrideSamples = sound.MSecToSamples(ap.Params.StrideMs, sr)
 
 	winSamplesHalf := ap.Params.WinSamples/2 + 1
 	ap.Dft.Initialize(ap.Params.WinSamples)
@@ -263,11 +239,10 @@ func (ap *App) InitProcess() (err error, segments int) {
 		ap.MfccDct.SetShape([]int{ap.Mel.FBank.NFilters}, nil, nil)
 	}
 
-	siglen := len(ap.Signal.Values) - ap.Params.SegmentSamples*ap.Sound.Channels()
+	samples := sound.MSecToSamples(ap.Params.SegmentEnd-ap.Params.SegmentStart, ap.Sound.SampleRate())
+	siglen := len(ap.Signal.Values) - samples*ap.Sound.Channels()
 	siglen = siglen / ap.Sound.Channels()
-	ap.SegCnt = siglen/ap.Params.StrideSamples + 1 // add back the first segment subtracted at from siglen calculation
-	ap.Segment = -1
-	return nil, ap.SegCnt
+	return nil, 0
 }
 
 // LoadSnd
@@ -281,7 +256,7 @@ func (ap *App) LoadSnd(path string) {
 	ap.LoadSound() // actually load the sound
 
 	fn := strings.TrimSuffix(ap.SpeechSeq.File, ".wav")
-	ap.SndFileName = fn
+	ap.SndName = fn
 
 	if ap.Corpus == "TIMIT" {
 		fn := strings.Replace(fn, "ExpWavs", "", 1) // different directory for timing data
@@ -349,7 +324,6 @@ func (ap *App) LoadSound() bool {
 // ClearSoundsAndData empties the sound list, sets current sound to nothing, etc
 func ClearSoundsAndData(ap *App) {
 	ap.SpeechSeq.File = ""
-	ap.SndIdx = -1
 	ap.MoreSegments = false // this will force a new sound to be loaded
 }
 
@@ -424,7 +398,7 @@ func (ap *App) ProcessSegment() {
 // bands that mimic the non-linear human perception of sound
 func (ap *App) ProcessStep(ch int, step int) error {
 	offset := ap.Params.Steps[step]
-	start := sound.MSecToSamples(float32(ap.UserVals.SegmentStart), ap.Sound.SampleRate()) + offset
+	start := sound.MSecToSamples(ap.Params.SegmentStart, ap.Sound.SampleRate()) + offset
 	err := ap.SndToWindow(start, ch)
 	if err == nil {
 		ap.Fft.Reset(ap.Params.WinSamples)
@@ -473,13 +447,12 @@ func (ap *App) ApplyGabor() (tsr *etensor.Float32) {
 	y := float32(y1 - y2)
 	sy := (int(mat32.Floor(y/float32(ap.GaborSet.StrideY))) + 1) * 2 // double - two rows, off-center and on-center
 
-	if ap.UserVals.SegmentEnd > ap.UserVals.SegmentStart {
-		ap.UserVals.SegmentDuration = ap.UserVals.SegmentEnd - ap.UserVals.SegmentStart
+	segmentMs := float32(0.0)
+	if ap.Params.SegmentEnd > ap.Params.SegmentStart {
+		segmentMs = ap.Params.SegmentEnd - ap.Params.SegmentStart
 	}
-	if ap.UserVals.SegmentDuration <= 0 {
-		ap.UserVals.SegmentDuration = int(ap.Params.SegmentMs)
-	}
-	x1 := float32(ap.UserVals.SegmentDuration)
+
+	x1 := float32(segmentMs)
 	x2 := float32(ap.GaborSet.SizeX)
 	x := float32(x1 - x2)
 	active := agabor.Active(ap.GaborSpecs)
@@ -516,11 +489,12 @@ func (ap *App) ApplyKwta(ch int) {
 	if ap.Kwta.On {
 		rawSS := ap.GborOutput.SubSpace([]int{ch}).(*etensor.Float32)
 		kwtaSS := ap.GborKwta.SubSpace([]int{ch}).(*etensor.Float32)
-		if ap.KwtaPool == true {
-			ap.Kwta.KWTAPool(rawSS, kwtaSS, &ap.Inhibs, &ap.ExtGi)
-		} else {
-			ap.Kwta.KWTALayer(rawSS, kwtaSS, &ap.ExtGi)
-		}
+		// This app is 2D only - no pools
+		//if ap.KwtaPool == true {
+		//	ap.Kwta.KWTAPool(rawSS, kwtaSS, &ap.Inhibs, &ap.ExtGi)
+		//} else {
+		ap.Kwta.KWTALayer(rawSS, kwtaSS, &ap.ExtGi)
+		//}
 	}
 }
 
@@ -554,14 +528,14 @@ func (ap *App) ConfigGui() *gi.Window {
 		Func: func() {
 			exts := ".wav"
 			//giv.FileViewDialog(ap.GUI.ViewPort, string(apFile), exts, giv.DlgOpts{Title: "Open .wav Sound File", Prompt: "Open a .wav file to load for sound processing."}, nil,
-			giv.FileViewDialog(ap.GUI.ViewPort, ap.InitDir, exts, giv.DlgOpts{Title: "Open .wav Sound File", Prompt: "Open a .wav file to load for sound processing."}, nil,
+			giv.FileViewDialog(ap.GUI.ViewPort, ap.SndPath, exts, giv.DlgOpts{Title: "Open .wav Sound File", Prompt: "Open a .wav file to load for sound processing."}, nil,
 				ap.GUI.Win.This(), func(recv, send ki.Ki, sig int64, data interface{}) {
 					if sig == int64(gi.DialogAccepted) {
 						dlg, _ := send.Embed(gi.KiT_Dialog).(*gi.Dialog)
 						fn := giv.FileViewDialogValue(dlg)
 						ap.SndFile = fn
 						ap.SpeechSeq.File = fn
-						ap.SndFilePath, ap.SndFileName = path.Split(fn)
+						ap.SndPath, ap.SndName = path.Split(fn)
 						ap.GUI.Win.UpdateSig()
 						ap.LoadSnd(ap.SndFile)
 						ap.Sound.Load(ap.SndFile)
@@ -580,15 +554,6 @@ func (ap *App) ConfigGui() *gi.Window {
 				ap.ApplyGabor()
 				ap.GUI.UpdateWindow()
 			}
-		},
-	})
-
-	ap.GUI.AddToolbarItem(egui.ToolbarItem{Label: "Generate Gabors", Icon: "update",
-		Tooltip: "Generate gabors from the gabor specifications",
-		Active:  egui.ActiveStopped,
-		Func: func() {
-			ap.GenGabors()
-			ap.GUI.UpdateWindow()
 		},
 	})
 
@@ -621,6 +586,18 @@ func (ap *App) ConfigGui() *gi.Window {
 	specs.Viewport = ap.GUI.ViewPort
 	specs.SetSlice(&ap.GaborSpecs)
 
+	ap.GUI.ToolBar = gi.AddNewToolBar(specs, "tbar")
+	ap.GUI.ToolBar.SetStretchMaxWidth()
+
+	ap.GUI.AddToolbarItem(egui.ToolbarItem{Label: "Update Gabors", Icon: "update",
+		Tooltip: "Update gabors from the gabor specifications",
+		Active:  egui.ActiveStopped,
+		Func: func() {
+			ap.GenGabors()
+			ap.GUI.UpdateWindow()
+		},
+	})
+
 	tv := gi.AddNewTabView(split, "tv")
 	split.SetSplits(.3, .2, .2, .3)
 
@@ -631,18 +608,15 @@ func (ap *App) ConfigGui() *gi.Window {
 
 	tg = tv.AddNewTab(etview.KiT_TensorGrid, "Power").(*etview.TensorGrid)
 	tg.SetStretchMax()
-	ap.PowerGrid = tg
 	ap.LogPowerSegment.SetMetaData("grid-min", "10")
 	tg.SetTensor(&ap.LogPowerSegment)
 
 	tg = tv.AddNewTab(etview.KiT_TensorGrid, "Mel").(*etview.TensorGrid)
 	tg.SetStretchMax()
-	ap.MelFBankGrid = tg
 	tg.SetTensor(&ap.MelFBankSegment)
 
 	tg = tv.AddNewTab(etview.KiT_TensorGrid, "Gabor Result").(*etview.TensorGrid)
 	tg.SetStretchMax()
-	ap.GaborOutGrid = tg
 	tg.SetTensor(&ap.GborOutput)
 
 	ap.GUI.FinalizeGUI(false)
