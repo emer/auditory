@@ -34,7 +34,7 @@ type FilterSet struct {
 	Gain       float32         `desc:"overall gain multiplier applied after gabor filtering -- only relevant if not using renormalization (otherwize it just gets renormed away)"`
 	Distribute bool            `desc:"if multiple horiz or vertical distribute evenly"`
 	Filters    etensor.Float64 `view:"no-inline" desc:"actual gabor filters"`
-	Table      etable.Table    `view:"no-inline" desc:"simple gabor filter table (view only)"`
+	Table      etable.Table    `view:"-" desc:"simple gabor filter table (view only)"`
 }
 
 // Defaults sets default values for any filter fields where 0 is not a reasonable value
@@ -55,10 +55,11 @@ func (f *Filter) Defaults(i int) {
 
 // ToTensor generates filters into the tensor passed by caller
 func ToTensor(specs []Filter, set *FilterSet) { // i is filter index in
+	active := Active(specs)
 	nhf := 0 // number of horizontal filters
 	nvf := 0 // number of vertical filters
 	if set.Distribute == true {
-		for _, f := range specs {
+		for _, f := range active {
 			if f.Orientation == 0 {
 				nhf++
 			} else if f.Orientation == 90 {
@@ -84,7 +85,7 @@ func ToTensor(specs []Filter, set *FilterSet) { // i is filter index in
 	hCnt := 0 // the current count of 0 degree filters generated
 	vCnt := 0 // the current count of 90 degree filters generated
 
-	for i, f := range specs {
+	for i, f := range active {
 		f.Defaults(i)
 		twoPiNorm := (2.0 * mat32.Pi) / f.WaveLen
 		var lNorm float32
@@ -243,13 +244,14 @@ func Convolve(ch int, melData *etensor.Float32, filters FilterSet, rawOut *etens
 				pos := fSum >= 0.0
 				act := filters.Gain * mat32.Abs(fSum)
 				if rawOut.NumDims() == 3 {
-					y := fIdx * 2 // we are populating 2 rows, off-center and on-center, thus we need to jump by 2 when populating the output tensor
+					y := fIdx * 2                          // we are populating 2 rows, off-center and on-center, thus we need to jump by 2 when populating the output tensor
+					x := flt + tIdx*filters.Filters.Dim(0) // tIdx increments for each stride, flt increments stepping through the filters
 					if pos {
-						rawOut.SetFloat([]int{ch, y, flt}, float64(act))
-						rawOut.SetFloat([]int{ch, y + 1, flt}, 0)
+						rawOut.SetFloat([]int{ch, y, x}, float64(act))
+						rawOut.SetFloat([]int{ch, y + 1, x}, 0)
 					} else {
-						rawOut.SetFloat([]int{ch, y, flt}, 0)
-						rawOut.SetFloat([]int{ch, y + 1, flt}, float64(act))
+						rawOut.SetFloat([]int{ch, y, x}, 0)
+						rawOut.SetFloat([]int{ch, y + 1, x}, float64(act))
 					}
 				} else if rawOut.NumDims() == 5 { // in the 4D case we have pools no need for the multiplication we have in the 2D setting of the output tensor
 					if pos {
