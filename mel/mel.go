@@ -15,29 +15,29 @@ import (
 
 // FilterBank contains mel frequency feature bank sampling parameters
 type FilterBank struct {
-	NFilters    int     `viewif:"On" def:"32,26" desc:"number of Mel frequency filters to compute"`
-	LoHz        float32 `viewif:"On" def:"120,300" step:"10.0" desc:"low frequency end of mel frequency spectrum"`
-	HiHz        float32 `viewif:"On" def:"10000,8000" step:"1000.0" desc:"high frequency end of mel frequency spectrum -- must be <= sample_rate / 2 (i.e., less than the Nyquist frequencY"`
-	LogOff      float32 `viewif:"On" def:"0" desc:"on add this amount when taking the log of the Mel filter sums to produce the filter-bank output -- e.g., 1.0 makes everything positive -- affects the relative contrast of the outputs"`
-	LogMin      float32 `viewif:"On" def:"-10" desc:"minimum value a log can produce -- puts a lower limit on log output"`
+	NFilters    int     `view:"+" def:"32,26" desc:"number of Mel frequency filters to compute"`
+	LoHz        float32 `view:"+" def:"120,300" step:"10.0" desc:"low frequency end of mel frequency spectrum"`
+	HiHz        float32 `view:"+" def:"10000,8000" step:"1000.0" desc:"high frequency end of mel frequency spectrum -- must be <= sample_rate / 2 (i.e., less than the Nyquist frequencY"`
+	LogOff      float32 `view:"+" def:"0" desc:"on add this amount when taking the log of the Mel filter sums to produce the filter-bank output -- e.g., 1.0 makes everything positive -- affects the relative contrast of the outputs"`
+	LogMin      float32 `view:"+" def:"-10" desc:"minimum value a log can produce -- puts a lower limit on log output"`
 	Renorm      bool    `desc:" whether to perform renormalization of the mel values"`
-	RenormMin   float32 `viewif:"On" step:"1.0" desc:"minimum value to use for renormalization -- you must experiment with range of inputs to determine appropriate values"`
-	RenormMax   float32 `viewif:"On" step:"1.0" desc:"maximum value to use for renormalization -- you must experiment with range of inputs to determine appropriate values"`
-	RenormScale float32 `inactive:"+" desc:"1.0 / (ren_max - ren_min)"`
+	RenormMin   float32 `viewif:"Renorm=true" step:"1.0" desc:"minimum value to use for renormalization -- you must experiment with range of inputs to determine appropriate values"`
+	RenormMax   float32 `viewif:"Renorm=true" step:"1.0" desc:"maximum value to use for renormalization -- you must experiment with range of inputs to determine appropriate values"`
+	RenormScale float32 `view:"-" desc:"1.0 / (ren_max - ren_min)"`
 }
 
 // Params
 type Params struct {
-	FBank      FilterBank
-	BinPts     []int32 `view:"no-inline" desc:" mel scale points in fft bins"`
-	CompMfcc   bool    `desc:" compute cepstrum discrete cosine transform (dct) of the mel-frequency filter bank features"`
-	MfccNCoefs int     `def:"13" desc:" number of mfcc coefficients to output -- typically 1/2 of the number of filterbank features"` // Todo: should be 12 total - 2 - 13, higher ones not useful
+	FBank  FilterBank `view:"inline"`
+	BinPts []int32    `view:"-" desc:" mel scale points in fft bins"`
+	MFCC   bool       `view:"+" def:"false" desc:" compute cepstrum discrete cosine transform (dct) of the mel-frequency filter bank features"`
+	NCoefs int        `viewif:"MFCC=true" def:"13" desc:" number of mfcc coefficients to output -- typically 1/2 of the number of filterbank features"` // Todo: should be 12 total - 2 - 13, higher ones not useful
 }
 
 // Defaults
 func (mel *Params) Defaults() {
-	mel.CompMfcc = false
-	mel.MfccNCoefs = 13
+	mel.MFCC = false
+	mel.NCoefs = 13
 	mel.FBank.Defaults()
 }
 
@@ -146,7 +146,7 @@ func (mfb *FilterBank) Defaults() {
 // Filter filters the current window_in input data according to current settings -- called by ProcessStep, but can be called separately
 func (mel *Params) Filter(ch int, step int, windowIn *etensor.Float32, filters *etensor.Float32, dftPower *etensor.Float32, segmentData *etensor.Float32, fBankData *etensor.Float32, mfccSegmentData *etensor.Float32, mfccDct *etensor.Float32) {
 	mel.FilterDft(ch, step, *dftPower, segmentData, fBankData, filters)
-	if mel.CompMfcc {
+	if mel.MFCC {
 		mel.CepstrumDct(ch, step, fBankData, mfccSegmentData, mfccDct)
 	}
 }
