@@ -136,9 +136,7 @@ func (ap *App) Init() {
 	ap.ParamDefaults()
 	ap.Mel.Defaults()
 	ap.InitGabors()
-	active := agabor.Active(ap.GaborSpecs)
-	ap.GaborSet.Filters.SetShape([]int{len(active), ap.GaborSet.SizeY, ap.GaborSet.SizeX}, nil, nil)
-	ap.GenGabors()
+	ap.UpdateGabors()
 }
 
 // ParamDefaults initializes the Input
@@ -164,7 +162,7 @@ func (ap *App) InitGabors() {
 	ap.GaborSet.SizeX = 9
 	ap.GaborSet.SizeY = 9
 	ap.GaborSet.Gain = 1.5
-	ap.GaborSet.StrideX = 4
+	ap.GaborSet.StrideX = 6
 	ap.GaborSet.StrideY = 3
 	ap.GaborSet.Distribute = false
 
@@ -187,6 +185,12 @@ func (ap *App) InitGabors() {
 	}
 }
 
+func (ap *App) UpdateGabors() {
+	active := agabor.Active(ap.GaborSpecs)
+	ap.GaborSet.Filters.SetShape([]int{len(active), ap.GaborSet.SizeY, ap.GaborSet.SizeX}, nil, nil)
+	agabor.ToTensor(ap.GaborSpecs, &ap.GaborSet)
+}
+
 func (ap *App) InitProcess() (err error, segments int) {
 	if ap.Sound.Buf == nil {
 		return errors.New("Load a sound and try again"), 0
@@ -204,6 +208,18 @@ func (ap *App) InitProcess() (err error, segments int) {
 	segmentMs := ap.Params.SegmentEnd - ap.Params.SegmentStart
 	ap.Params.SegmentSteps = int(math.Round(float64(segmentMs / ap.Params.StepMs)))
 	ap.Params.SegmentStepsTotal = ap.Params.SegmentSteps + 2*ap.Params.BorderSteps
+
+	// these overrides must follow Mel.Defaults
+	if ap.Corpus == "TIMIT" {
+		ap.Mel.FBank.RenormMin = -6
+		ap.Mel.FBank.RenormMax = 4
+	} else {
+		ap.Mel.FBank.RenormMin = 2
+		ap.Mel.FBank.RenormMax = 9
+	}
+	ap.Mel.FBank.LoHz = 20
+	ap.Mel.FBank.HiHz = 8000
+	ap.Mel.FBank.NFilters = 39
 
 	winSamplesHalf := ap.Params.WinSamples/2 + 1
 	ap.Dft.Initialize(ap.Params.WinSamples)
@@ -271,13 +287,11 @@ func (ap *App) LoadSnd(path string) {
 	} else {
 		fmt.Println("NextSound: ap.Corpus no match")
 	}
-	//ap.InitProcess()
 
 	if ap.SpeechSeq.Units == nil {
 		fmt.Println("AdjSeqTimes: SpeechSeq.Units is nil. Some problem with loading file transcription and timing data")
 		return
 	}
-
 	ap.AdjSeqTimes()
 
 	// todo: this works for timit - but need a more general solution
@@ -288,7 +302,7 @@ func (ap *App) LoadSnd(path string) {
 	} else {
 		fmt.Println("last unit of speech sequence not silence")
 	}
-
+	ap.GUI.UpdateWindow()
 	return
 }
 
@@ -436,25 +450,21 @@ func (ap *App) SndToWindow(start, ch int) error {
 	return nil
 }
 
-func (ap *App) GenGabors() {
-	agabor.ToTensor(ap.GaborSpecs, &ap.GaborSet)
-}
-
 // ApplyGabor convolves the gabor filters with the mel output
 func (ap *App) ApplyGabor() (tsr *etensor.Float32) {
+	if ap.Params.SegmentEnd <= ap.Params.SegmentStart {
+		fmt.Println("SegmentEnd must be greater than SegmentStart")
+		return
+	}
+
 	y1 := ap.MelFBank.Dim(0)
 	y2 := ap.GaborSet.SizeY
 	y := float32(y1 - y2)
 	sy := (int(mat32.Floor(y/float32(ap.GaborSet.StrideY))) + 1) * 2 // double - two rows, off-center and on-center
 
-	segmentMs := float32(0.0)
-	if ap.Params.SegmentEnd > ap.Params.SegmentStart {
-		segmentMs = ap.Params.SegmentEnd - ap.Params.SegmentStart
-	}
-
-	x1 := float32(segmentMs)
+	x1 := float32(ap.Params.SegmentEnd-ap.Params.SegmentStart) / ap.Params.StepMs
 	x2 := float32(ap.GaborSet.SizeX)
-	x := float32(x1 - x2)
+	x := x1 - x2
 	active := agabor.Active(ap.GaborSpecs)
 	sx := (int(mat32.Floor(x/float32(ap.GaborSet.StrideX))) + 1) * len(active)
 
@@ -568,19 +578,28 @@ func (ap *App) ConfigGui() *gi.Window {
 	//})
 	//
 
-	split := gi.AddNewSplitView(mfr, "split")
+	split1 := gi.AddNewSplitView(mfr, "split1")
+	split1.Dim = mat32.X
+	split1.SetStretchMax()
+
+	split := gi.AddNewSplitView(split1, "split")
 	split.Dim = mat32.Y
 	split.SetStretchMax()
+
+	snds := giv.AddNewSliceView(split1, "snds")
+	snds.Viewport = ap.GUI.ViewPort
+	snds.SetSlice(&ap.SpeechSeq.Units)
+	//snds.NoAdd = true // causes the sliceview to have multiple columns!! Data fine but layout very unexpected
+	//snds.NoDelete = true // causes the sliceview to have multiple columns!! Data fine but layout very unexpected
+	//snds.SetInactiveState(true) // causes the sliceview to have multiple columns!! Data fine but layout very unexpected
+
+	split1.SetSplits(.75, .25)
 
 	ap.GUI.StructView = giv.AddNewStructView(split, "app")
 	ap.GUI.StructView.SetStruct(ap)
 
-	snds := giv.AddNewSliceView(split, "snds")
-	snds.Viewport = ap.GUI.ViewPort
-	snds.SetSlice(&ap.SpeechSeq.Units)
-	snds.NoAdd = true
-	snds.NoDelete = true
-	snds.SetInactiveState(true)
+	//ap.GUI.StructView = giv.AddNewStructView(split, "params")
+	//ap.GUI.StructView.SetStruct(&ap.Params)
 
 	specs := giv.AddNewTableView(split, "specs")
 	specs.Viewport = ap.GUI.ViewPort
@@ -593,13 +612,13 @@ func (ap *App) ConfigGui() *gi.Window {
 		Tooltip: "Update gabors from the gabor specifications",
 		Active:  egui.ActiveStopped,
 		Func: func() {
-			ap.GenGabors()
+			ap.UpdateGabors()
 			ap.GUI.UpdateWindow()
 		},
 	})
 
 	tv := gi.AddNewTabView(split, "tv")
-	split.SetSplits(.3, .2, .2, .3)
+	split.SetSplits(.3, .3, .4)
 
 	tg := tv.AddNewTab(etview.KiT_TensorGrid, "Gabors").(*etview.TensorGrid)
 	tg.SetStretchMax()
