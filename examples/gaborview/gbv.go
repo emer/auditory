@@ -24,7 +24,6 @@ import (
 	"github.com/goki/mat32"
 	"gonum.org/v1/gonum/dsp/fourier"
 	"log"
-	"math"
 	"os"
 	"path"
 	"strings"
@@ -122,7 +121,7 @@ type App struct {
 	FftCoefs   []complex128      `view:"-" desc:" discrete fourier transform (fft) output complex representation"`
 	Fft        *fourier.CmplxFFT `view:"-" desc:" struct for fast fourier transform"`
 
-	SpeechSeq speech.SpeechSequence
+	SpeechSeq speech.Sequence
 	CurUnits  []string `desc:"names of units in the current audio segment"`
 
 	// internal state - view:"-"
@@ -193,8 +192,15 @@ func (ap *App) UpdateGabors() {
 
 func (ap *App) InitProcess() (err error, segments int) {
 	if ap.Sound.Buf == nil {
+		gi.PromptDialog(nil, gi.DlgOpts{Title: "Sound buffer is empty", Prompt: "Open a sound file before processing"}, gi.AddOk, gi.NoCancel, nil, nil)
 		return errors.New("Load a sound and try again"), 0
 	}
+
+	if ap.Params.SegmentEnd <= ap.Params.SegmentStart {
+		gi.PromptDialog(nil, gi.DlgOpts{Title: "End <= Start", Prompt: "SegmentEnd must be greater than SegmentStart."}, gi.AddOk, gi.NoCancel, nil, nil)
+		return errors.New("SegmentEnd <= SegmentStart"), 0
+	}
+
 	sr := ap.Sound.SampleRate()
 	if sr <= 0 {
 		fmt.Println("sample rate <= 0")
@@ -204,9 +210,11 @@ func (ap *App) InitProcess() (err error, segments int) {
 	ap.Params.WinSamples = sound.MSecToSamples(ap.Params.WinMs, sr)
 	ap.Params.StepSamples = sound.MSecToSamples(ap.Params.StepMs, sr)
 
-	//ap.Params.SegmentSamples = sound.MSecToSamples(ap.Params.SegmentMs, sr)
+	// round up to nearest step interval
 	segmentMs := ap.Params.SegmentEnd - ap.Params.SegmentStart
-	ap.Params.SegmentSteps = int(math.Round(float64(segmentMs / ap.Params.StepMs)))
+	segmentMs = segmentMs + ap.Params.StepMs - float32(int(segmentMs)%int(ap.Params.StepMs))
+
+	ap.Params.SegmentSteps = int(segmentMs / ap.Params.StepMs)
 	ap.Params.SegmentStepsTotal = ap.Params.SegmentSteps + 2*ap.Params.BorderSteps
 
 	// these overrides must follow Mel.Defaults
@@ -389,7 +397,12 @@ func (ap *App) SndFmIdx(idx int) (snd string, ok bool) {
 }
 
 // ProcessSegment processes the entire segment's input by processing a small overlapping set of samples on each pass
-func (ap *App) ProcessSegment() {
+func (ap *App) ProcessSegment() error {
+	d := int(ap.Params.SegmentEnd - ap.Params.SegmentStart)
+	if int(ap.Params.StepMs) < d*ap.GaborSet.SizeX {
+		gi.PromptDialog(nil, gi.DlgOpts{Title: "Segment too short", Prompt: "The segment duration must be at least as long as the gabor filter width (SizeX) * the step size (StepMs)."}, gi.AddOk, gi.NoCancel, nil, nil)
+		return errors.New("Segment too short")
+	}
 	ap.Power.SetZeros()
 	ap.LogPower.SetZeros()
 	ap.PowerSegment.SetZeros()
@@ -404,7 +417,7 @@ func (ap *App) ProcessSegment() {
 			}
 		}
 	}
-	//fmt.Printf("total length = %v, remaining = %v\n", len(ap.Signal.Values), remaining)
+	return nil
 }
 
 // ProcessStep processes a step worth of sound input from current input_pos, and increment input_pos by input.step_samples
@@ -453,7 +466,7 @@ func (ap *App) SndToWindow(start, ch int) error {
 // ApplyGabor convolves the gabor filters with the mel output
 func (ap *App) ApplyGabor() (tsr *etensor.Float32) {
 	if ap.Params.SegmentEnd <= ap.Params.SegmentStart {
-		fmt.Println("SegmentEnd must be greater than SegmentStart")
+		gi.PromptDialog(nil, gi.DlgOpts{Title: "End <= Start", Prompt: "SegmentEnd must be greater than SegmentStart."}, gi.AddOk, gi.NoCancel, nil, nil)
 		return
 	}
 
@@ -468,6 +481,7 @@ func (ap *App) ApplyGabor() (tsr *etensor.Float32) {
 	active := agabor.Active(ap.GaborSpecs)
 	sx := (int(mat32.Floor(x/float32(ap.GaborSet.StrideX))) + 1) * len(active)
 
+	ap.UpdateGabors()
 	ap.GborOutput.SetShape([]int{ap.Sound.Channels(), sy, sx}, nil, []string{"chan", "freq", "time"})
 	ap.ExtGi.SetShape([]int{sy, ap.GaborSet.Filters.Dim(0)}, nil, nil) // passed in for each channel
 	ap.GborOutput.SetMetaData("odd-row", "true")
@@ -537,7 +551,6 @@ func (ap *App) ConfigGui() *gi.Window {
 		Active:  egui.ActiveStopped,
 		Func: func() {
 			exts := ".wav"
-			//giv.FileViewDialog(ap.GUI.ViewPort, string(apFile), exts, giv.DlgOpts{Title: "Open .wav Sound File", Prompt: "Open a .wav file to load for sound processing."}, nil,
 			giv.FileViewDialog(ap.GUI.ViewPort, ap.SndPath, exts, giv.DlgOpts{Title: "Open .wav Sound File", Prompt: "Open a .wav file to load for sound processing."}, nil,
 				ap.GUI.Win.This(), func(recv, send ki.Ki, sig int64, data interface{}) {
 					if sig == int64(gi.DialogAccepted) {
@@ -554,15 +567,17 @@ func (ap *App) ConfigGui() *gi.Window {
 		},
 	})
 
-	ap.GUI.AddToolbarItem(egui.ToolbarItem{Label: "Process and Apply", Icon: "update",
+	ap.GUI.AddToolbarItem(egui.ToolbarItem{Label: "Process", Icon: "play",
 		Tooltip: "Process the next segment of audio using the SegStart and SegEnd params. Then apply the gabors to the Mel output",
 		Active:  egui.ActiveStopped,
 		Func: func() {
 			err, _ := ap.InitProcess()
 			if err == nil {
-				ap.ProcessSegment()
-				ap.ApplyGabor()
-				ap.GUI.UpdateWindow()
+				err := ap.ProcessSegment()
+				if err == nil {
+					ap.ApplyGabor()
+					ap.GUI.UpdateWindow()
+				}
 			}
 		},
 	})
@@ -588,10 +603,11 @@ func (ap *App) ConfigGui() *gi.Window {
 
 	snds := giv.AddNewSliceView(split1, "snds")
 	snds.Viewport = ap.GUI.ViewPort
+	snds.NoAdd = true
+	snds.NoDelete = true
+	snds.SetInactiveState(true)
+	// set slice after view settings
 	snds.SetSlice(&ap.SpeechSeq.Units)
-	//snds.NoAdd = true // causes the sliceview to have multiple columns!! Data fine but layout very unexpected
-	//snds.NoDelete = true // causes the sliceview to have multiple columns!! Data fine but layout very unexpected
-	//snds.SetInactiveState(true) // causes the sliceview to have multiple columns!! Data fine but layout very unexpected
 
 	split1.SetSplits(.75, .25)
 
