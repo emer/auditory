@@ -54,41 +54,43 @@ func (se *SndEnv) ParamDefaults() {
 type SndEnv struct {
 	// the environment has the training/test data and the procedures for creating/choosing the input to the model
 	// "Segment" in var name indicates that the data or value only applies to a segment of samples rather than the entire signal
-	Nm              string `desc:"name of this environment"`
-	Dsc             string `desc:"description of this environment"`
-	Sound           Wave   `desc:"specifications of the raw se.tory input"`
-	Params          Params
-	Signal          etensor.Float32 `view:"no-inline" desc:" the full sound input obtained from the sound input"`
-	SegCnt          int             `desc:"the number of segments for this sound"`
-	Window          etensor.Float32 `inactive:"+" desc:" [Input.WinSamples] the raw sound input, one channel at a time"`
-	Segment         int             `inactive:"no-inline" desc:" the current chunk of samples (a full segment's' worth) - zero is first chunk"`
+	Nm      string `desc:"name of this environment"`
+	Dsc     string `desc:"description of this environment"`
+	Sound   Wave   `desc:"specifications of the raw sensory input"`
+	Params  Params
+	Signal  etensor.Float32 `view:"no-inline" desc:" the full sound input"`
+	SegCnt  int             `desc:"the number of segments in this sound file (based on current segment size)"`
+	Window  etensor.Float32 `inactive:"+" desc:" [Input.WinSamples] the raw sound input, one channel at a time"`
+	Segment int             `inactive:"no-inline" desc:" the current chunk of samples (a full segment's' worth) - zero is first chunk"`
+
 	Dft             dft.Params
-	Power           etensor.Float32   `view:"-" desc:" power of the dft, up to the nyquist limit frequency (1/2 input.WinSamples)"`
-	LogPower        etensor.Float32   `view:"-" desc:" log power of the dft, up to the nyquist liit frequency (1/2 input.WinSamples)"`
-	PowerSegment    etensor.Float32   `view:"no-inline" desc:" full segment's worth of power of the dft, up to the nyquist limit frequency (1/2 input.win_samples)"`
-	LogPowerSegment etensor.Float32   `view:"no-inline" desc:" full segment's worth of log power of the dft, up to the nyquist limit frequency (1/2 input.win_samples)"`
-	Mel             mel.Params        `view:"no-inline"`
-	MelFBank        etensor.Float32   `view:"no-inline" desc:" mel scale transformation of dft_power, resulting in the mel filterbank output -- the natural log of this is typically applied"`
-	MelFBankSegment etensor.Float32   `view:"no-inline" desc:" full segment's worth of mel feature-bank output"`
-	MelFilters      etensor.Float32   `view:"no-inline" desc:" the actual filters"`
-	MfccDctSegment  etensor.Float32   `view:"no-inline" desc:" full segment's worth of discrete cosine transform of log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
-	MfccDct         etensor.Float32   `view:"no-inline" desc:" discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
-	GaborSpecs      []agabor.Filter   `view:"no-inline" desc:" a set of gabor filter specifications, one spec per filter'"`
-	GaborFilters    agabor.FilterSet  `desc:"the actual gabor filters, the first spec determines the size of all filters in the set"`
-	GaborTab        etable.Table      `view:"no-inline" desc:"gabor filter table (view only)"`
-	GborOutPoolsX   int               `view:"+" desc:" the number of neuron pools along the time dimension in the input layer"`
-	GborOutUnitsX   int               `view:"+" desc:" the number of neurons in a pool (typically the number of gabor filters) along the time dimension in the input layer"`
-	GborOutPoolsY   int               `view:"+" desc:" the number of neuron pools along the frequency dimension in the input layer"`
-	GborOutUnitsY   int               `view:"+" desc:" the number of neurons in a pool along the frequency dimension in the input layer"`
-	GborOutput      etensor.Float32   `view:"no-inline" desc:" raw output of Gabor -- full segment's worth of gabor steps"`
-	GborKwta        etensor.Float32   `view:"no-inline" desc:" post-kwta output of full segment's worth of gabor steps"`
-	Inhibs          fffb.Inhibs       `view:"no-inline" desc:"inhibition values for A1 KWTA"`
-	ExtGi           etensor.Float32   `view:"no-inline" desc:"A1 simple extra Gi from neighbor inhibition tensor"`
-	NeighInhib      kwta.NeighInhib   `desc:"neighborhood inhibition for V1s -- each unit gets inhibition from same feature in nearest orthogonal neighbors -- reduces redundancy of feature code"`
-	Kwta            kwta.KWTA         `desc:"kwta parameters, using FFFB form"`
-	KwtaPool        bool              `desc:"if Kwta.On == true, call KwtaPool (true) or KwtaLayer (false)"`
-	FftCoefs        []complex128      `view:"-" desc:" discrete fourier transform (fft) output complex representation"`
-	Fft             *fourier.CmplxFFT `view:"-" desc:" struct for fast fourier transform"`
+	Power           etensor.Float32 `view:"-" desc:" power of the dft, up to the nyquist limit frequency (1/2 input.WinSamples)"`
+	LogPower        etensor.Float32 `view:"-" desc:" log power of the dft, up to the nyquist liit frequency (1/2 input.WinSamples)"`
+	PowerSegment    etensor.Float32 `view:"no-inline" desc:" full segment's worth of power of the dft, up to the nyquist limit frequency (1/2 input.win_samples)"`
+	LogPowerSegment etensor.Float32 `view:"no-inline" desc:" full segment's worth of log power of the dft, up to the nyquist limit frequency (1/2 input.win_samples)"`
+	Mel             mel.Params      `view:"no-inline"`
+	MelFBank        etensor.Float32 `view:"no-inline" desc:" mel scale transformation of dft_power, resulting in the mel filterbank output -- the natural log of this is typically applied"`
+	MelFBankSegment etensor.Float32 `view:"no-inline" desc:" full segment's worth of mel feature-bank output"`
+	MelFilters      etensor.Float32 `view:"no-inline" desc:" the actual filters"`
+	MfccDctSegment  etensor.Float32 `view:"no-inline" desc:" full segment's worth of discrete cosine transform of log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
+	MfccDct         etensor.Float32 `view:"no-inline" desc:" discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
+
+	GaborSpecs    []agabor.Filter   `view:"no-inline" desc:" a set of gabor filter specifications, one spec per filter'"`
+	GaborFilters  agabor.FilterSet  `desc:"the actual gabor filters, the first spec determines the size of all filters in the set"`
+	GaborTab      etable.Table      `view:"no-inline" desc:"gabor filter table (view only)"`
+	GborOutPoolsX int               `view:"+" desc:" the number of neuron pools along the time dimension in the input layer"`
+	GborOutPoolsY int               `view:"+" desc:" the number of neuron pools along the frequency dimension in the input layer"`
+	GborOutUnitsX int               `view:"+" desc:" the number of neurons in a pool (typically the number of gabor filters) along the time dimension in the input layer"`
+	GborOutUnitsY int               `view:"+" desc:" the number of neurons in a pool along the frequency dimension in the input layer"`
+	GborOutput    etensor.Float32   `view:"no-inline" desc:" raw output of Gabor -- full segment's worth of gabor steps"`
+	GborKwta      etensor.Float32   `view:"no-inline" desc:" post-kwta output of full segment's worth of gabor steps"`
+	Inhibs        fffb.Inhibs       `view:"no-inline" desc:"inhibition values for A1 KWTA"`
+	ExtGi         etensor.Float32   `view:"no-inline" desc:"A1 simple extra Gi from neighbor inhibition tensor"`
+	NeighInhib    kwta.NeighInhib   `desc:"neighborhood inhibition for V1s -- each unit gets inhibition from same feature in nearest orthogonal neighbors -- reduces redundancy of feature code"`
+	Kwta          kwta.KWTA         `desc:"kwta parameters, using FFFB form"`
+	KwtaPool      bool              `desc:"if Kwta.On == true, call KwtaPool (true) or KwtaLayer (false)"`
+	FftCoefs      []complex128      `view:"-" desc:" discrete fourier transform (fft) output complex representation"`
+	Fft           *fourier.CmplxFFT `view:"-" desc:" struct for fast fourier transform"`
 
 	// internal state - view:"-"
 	FirstStep bool `view:"-" desc:" if first frame to process -- turns off prv smoothing of dft power"`
@@ -138,10 +140,13 @@ func (se *SndEnv) Init(msSilenceAdd, msSilenceRmStart, msSilenceRmEnd float64) (
 		se.Signal.Values = se.Pad(se.Signal.Values)
 	}
 
-	nfilters := len(se.GaborSpecs)
+	specs := agabor.Active(se.GaborSpecs)
+
+	nfilters := len(specs)
 	se.GaborFilters.Filters.SetShape([]int{nfilters, se.GaborFilters.SizeY, se.GaborFilters.SizeX}, nil, nil)
 	se.NeighInhib.Defaults() // NeighInhib code not working yet - need to pass 4d tensor not 5d
-	agabor.ToTensor(se.GaborSpecs, &se.GaborFilters)
+	//agabor.ToTensor(se.GaborSpecs, &se.GaborFilters)
+	agabor.ToTensor(specs, &se.GaborFilters)
 	se.GaborFilters.ToTable(se.GaborFilters, &se.GaborTab) // note: view only, testing
 	if se.GborOutPoolsX == 0 && se.GborOutPoolsY == 0 {    // 2D
 		se.GborOutput.SetShape([]int{se.Sound.Channels(), se.GborOutUnitsY, se.GborOutUnitsX}, nil, []string{"chan", "freq", "time"})
@@ -187,7 +192,7 @@ func (se *SndEnv) Init(msSilenceAdd, msSilenceRmStart, msSilenceRmEnd float64) (
 
 	se.MelFBank.SetShape([]int{se.Mel.FBank.NFilters}, nil, nil)
 	se.MelFBankSegment.SetShape([]int{se.Params.SegmentStepsTotal, se.Mel.FBank.NFilters, se.Sound.Channels()}, nil, nil)
-	if se.Mel.CompMfcc {
+	if se.Mel.MFCC {
 		se.MfccDctSegment.CopyShapeFrom(&se.MelFBankSegment)
 		se.MfccDct.SetShape([]int{se.Mel.FBank.NFilters}, nil, nil)
 	}
@@ -225,7 +230,6 @@ func (se *SndEnv) ApplyKwta(ch int) {
 
 // ProcessSegment processes the entire segment's input by processing a small overlapping set of samples on each pass
 func (se *SndEnv) ProcessSegment() (moreSegments bool) {
-	//start := time.Now()
 	moreSegments = true
 	se.Power.SetZeros()
 	se.LogPower.SetZeros()
@@ -251,9 +255,6 @@ func (se *SndEnv) ProcessSegment() (moreSegments bool) {
 		//fmt.Printf("Last Segment for %v: %d\n", se.SndFileCur, se.Segment)
 	}
 	se.ApplyGabor()
-	//se.ToolBar.UpdateActions()
-	//elapsed := time.Since(start)
-	//log.Printf("ProcessSegment took %s", elapsed)
 	return moreSegments
 }
 

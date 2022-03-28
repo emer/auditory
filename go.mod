@@ -3,6 +3,7 @@ module github.com/emer/auditory
 go 1.17
 
 require (
+	github.com/emer/emergent v1.1.55
 	github.com/emer/etable v1.0.43
 	github.com/emer/leabra v1.1.48
 	github.com/emer/vision v1.1.15

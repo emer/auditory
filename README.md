@@ -20,7 +20,7 @@ Auditory is the our repository for audition processing code in Go (golang) focus
 - playwav.go can be called to play a wav file
 
 **speech**
-- speech package has structs for SpeechSequence and SpeechUnit
+- speech package has structs for Sequence and Unit
 - packages for specific sound sets (corpora) include code to load these sound files with timing information and lookup code.
   - Package timit Phones of the TIMIT database. See Speaker-Independent Phone Recognition Using Hidden Markov Models, Kai-Fu Lee and Hsiao-Wuen Hon in IEEE Transactions on Acoustics, Speech and Signal Processing, Vol 37, 1989
   - Package grafestes contains the consonant vowel names and timing information for the sound sequences used for the research reported in "Listening Through Voices: Infant Statistical Word Segmentation Across Multiple Speakers", Katherine Graf Estes & Lew-Williams, 2015.
