@@ -4,8 +4,18 @@
 
 package speech
 
-// SpeechUnit
-type SpeechUnit struct {
+//// Units is a collection of speech units
+//type Units []*SpeechUnit
+//
+//var KiT_Units = kit.Types.AddType(&Units{}, UnitProps)
+//
+//// LinesProps define the ToolBar for lines
+//var UnitProps = ki.Props{
+//
+//}
+
+// Unit
+type Unit struct {
 	Name   string  `desc:"the CV (e.g. -- da, go, ku ...), or phones (g, ah, ix ...)"`
 	Start  float64 `desc:"start time of this unit in a particular sequence in milliseconds"`
 	End    float64 `desc:"end time of this unit in a particular sequence in milliseconds"`
@@ -15,12 +25,12 @@ type SpeechUnit struct {
 }
 
 // SpeechSequence a sequence of speech units, for example a sequence of phones or words
-type SpeechSequence struct {
-	File     string       `desc:""`
-	ID       string       `desc:"an id to use if the corpus has subsets"`
-	Sequence string       `desc:"the full sequence of CVs, Phones, Words or whatever the unit"`
-	Units    []SpeechUnit `desc:"the units of the sequence"`
-	Silence  float64      `desc:"milliseconds of silence added at start of sequence to add variability"`
-	TimeCur  float64      `desc:"current time in milliseconds since start of sequence"`
-	TimeStop float64      `desc:"start of final silence in milliseconds"`
+type Sequence struct {
+	File     string  `desc:""`
+	ID       string  `desc:"an id to use if the corpus has subsets"`
+	Sequence string  `desc:"the full sequence of CVs, Phones, Words or whatever the unit"`
+	Units    []Unit  `desc:"the units of the sequence"`
+	Silence  float64 `desc:"milliseconds of silence added at start of sequence to add variability"`
+	TimeCur  float64 `desc:"current time in milliseconds since start of sequence"`
+	TimeStop float64 `desc:"start of final silence in milliseconds"`
 }
