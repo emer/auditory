@@ -132,7 +132,7 @@ func (sp *SndProcess) Config() {
 
 	sp.MelFBank.SetShape([]int{sp.Mel.FBank.NFilters}, nil, nil)
 	sp.MelFBankSegment.SetShape([]int{sp.Params.SegmentStepsTotal, sp.Mel.FBank.NFilters, sp.Sound.Channels()}, nil, nil)
-	if sp.Mel.CompMfcc {
+	if sp.Mel.MFCC {
 		sp.MfccDctSegment.SetShape([]int{sp.Params.SegmentStepsTotal, sp.Mel.FBank.NFilters, sp.Sound.Channels()}, nil, nil)
 		sp.MfccDct.SetShape([]int{sp.Mel.FBank.NFilters}, nil, nil)
 	}
