@@ -4,15 +4,18 @@
 
 package speech
 
-//// Units is a collection of speech units
-//type Units []*SpeechUnit
-//
-//var KiT_Units = kit.Types.AddType(&Units{}, UnitProps)
-//
-//// LinesProps define the ToolBar for lines
-//var UnitProps = ki.Props{
-//
-//}
+import (
+	"github.com/goki/ki/ki"
+	"github.com/goki/ki/kit"
+)
+
+// Units is a collection of speech units
+type Units []*Unit
+
+var KiT_Units = kit.Types.AddType(&Units{}, UnitProps)
+
+// UnitProps - none at this time
+var UnitProps = ki.Props{}
 
 // Unit
 type Unit struct {
@@ -24,7 +27,7 @@ type Unit struct {
 	Type   string  `desc:"optional info - type of unit, phone, phoneme, word, CV (consonsant-vowel), etc"`
 }
 
-// SpeechSequence a sequence of speech units, for example a sequence of phones or words
+// Sequence a sequence of speech units, for example a sequence of phones or words
 type Sequence struct {
 	File     string  `desc:""`
 	ID       string  `desc:"an id to use if the corpus has subsets"`

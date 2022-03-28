@@ -52,9 +52,9 @@ func LoadTranscription(fn string) ([]string, error) {
 }
 
 // LoadTimes loads the timing and sequence (transcription) data for CV files
-func LoadTimes(fn string, names []string) ([]speech.SpeechUnit, error) {
+func LoadTimes(fn string, names []string) ([]speech.Unit, error) {
 	//fmt.Println("LoadCVTimes")
-	var units []speech.SpeechUnit
+	var units []speech.Unit
 	fp, err := os.Open(fn)
 	if err != nil {
 		log.Println(err)
@@ -74,7 +74,7 @@ func LoadTimes(fn string, names []string) ([]speech.SpeechUnit, error) {
 		} else if strings.HasPrefix(t, "\\") { // lines starting with '/' are lines with frequency for start/end points
 			continue
 		}
-		cvt := new(speech.SpeechUnit)
+		cvt := new(speech.Unit)
 		units = append(units, *cvt)
 		cvs := strings.Fields(t)
 		f, err := strconv.ParseFloat(cvs[0], 64)

@@ -126,9 +126,9 @@ func LoadTranscription(fn string) ([]string, error) {
 }
 
 // LoadTimes loads both the timing and transcription data for timit files so the names slice is unused
-func LoadTimes(fn string, names []string) ([]speech.SpeechUnit, error) {
+func LoadTimes(fn string, names []string) ([]speech.Unit, error) {
 	//fmt.Println("LoadTimitSeqsAndTimes")
-	var units []speech.SpeechUnit
+	var units []speech.Unit
 
 	// load the sound start/end times shipped with the TIMIT database
 	fp, err := os.Open(fn)
@@ -148,7 +148,7 @@ func LoadTimes(fn string, names []string) ([]speech.SpeechUnit, error) {
 		if t == "" {
 			break
 		}
-		cvt := new(speech.SpeechUnit)
+		cvt := new(speech.Unit)
 		units = append(units, *cvt)
 		cvs := strings.Fields(t)
 		f, err := strconv.ParseFloat(cvs[0], 64)
