@@ -94,7 +94,7 @@ type App struct {
 
 	GUI    egui.GUI        `view:"-" desc:"manages all the gui elements"`
 	Params Params          `view:"inline" desc:"fundamental processing parameters"`
-	Sound  sound.Wave      `view:"no-inline"`
+	Sound  sound.Wave      `view:"inline"`
 	Signal etensor.Float32 `view:"-" desc:" the full sound input obtained from the sound input - plus any added padding"`
 	Window etensor.Float32 `view:"-" desc:" [Input.WinSamples] the raw sound input, one channel at a time"`
 
@@ -158,6 +158,9 @@ func (ap *App) Config() {
 }
 
 func (ap *App) InitGabors() {
+	ap.GaborSet.Filters.SetMetaData("min", "-.25")
+	ap.GaborSet.Filters.SetMetaData("max", ".25")
+
 	ap.GaborSet.SizeX = 9
 	ap.GaborSet.SizeY = 9
 	ap.GaborSet.Gain = 1.5
@@ -185,6 +188,9 @@ func (ap *App) InitGabors() {
 }
 
 func (ap *App) UpdateGabors() {
+	if ap.GaborSet.SizeX < ap.GaborSet.StrideX {
+		gi.PromptDialog(nil, gi.DlgOpts{Title: "Stride > size", Prompt: "The stride in X is greater than the filter size in X"}, gi.AddOk, gi.AddCancel, nil, nil)
+	}
 	active := agabor.Active(ap.GaborSpecs)
 	ap.GaborSet.Filters.SetShape([]int{len(active), ap.GaborSet.SizeY, ap.GaborSet.SizeX}, nil, nil)
 	agabor.ToTensor(ap.GaborSpecs, &ap.GaborSet)
@@ -212,22 +218,10 @@ func (ap *App) InitProcess() (err error, segments int) {
 
 	// round up to nearest step interval
 	segmentMs := ap.Params.SegmentEnd - ap.Params.SegmentStart
-	segmentMs = segmentMs + ap.Params.StepMs - float32(int(segmentMs)%int(ap.Params.StepMs))
+	segmentMs = segmentMs + ap.Params.StepMs*float32(int(segmentMs)%int(ap.Params.StepMs))
 
 	ap.Params.SegmentSteps = int(segmentMs / ap.Params.StepMs)
 	ap.Params.SegmentStepsTotal = ap.Params.SegmentSteps + 2*ap.Params.BorderSteps
-
-	// these overrides must follow Mel.Defaults
-	if ap.Corpus == "TIMIT" {
-		ap.Mel.FBank.RenormMin = -6
-		ap.Mel.FBank.RenormMax = 4
-	} else {
-		ap.Mel.FBank.RenormMin = 2
-		ap.Mel.FBank.RenormMax = 9
-	}
-	ap.Mel.FBank.LoHz = 20
-	ap.Mel.FBank.HiHz = 8000
-	ap.Mel.FBank.NFilters = 39
 
 	winSamplesHalf := ap.Params.WinSamples/2 + 1
 	ap.Dft.Initialize(ap.Params.WinSamples)
@@ -324,25 +318,6 @@ func (ap *App) LoadSound() bool {
 	return true
 }
 
-//// NextSegment calls to process the next segment of sound, loading a new sound if the last sound was fully processed
-//func (ap *App) NextSegment() error {
-//	if ap.MoreSegments == false {
-//		done, err := ap.NextSound()
-//		if done && err == nil {
-//			return err
-//		}
-//		if err != nil {
-//			return err
-//		}
-//	}
-//	ap.SpeechSeq.TimeCur += float64(ap.Snd.Params.StrideMs)
-//	ap.MoreSegments = ap.Snd.ProcessSegment()
-//	if ap.SpeechSeq.TimeCur >= ap.SpeechSeq.TimeStop {
-//		ap.MoreSegments = false
-//	}
-//	return nil
-//}
-
 // ClearSoundsAndData empties the sound list, sets current sound to nothing, etc
 func ClearSoundsAndData(ap *App) {
 	ap.SpeechSeq.File = ""
@@ -399,8 +374,8 @@ func (ap *App) SndFmIdx(idx int) (snd string, ok bool) {
 // ProcessSegment processes the entire segment's input by processing a small overlapping set of samples on each pass
 func (ap *App) ProcessSegment() error {
 	d := int(ap.Params.SegmentEnd - ap.Params.SegmentStart)
-	if int(ap.Params.StepMs) < d*ap.GaborSet.SizeX {
-		gi.PromptDialog(nil, gi.DlgOpts{Title: "Segment too short", Prompt: "The segment duration must be at least as long as the gabor filter width (SizeX) * the step size (StepMs)."}, gi.AddOk, gi.NoCancel, nil, nil)
+	if d/int(ap.Params.StepMs) < ap.GaborSet.SizeX {
+		gi.PromptDialog(nil, gi.DlgOpts{Title: "Segment duration too short", Prompt: "The segment duration divided by the step size (StepMs) must be at least as large as the gabor filter width (SizeX)."}, gi.AddOk, gi.NoCancel, nil, nil)
 		return errors.New("Segment too short")
 	}
 	ap.Power.SetZeros()
@@ -568,7 +543,7 @@ func (ap *App) ConfigGui() *gi.Window {
 	})
 
 	ap.GUI.AddToolbarItem(egui.ToolbarItem{Label: "Process", Icon: "play",
-		Tooltip: "Process the next segment of audio using the SegStart and SegEnd params. Then apply the gabors to the Mel output",
+		Tooltip: "Process the segment of audio from SegmentStart to SegmentEnd applying the gabor filters to the Mel tensor",
 		Active:  egui.ActiveStopped,
 		Func: func() {
 			err, _ := ap.InitProcess()
@@ -582,16 +557,14 @@ func (ap *App) ConfigGui() *gi.Window {
 		},
 	})
 
-	//
-	//ap.GUI.AddToolbarItem(egui.ToolbarItem{Label: "Next Segment", Icon: "update",
-	//	Tooltip: "Process the next segment of audio using the current parameters.",
-	//	Active:  egui.ActiveStopped,
-	//	Func: func() {
-	//		ap.ProcessSegment()
-	//		ap.GUI.UpdateWindow()
-	//	},
-	//})
-	//
+	ap.GUI.AddToolbarItem(egui.ToolbarItem{Label: "Update Gabors", Icon: "update",
+		Tooltip: "Call this to see the result of changing the Gabor specifications",
+		Active:  egui.ActiveStopped,
+		Func: func() {
+			ap.UpdateGabors()
+			ap.GUI.UpdateWindow()
+		},
+	})
 
 	split1 := gi.AddNewSplitView(mfr, "split1")
 	split1.Dim = mat32.X
@@ -621,17 +594,8 @@ func (ap *App) ConfigGui() *gi.Window {
 	specs.Viewport = ap.GUI.ViewPort
 	specs.SetSlice(&ap.GaborSpecs)
 
-	ap.GUI.ToolBar = gi.AddNewToolBar(specs, "tbar")
-	ap.GUI.ToolBar.SetStretchMaxWidth()
-
-	ap.GUI.AddToolbarItem(egui.ToolbarItem{Label: "Update Gabors", Icon: "update",
-		Tooltip: "Update gabors from the gabor specifications",
-		Active:  egui.ActiveStopped,
-		Func: func() {
-			ap.UpdateGabors()
-			ap.GUI.UpdateWindow()
-		},
-	})
+	//ap.GUI.ToolBar = gi.AddNewToolBar(specs, "tbar")
+	//ap.GUI.ToolBar.SetStretchMaxWidth()
 
 	tv := gi.AddNewTabView(split, "tv")
 	split.SetSplits(.3, .3, .4)
