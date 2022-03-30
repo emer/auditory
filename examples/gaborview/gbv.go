@@ -121,8 +121,9 @@ type App struct {
 	FftCoefs   []complex128      `view:"-" desc:" discrete fourier transform (fft) output complex representation"`
 	Fft        *fourier.CmplxFFT `view:"-" desc:" struct for fast fourier transform"`
 
-	SpeechSeq speech.Sequence
-	CurUnits  []string `desc:"names of units in the current audio segment"`
+	Sequence speech.Sequence
+	SeqTable giv.TableView
+	//CurUnits []string `desc:"names of units in the current audio segment"`
 
 	// internal state - view:"-"
 	ToolBar      *gi.ToolBar `view:"-" desc:" the master toolbar"`
@@ -145,6 +146,7 @@ func (ap *App) ParamDefaults() {
 	ap.Params.Channel = 0
 	ap.Params.PadValue = 0.0
 	ap.Params.BorderSteps = 0
+	ap.Sequence.Units = append(ap.Sequence.Units, *new(speech.Unit))
 }
 
 // Config configures all the elements using the standard functions
@@ -268,12 +270,12 @@ func (ap *App) LoadSnd(path string) {
 	ap.SndFile = path
 	err := ap.Sound.Load(path)
 	if err != nil {
-		log.Printf("LoadSnd: error loading sound -- %v\n, err", ap.SpeechSeq.File)
+		log.Printf("LoadSnd: error loading sound -- %v\n, err", ap.Sequence.File)
 		return
 	}
 	ap.LoadSound() // actually load the sound
 
-	fn := strings.TrimSuffix(ap.SpeechSeq.File, ".wav")
+	fn := strings.TrimSuffix(ap.Sequence.File, ".wav")
 	ap.SndName = fn
 
 	if ap.Corpus == "TIMIT" {
@@ -281,7 +283,7 @@ func (ap *App) LoadSnd(path string) {
 		fn = strings.Replace(fn, ".WAV", "", 1)
 		fnm := fn + ".PHN.MS" // PHN is "Phone" and MS is milliseconds
 		names := []string{}
-		ap.SpeechSeq.Units, err = timit.LoadTimes(fnm, names) // names can be empty for timit, LoadTimes loads names
+		ap.Sequence.Units, err = timit.LoadTimes(fnm, names) // names can be empty for timit, LoadTimes loads names
 		if err != nil {
 			fmt.Printf("LoadSnd: Problem loading %s transcription and timing data", fnm)
 			return
@@ -290,17 +292,17 @@ func (ap *App) LoadSnd(path string) {
 		fmt.Println("NextSound: ap.Corpus no match")
 	}
 
-	if ap.SpeechSeq.Units == nil {
+	if ap.Sequence.Units == nil {
 		fmt.Println("AdjSeqTimes: SpeechSeq.Units is nil. Some problem with loading file transcription and timing data")
 		return
 	}
 	ap.AdjSeqTimes()
 
 	// todo: this works for timit - but need a more general solution
-	ap.SpeechSeq.TimeCur = ap.SpeechSeq.Units[0].AStart
-	n := len(ap.SpeechSeq.Units) // find last unit
-	if ap.SpeechSeq.Units[n-1].Name == "h#" {
-		ap.SpeechSeq.TimeStop = ap.SpeechSeq.Units[n-1].AStart
+	ap.Sequence.TimeCur = ap.Sequence.Units[0].AStart
+	n := len(ap.Sequence.Units) // find last unit
+	if ap.Sequence.Units[n-1].Name == "h#" {
+		ap.Sequence.TimeStop = ap.Sequence.Units[n-1].AStart
 	} else {
 		fmt.Println("last unit of speech sequence not silence")
 	}
@@ -320,7 +322,7 @@ func (ap *App) LoadSound() bool {
 
 // ClearSoundsAndData empties the sound list, sets current sound to nothing, etc
 func ClearSoundsAndData(ap *App) {
-	ap.SpeechSeq.File = ""
+	ap.Sequence.File = ""
 	ap.MoreSegments = false // this will force a new sound to be loaded
 }
 
@@ -332,14 +334,14 @@ func LoadSndData(ap *App) {
 // AdjSeqTimes adjust for any offset if the sequence doesn't start at 0 ms. Also adjust for random silence that
 // might have been added to front of signal
 func (ap *App) AdjSeqTimes() {
-	silence := ap.SpeechSeq.Silence // random silence added to start of sequence for variability
+	silence := ap.Sequence.Silence // random silence added to start of sequence for variability
 	offset := 0.0
-	if ap.SpeechSeq.Units[0].Start > 0 {
-		offset = ap.SpeechSeq.Units[0].Start // some sequences are sections of longer ones so times don't start at zero (not true for timit)
+	if ap.Sequence.Units[0].Start > 0 {
+		offset = ap.Sequence.Units[0].Start // some sequences are sections of longer ones so times don't start at zero (not true for timit)
 	}
-	for i := range ap.SpeechSeq.Units {
-		ap.SpeechSeq.Units[i].AStart = ap.SpeechSeq.Units[i].Start + silence - offset
-		ap.SpeechSeq.Units[i].AEnd = ap.SpeechSeq.Units[i].End + silence - offset
+	for i := range ap.Sequence.Units {
+		ap.Sequence.Units[i].AStart = ap.Sequence.Units[i].Start + silence - offset
+		ap.Sequence.Units[i].AEnd = ap.Sequence.Units[i].End + silence - offset
 	}
 }
 
@@ -348,11 +350,11 @@ func (ap *App) IdxFmSnd(s string) (idx int, ok bool) {
 	idx = -1
 	ok = false
 	if ap.Corpus == "TIMIT" {
-		idx, ok = timit.IdxFmSnd(s, ap.SpeechSeq.ID)
+		idx, ok = timit.IdxFmSnd(s, ap.Sequence.ID)
 	} else if ap.Corpus == "SYNTHCVS" {
-		idx, ok = synthcvs.IdxFmSnd(s, ap.SpeechSeq.ID)
+		idx, ok = synthcvs.IdxFmSnd(s, ap.Sequence.ID)
 	} else if ap.Corpus == "GRAFESTES" {
-		idx, ok = grafestes.IdxFmSnd(s, ap.SpeechSeq.ID)
+		idx, ok = grafestes.IdxFmSnd(s, ap.Sequence.ID)
 	} else {
 		fmt.Println("IdxFmSnd: fell through corpus ifelse ")
 	}
@@ -364,7 +366,7 @@ func (ap *App) SndFmIdx(idx int) (snd string, ok bool) {
 	snd = ""
 	ok = false
 	if ap.Corpus == "TIMIT" {
-		snd, ok = timit.SndFmIdx(idx, ap.SpeechSeq.ID)
+		snd, ok = timit.SndFmIdx(idx, ap.Sequence.ID)
 	} else {
 		fmt.Println("SndFmIdx: fell through corpus ifelse ")
 	}
@@ -532,7 +534,7 @@ func (ap *App) ConfigGui() *gi.Window {
 						dlg, _ := send.Embed(gi.KiT_Dialog).(*gi.Dialog)
 						fn := giv.FileViewDialogValue(dlg)
 						ap.SndFile = fn
-						ap.SpeechSeq.File = fn
+						ap.Sequence.File = fn
 						ap.SndPath, ap.SndName = path.Split(fn)
 						ap.GUI.Win.UpdateSig()
 						ap.LoadSnd(ap.SndFile)
@@ -574,13 +576,22 @@ func (ap *App) ConfigGui() *gi.Window {
 	split.Dim = mat32.Y
 	split.SetStretchMax()
 
-	snds := giv.AddNewSliceView(split1, "snds")
+	snds := giv.AddNewTableView(split1, "snds")
 	snds.Viewport = ap.GUI.ViewPort
 	snds.NoAdd = true
 	snds.NoDelete = true
 	snds.SetInactiveState(true)
 	// set slice after view settings
-	snds.SetSlice(&ap.SpeechSeq.Units)
+	snds.SliceViewSig.Connect(mfr, func(recv, send ki.Ki, sig int64, data interface{}) {
+		if sig == int64(giv.SliceViewDoubleClicked) {
+			row := snds.SelectedIdx
+			u := ap.Sequence.Units[row]
+			ap.Params.SegmentStart = float32(u.AStart)
+			ap.Params.SegmentEnd = float32(u.AEnd)
+			ap.GUI.UpdateWindow()
+		}
+	})
+	snds.SetSlice(&ap.Sequence.Units)
 
 	split1.SetSplits(.75, .25)
 
@@ -593,9 +604,6 @@ func (ap *App) ConfigGui() *gi.Window {
 	specs := giv.AddNewTableView(split, "specs")
 	specs.Viewport = ap.GUI.ViewPort
 	specs.SetSlice(&ap.GaborSpecs)
-
-	//ap.GUI.ToolBar = gi.AddNewToolBar(specs, "tbar")
-	//ap.GUI.ToolBar.SetStretchMaxWidth()
 
 	tv := gi.AddNewTabView(split, "tv")
 	split.SetSplits(.3, .3, .4)
