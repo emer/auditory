@@ -26,29 +26,28 @@ type Params struct {
 	StepMs      float32 `def:"5,10,12.5" desc:"input step -- number of milliseconds worth of sound that the input is stepped along to obtain the next window sample"`
 	SegmentMs   float32 `def:"100" desc:"length of full segment's worth of input -- total number of milliseconds to accumulate into a complete segment -- must be a multiple of StepMs -- input will be SegmentMs / StepMs = SegmentSteps wide in the X axis, and number of filters in the Y axis"`
 	StrideMs    float32 `def:"100" desc:"how far to move on each trial"`
-	BorderSteps int     `def:"6" view:"+" desc:"overlap with previous segment"`
+	BorderSteps int     `def:"6" view:"+" desc:"overlap with previous and next segment"`
 	Channel     int     `viewif:"Channels=1" desc:"specific channel to process, if input has multiple channels, and we only process one of them (-1 = process all)"`
 	PadValue    float32 `desc:"value to use of signal when padding"`
 
 	// these are calculated
-	WinSamples        int   `inactive:"+" desc:"number of samples to process each step"`
-	StepSamples       int   `inactive:"+" desc:"number of samples to step input by"`
-	SegmentSamples    int   `inactive:"+" desc:"number of samples in a segment"`
-	StrideSamples     int   `inactive:"+" desc:"number of samples converted from StrideMS"`
-	SegmentSteps      int   `inactive:"+" desc:"number of steps in a segment"`
-	SegmentStepsTotal int   `inactive:"+" desc:"SegmentSteps plus steps border steps on both sides"`
-	Steps             []int `inactive:"+" desc:"pre-calculated start position for each step"`
+	WinSamples     int   `inactive:"+" desc:"number of samples to process each step"`
+	StepSamples    int   `inactive:"+" desc:"number of samples to step input by"`
+	SegmentSamples int   `inactive:"+" desc:"number of samples in a segment"`
+	StrideSamples  int   `inactive:"+" desc:"number of samples converted from StrideMS"`
+	SegmentSteps   int   `inactive:"+" desc:"includes border steps on both sides"`
+	Steps          []int `inactive:"+" desc:"pre-calculated start position for each step"`
 }
 
 // ParamDefaults initializes the Input
 func (se *SndEnv) ParamDefaults() {
 	se.Params.WinMs = 25.0
-	se.Params.StepMs = 5.0
+	se.Params.StepMs = 10.0
 	se.Params.SegmentMs = 100.0
 	se.Params.Channel = 0
 	se.Params.PadValue = 0.0
 	se.Params.StrideMs = 100.0
-	se.Params.BorderSteps = 6
+	se.Params.BorderSteps = 2
 }
 
 type SndEnv struct {
@@ -119,8 +118,8 @@ func (se *SndEnv) Init(msSilenceAdd, msSilenceRmStart, msSilenceRmEnd float64) (
 	se.Params.WinSamples = MSecToSamples(se.Params.WinMs, sr)
 	se.Params.StepSamples = MSecToSamples(se.Params.StepMs, sr)
 	se.Params.SegmentSamples = MSecToSamples(se.Params.SegmentMs, sr)
-	se.Params.SegmentSteps = int(math.Round(float64(se.Params.SegmentMs / se.Params.StepMs)))
-	se.Params.SegmentStepsTotal = se.Params.SegmentSteps + 2*se.Params.BorderSteps
+	steps := int(math.Round(float64(se.Params.SegmentMs / se.Params.StepMs)))
+	se.Params.SegmentSteps = steps + 2*se.Params.BorderSteps
 	se.Params.StrideSamples = MSecToSamples(se.Params.StrideMs, sr)
 
 	// remove any silence at beginning of signal
@@ -141,11 +140,9 @@ func (se *SndEnv) Init(msSilenceAdd, msSilenceRmStart, msSilenceRmEnd float64) (
 	}
 
 	specs := agabor.Active(se.GaborSpecs)
-
 	nfilters := len(specs)
 	se.GaborFilters.Filters.SetShape([]int{nfilters, se.GaborFilters.SizeY, se.GaborFilters.SizeX}, nil, nil)
 	se.NeighInhib.Defaults() // NeighInhib code not working yet - need to pass 4d tensor not 5d
-	//agabor.ToTensor(se.GaborSpecs, &se.GaborFilters)
 	agabor.ToTensor(specs, &se.GaborFilters)
 	se.GaborFilters.ToTable(se.GaborFilters, &se.GaborTab) // note: view only, testing
 	if se.GborOutPoolsX == 0 && se.GborOutPoolsY == 0 {    // 2D
@@ -169,7 +166,7 @@ func (se *SndEnv) Init(msSilenceAdd, msSilenceRmStart, msSilenceRmEnd float64) (
 	se.Window.SetShape([]int{se.Params.WinSamples}, nil, nil)
 	se.Power.SetShape([]int{winSamplesHalf}, nil, nil)
 	se.LogPower.CopyShapeFrom(&se.Power)
-	se.PowerSegment.SetShape([]int{se.Params.SegmentStepsTotal, winSamplesHalf, se.Sound.Channels()}, nil, nil)
+	se.PowerSegment.SetShape([]int{se.Params.SegmentSteps, winSamplesHalf, se.Sound.Channels()}, nil, nil)
 	if se.Dft.CompLogPow {
 		se.LogPowerSegment.CopyShapeFrom(&se.PowerSegment)
 	}
@@ -185,13 +182,13 @@ func (se *SndEnv) Init(msSilenceAdd, msSilenceRmStart, msSilenceRmEnd float64) (
 	// This code does this by generating negative offsets for the start of the processing.
 	// Also see SndToWindow for the use of the step values
 	stepsBack := se.Params.BorderSteps
-	se.Params.Steps = make([]int, se.Params.SegmentStepsTotal)
-	for i := 0; i < se.Params.SegmentStepsTotal; i++ {
+	se.Params.Steps = make([]int, se.Params.SegmentSteps)
+	for i := 0; i < se.Params.SegmentSteps; i++ {
 		se.Params.Steps[i] = se.Params.StepSamples * (i - stepsBack)
 	}
 
 	se.MelFBank.SetShape([]int{se.Mel.FBank.NFilters}, nil, nil)
-	se.MelFBankSegment.SetShape([]int{se.Params.SegmentStepsTotal, se.Mel.FBank.NFilters, se.Sound.Channels()}, nil, nil)
+	se.MelFBankSegment.SetShape([]int{se.Params.SegmentSteps, se.Mel.FBank.NFilters, se.Sound.Channels()}, nil, nil)
 	if se.Mel.MFCC {
 		se.MfccDctSegment.CopyShapeFrom(&se.MelFBankSegment)
 		se.MfccDct.SetShape([]int{se.Mel.FBank.NFilters}, nil, nil)
@@ -241,7 +238,7 @@ func (se *SndEnv) ProcessSegment() (moreSegments bool) {
 	se.Segment++
 	//fmt.Printf("Segment: %d\n", se.Segment)
 	for ch := int(0); ch < se.Sound.Channels(); ch++ {
-		for s := 0; s < int(se.Params.SegmentStepsTotal); s++ {
+		for s := 0; s < int(se.Params.SegmentSteps); s++ {
 			err := se.ProcessStep(ch, s)
 			if err != nil {
 				break
