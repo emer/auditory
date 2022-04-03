@@ -12,6 +12,7 @@ import (
 	"github.com/emer/auditory/speech/synthcvs"
 	"github.com/emer/auditory/speech/timit"
 	"github.com/emer/emergent/egui"
+	"github.com/emer/etable/etable"
 	"github.com/emer/etable/etensor"
 	"github.com/emer/etable/etview"
 	"github.com/emer/leabra/fffb"
@@ -60,10 +61,11 @@ func (ss *App) New() {
 ////////////////////////////////////////////////////////////////////////////////////////////
 // Environment - params and config for the train/test environment
 
-// User holds data (or points to other fields) the user will likely want to access quickly and edit frequently
-type User struct {
-	Start *float32 `view:"inline" desc:"the start of the audio segment, in milliseconds, that we will be processing"`
-	End   *float32 `view:"inline" desc:"the end of the audio segment, in milliseconds, that we will be processing"`
+// Table contains all the info for one table
+type Table struct {
+	Table *etable.Table     `desc:"jobs table"`
+	View  *etview.TableView `desc:"view of table"`
+	Sels  []string          `desc:"selected row ids in ascending order in view"`
 }
 
 // Params defines the sound input parameters for auditory processing
@@ -75,13 +77,13 @@ type Params struct {
 	BorderSteps  int     `view:"-" def:"0" desc:"overlap with previous segment"`
 	Channel      int     `view:"-" desc:"specific channel to process, if input has multiple channels, and we only process one of them (-1 = process all)"`
 	PadValue     float32 `view:"-"`
+	Resize       bool    `desc:"if resize is true segment durations will be lengthened (a bit before and a bit after) to be a multiple of the filter width"`
 
 	// these are calculated
-	WinSamples        int   `view:"-" desc:"number of samples to process each step"`
-	StepSamples       int   `view:"-" desc:"number of samples to step input by"`
-	SegmentSteps      int   `view:"-" desc:"number of steps in a segment"`
-	SegmentStepsTotal int   `view:"-" desc:"SegmentSteps plus steps overlapping next segment or for padding if no next segment"`
-	Steps             []int `view:"-" desc:"pre-calculated start position for each step"`
+	WinSamples  int   `view:"-" desc:"number of samples to process each step"`
+	StepSamples int   `view:"-" desc:"number of samples to step input by"`
+	StepsTotal  int   `view:"-" desc:"SegmentSteps plus steps overlapping next segment or for padding if no next segment"`
+	Steps       []int `view:"-" desc:"pre-calculated start position for each step"`
 }
 
 type App struct {
@@ -123,7 +125,8 @@ type App struct {
 
 	Sequence speech.Sequence
 	SeqTable giv.TableView
-	//CurUnits []string `desc:"names of units in the current audio segment"`
+	//Snds     etable.Table
+	SndsTable Table
 
 	// internal state - view:"-"
 	ToolBar      *gi.ToolBar `view:"-" desc:" the master toolbar"`
@@ -147,6 +150,7 @@ func (ap *App) ParamDefaults() {
 	ap.Params.PadValue = 0.0
 	ap.Params.BorderSteps = 0
 	ap.Sequence.Units = append(ap.Sequence.Units, *new(speech.Unit))
+	ap.Params.Resize = true
 }
 
 // Config configures all the elements using the standard functions
@@ -157,6 +161,8 @@ func (ap *App) Config() {
 	} else {
 		ap.SndPath = "~"
 	}
+
+	ap.ConfigSoundsTable()
 }
 
 func (ap *App) InitGabors() {
@@ -198,22 +204,43 @@ func (ap *App) UpdateGabors() {
 	agabor.ToTensor(ap.GaborSpecs, &ap.GaborSet)
 }
 
-func (ap *App) InitProcess() (err error, segments int) {
+func (ap *App) Process() (err error) {
 	if ap.Sound.Buf == nil {
 		gi.PromptDialog(nil, gi.DlgOpts{Title: "Sound buffer is empty", Prompt: "Open a sound file before processing"}, gi.AddOk, gi.NoCancel, nil, nil)
-		return errors.New("Load a sound and try again"), 0
+		errors.New("Load a sound and try again")
 	}
 
 	if ap.Params.SegmentEnd <= ap.Params.SegmentStart {
 		gi.PromptDialog(nil, gi.DlgOpts{Title: "End <= Start", Prompt: "SegmentEnd must be greater than SegmentStart."}, gi.AddOk, gi.NoCancel, nil, nil)
-		return errors.New("SegmentEnd <= SegmentStart"), 0
+		return errors.New("SegmentEnd <= SegmentStart")
 	}
+
+	duration := ap.Params.SegmentEnd - ap.Params.SegmentStart
+	stepMs := ap.Params.StepMs
+	sizeXMs := float32(ap.GaborSet.SizeX) * stepMs
+	strideXMs := float32(ap.GaborSet.StrideX) * stepMs
+	add := float32(0)
+	if duration < sizeXMs {
+		add = sizeXMs - duration
+	} else { // duration is longer than one filter so find the next stride end
+		d := duration
+		d -= sizeXMs
+		rem := float32(int(d) % int(strideXMs))
+		add = strideXMs - rem
+	}
+	if ap.Params.SegmentStart-add < 0 {
+		ap.Params.SegmentEnd += add
+	} else {
+		ap.Params.SegmentStart -= add / 2
+		ap.Params.SegmentEnd += add / 2
+	}
+	ap.GUI.UpdateWindow()
 
 	sr := ap.Sound.SampleRate()
 	if sr <= 0 {
 		fmt.Println("sample rate <= 0")
-		err = errors.New("sample rate <= 0")
-		return err, 0
+		return errors.New("sample rate <= 0")
+
 	}
 	ap.Params.WinSamples = sound.MSecToSamples(ap.Params.WinMs, sr)
 	ap.Params.StepSamples = sound.MSecToSamples(ap.Params.StepMs, sr)
@@ -222,8 +249,8 @@ func (ap *App) InitProcess() (err error, segments int) {
 	segmentMs := ap.Params.SegmentEnd - ap.Params.SegmentStart
 	segmentMs = segmentMs + ap.Params.StepMs*float32(int(segmentMs)%int(ap.Params.StepMs))
 
-	ap.Params.SegmentSteps = int(segmentMs / ap.Params.StepMs)
-	ap.Params.SegmentStepsTotal = ap.Params.SegmentSteps + 2*ap.Params.BorderSteps
+	steps := int(segmentMs / ap.Params.StepMs)
+	ap.Params.StepsTotal = steps + 2*ap.Params.BorderSteps
 
 	winSamplesHalf := ap.Params.WinSamples/2 + 1
 	ap.Dft.Initialize(ap.Params.WinSamples)
@@ -231,7 +258,7 @@ func (ap *App) InitProcess() (err error, segments int) {
 	ap.Window.SetShape([]int{ap.Params.WinSamples}, nil, nil)
 	ap.Power.SetShape([]int{winSamplesHalf}, nil, nil)
 	ap.LogPower.CopyShapeFrom(&ap.Power)
-	ap.PowerSegment.SetShape([]int{ap.Params.SegmentStepsTotal, winSamplesHalf, ap.Sound.Channels()}, nil, nil)
+	ap.PowerSegment.SetShape([]int{ap.Params.StepsTotal, winSamplesHalf, ap.Sound.Channels()}, nil, nil)
 	if ap.Dft.CompLogPow {
 		ap.LogPowerSegment.CopyShapeFrom(&ap.PowerSegment)
 	}
@@ -247,22 +274,37 @@ func (ap *App) InitProcess() (err error, segments int) {
 	// This code does this by generating negative offsets for the start of the processing.
 	// Also see SndToWindow for the use of the step values
 	stepsBack := ap.Params.BorderSteps
-	ap.Params.Steps = make([]int, ap.Params.SegmentStepsTotal)
-	for i := 0; i < ap.Params.SegmentStepsTotal; i++ {
+	ap.Params.Steps = make([]int, ap.Params.StepsTotal)
+	for i := 0; i < ap.Params.StepsTotal; i++ {
 		ap.Params.Steps[i] = ap.Params.StepSamples * (i - stepsBack)
 	}
 
 	ap.MelFBank.SetShape([]int{ap.Mel.FBank.NFilters}, nil, nil)
-	ap.MelFBankSegment.SetShape([]int{ap.Params.SegmentStepsTotal, ap.Mel.FBank.NFilters, ap.Sound.Channels()}, nil, nil)
+	ap.MelFBankSegment.SetShape([]int{ap.Params.StepsTotal, ap.Mel.FBank.NFilters, ap.Sound.Channels()}, nil, nil)
 	if ap.Mel.MFCC {
 		ap.MfccDctSegment.CopyShapeFrom(&ap.MelFBankSegment)
 		ap.MfccDct.SetShape([]int{ap.Mel.FBank.NFilters}, nil, nil)
 	}
-
 	samples := sound.MSecToSamples(ap.Params.SegmentEnd-ap.Params.SegmentStart, ap.Sound.SampleRate())
 	siglen := len(ap.Signal.Values) - samples*ap.Sound.Channels()
 	siglen = siglen / ap.Sound.Channels()
-	return nil, 0
+
+	ap.Power.SetZeros()
+	ap.LogPower.SetZeros()
+	ap.PowerSegment.SetZeros()
+	ap.LogPowerSegment.SetZeros()
+	ap.MelFBankSegment.SetZeros()
+	ap.MfccDctSegment.SetZeros()
+
+	for ch := int(0); ch < ap.Sound.Channels(); ch++ {
+		for s := 0; s < int(ap.Params.StepsTotal); s++ {
+			err := ap.ProcessStep(ch, s)
+			if err != nil {
+				break
+			}
+		}
+	}
+	return nil
 }
 
 // LoadSnd
@@ -306,7 +348,16 @@ func (ap *App) LoadSnd(path string) {
 	} else {
 		fmt.Println("last unit of speech sequence not silence")
 	}
+
+	ap.SndsTable.Table.AddRows(len(ap.Sequence.Units))
+	for r, s := range ap.Sequence.Units {
+		ap.SndsTable.Table.SetCellString("Sound", r, s.Name)
+		ap.SndsTable.Table.SetCellFloat("Start", r, s.AStart)
+		ap.SndsTable.Table.SetCellFloat("End", r, s.AEnd)
+	}
+	ap.SndsTable.View.UpdateTable()
 	ap.GUI.UpdateWindow()
+
 	return
 }
 
@@ -371,30 +422,6 @@ func (ap *App) SndFmIdx(idx int) (snd string, ok bool) {
 		fmt.Println("SndFmIdx: fell through corpus ifelse ")
 	}
 	return
-}
-
-// ProcessSegment processes the entire segment's input by processing a small overlapping set of samples on each pass
-func (ap *App) ProcessSegment() error {
-	d := int(ap.Params.SegmentEnd - ap.Params.SegmentStart)
-	if d/int(ap.Params.StepMs) < ap.GaborSet.SizeX {
-		gi.PromptDialog(nil, gi.DlgOpts{Title: "Segment duration too short", Prompt: "The segment duration divided by the step size (StepMs) must be at least as large as the gabor filter width (SizeX)."}, gi.AddOk, gi.NoCancel, nil, nil)
-		return errors.New("Segment too short")
-	}
-	ap.Power.SetZeros()
-	ap.LogPower.SetZeros()
-	ap.PowerSegment.SetZeros()
-	ap.LogPowerSegment.SetZeros()
-	ap.MelFBankSegment.SetZeros()
-	ap.MfccDctSegment.SetZeros()
-	for ch := int(0); ch < ap.Sound.Channels(); ch++ {
-		for s := 0; s < int(ap.Params.SegmentStepsTotal); s++ {
-			err := ap.ProcessStep(ch, s)
-			if err != nil {
-				break
-			}
-		}
-	}
-	return nil
 }
 
 // ProcessStep processes a step worth of sound input from current input_pos, and increment input_pos by input.step_samples
@@ -499,6 +526,36 @@ func (ap *App) ApplyKwta(ch int) {
 	}
 }
 
+// ConfigSoundsTable
+func (ap *App) ConfigSoundsTable() {
+	ap.SndsTable.Table = &etable.Table{}
+	ap.SndsTable.Table.SetMetaData("name", "The Loaded Sounds")
+	ap.SndsTable.Table.SetMetaData("desc", "Sounds loaded from audio files")
+	ap.SndsTable.Table.SetMetaData("read-only", "true")
+
+	sch := etable.Schema{
+		{"Sound", etensor.STRING, nil, nil},
+		{"Start", etensor.FLOAT32, nil, nil},
+		{"End", etensor.FLOAT32, nil, nil},
+	}
+	ap.SndsTable.Table.SetFromSchema(sch, 0)
+}
+
+// ConfigTableView configures given tableview
+func (ap *App) ConfigTableView(tv *etview.TableView) {
+	tv.SetProp("inactive", true)
+	tv.SetInactive()
+	tv.SliceViewSig.Connect(ap.GUI.ViewPort, func(recv, send ki.Ki, sig int64, data interface{}) {
+		if sig == int64(giv.SliceViewDoubleClicked) {
+			row := ap.SndsTable.View.SelectedIdx
+			u := ap.Sequence.Units[row]
+			ap.Params.SegmentStart = float32(u.AStart)
+			ap.Params.SegmentEnd = float32(u.AEnd)
+			ap.GUI.UpdateWindow()
+		}
+	})
+}
+
 // ConfigGui configures the GoGi gui interface for this simulation,
 func (ap *App) ConfigGui() *gi.Window {
 	gi.SetAppName("Gabor View")
@@ -548,13 +605,10 @@ func (ap *App) ConfigGui() *gi.Window {
 		Tooltip: "Process the segment of audio from SegmentStart to SegmentEnd applying the gabor filters to the Mel tensor",
 		Active:  egui.ActiveStopped,
 		Func: func() {
-			err, _ := ap.InitProcess()
+			err := ap.Process()
 			if err == nil {
-				err := ap.ProcessSegment()
-				if err == nil {
-					ap.ApplyGabor()
-					ap.GUI.UpdateWindow()
-				}
+				ap.ApplyGabor()
+				ap.GUI.UpdateWindow()
 			}
 		},
 	})
@@ -576,30 +630,15 @@ func (ap *App) ConfigGui() *gi.Window {
 	split.Dim = mat32.Y
 	split.SetStretchMax()
 
-	snds := giv.AddNewTableView(split1, "snds")
-	snds.Viewport = ap.GUI.ViewPort
-	snds.NoAdd = true
-	snds.NoDelete = true
-	snds.SetInactiveState(true)
-	// set slice after view settings
-	snds.SliceViewSig.Connect(mfr, func(recv, send ki.Ki, sig int64, data interface{}) {
-		if sig == int64(giv.SliceViewDoubleClicked) {
-			row := snds.SelectedIdx
-			u := ap.Sequence.Units[row]
-			ap.Params.SegmentStart = float32(u.AStart)
-			ap.Params.SegmentEnd = float32(u.AEnd)
-			ap.GUI.UpdateWindow()
-		}
-	})
-	snds.SetSlice(&ap.Sequence.Units)
+	tv1 := gi.AddNewTabView(split1, "tv1")
+	ap.SndsTable.View = tv1.AddNewTab(etview.KiT_TableView, "Sounds").(*etview.TableView)
+	ap.ConfigTableView(ap.SndsTable.View)
+	ap.SndsTable.View.SetTable(ap.SndsTable.Table, nil)
 
-	split1.SetSplits(.75, .25)
+	split1.SetSplits(.80, .20)
 
 	ap.GUI.StructView = giv.AddNewStructView(split, "app")
 	ap.GUI.StructView.SetStruct(ap)
-
-	//ap.GUI.StructView = giv.AddNewStructView(split, "params")
-	//ap.GUI.StructView.SetStruct(&ap.Params)
 
 	specs := giv.AddNewTableView(split, "specs")
 	specs.Viewport = ap.GUI.ViewPort
