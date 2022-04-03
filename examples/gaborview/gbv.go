@@ -48,16 +48,6 @@ func guirun() {
 	win.StartEventLoop()
 }
 
-// this registers this Sim Type and gives it properties that e.g.,
-// prompt for filename for save methods.
-var KiT_Sim = kit.Types.AddType(&App{}, AppProps)
-
-// TheApp is the overall state for this simulation
-var TheApp App
-
-func (ss *App) New() {
-}
-
 ////////////////////////////////////////////////////////////////////////////////////////////
 // Environment - params and config for the train/test environment
 
@@ -123,15 +113,26 @@ type App struct {
 	FftCoefs   []complex128      `view:"-" desc:" discrete fourier transform (fft) output complex representation"`
 	Fft        *fourier.CmplxFFT `view:"-" desc:" struct for fast fourier transform"`
 
-	Sequence speech.Sequence
-	SeqTable giv.TableView
-	//Snds     etable.Table
+	Sequence  speech.Sequence
+	SeqTable  giv.TableView
 	SndsTable Table
 
 	// internal state - view:"-"
-	ToolBar      *gi.ToolBar `view:"-" desc:" the master toolbar"`
-	MoreSegments bool        `view:"-" desc:" are there more samples to process"`
-	FirstStep    bool        `view:"-" desc:" if first frame to process -- turns off prv smoothing of dft power"`
+	ToolBar *gi.ToolBar `view:"-" desc:" the master toolbar"`
+	//SoundsToolBar *gi.ToolBar `view:"-" desc:"the master toolbar"`
+
+	MoreSegments bool `view:"-" desc:" are there more samples to process"`
+	FirstStep    bool `view:"-" desc:" if first frame to process -- turns off prv smoothing of dft power"`
+}
+
+// this registers this Sim Type and gives it properties that e.g.,
+// prompt for filename for save methods.
+var KiT_App = kit.Types.AddType(&App{}, AppProps)
+
+// TheApp is the overall state for this simulation
+var TheApp App
+
+func (ss *App) New() {
 }
 
 // Init
@@ -377,9 +378,14 @@ func ClearSoundsAndData(ap *App) {
 	ap.MoreSegments = false // this will force a new sound to be loaded
 }
 
-// LoadSndData loads
-func LoadSndData(ap *App) {
-	ClearSoundsAndData(ap)
+// FilterSounds
+func (ap *App) FilterSounds(sound string) {
+	ap.SndsTable.View.Table.FilterColName("Sound", sound, false, true, true)
+}
+
+// UnFilterSounds
+func (ap *App) UnFilterSounds() {
+	ap.SndsTable.View.Table.Sequential()
 }
 
 // AdjSeqTimes adjust for any offset if the sequence doesn't start at 0 ms. Also adjust for random silence that
@@ -635,6 +641,16 @@ func (ap *App) ConfigGui() *gi.Window {
 	ap.ConfigTableView(ap.SndsTable.View)
 	ap.SndsTable.View.SetTable(ap.SndsTable.Table, nil)
 
+	//tbar.AddSeparator("filt")
+	ap.GUI.ToolBar.AddAction(gi.ActOpts{Label: "Filter sounds...", Icon: "search", Tooltip: "filter the table of sounds for sounds containing string..."}, ap.GUI.Win.This(),
+		func(recv, send ki.Ki, sig int64, data interface{}) {
+			giv.CallMethod(ap, "FilterSounds", ap.GUI.ViewPort)
+		})
+	ap.GUI.ToolBar.AddAction(gi.ActOpts{Label: "UnFilter sounds...", Icon: "search", Tooltip: "clear sounds table filter"}, ap.GUI.Win.This(),
+		func(recv, send ki.Ki, sig int64, data interface{}) {
+			giv.CallMethod(ap, "UnFilterSounds", ap.GUI.ViewPort)
+		})
+
 	split1.SetSplits(.80, .20)
 
 	ap.GUI.StructView = giv.AddNewStructView(split, "app")
@@ -669,9 +685,22 @@ func (ap *App) ConfigGui() *gi.Window {
 	return ap.GUI.Win
 }
 
-// These props register Save methods so they can be used
-var AppProps = ki.Props{}
-
 func (ap *App) CmdArgs() {
 
+}
+
+var AppProps = ki.Props{
+	"CallMethods": ki.PropSlice{
+		{"FilterSounds", ki.Props{
+			"desc": "Filter sounds table...",
+			"Args": ki.PropSlice{
+				{"sound", ki.Props{
+					"width": 60,
+				}},
+			},
+		}},
+		{"UnFilterSounds", ki.Props{
+			"desc": "UnFilter sounds table...",
+		}},
+	},
 }
