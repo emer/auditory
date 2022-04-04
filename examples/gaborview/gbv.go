@@ -114,16 +114,12 @@ type App struct {
 	FftCoefs   []complex128      `view:"-" desc:" discrete fourier transform (fft) output complex representation"`
 	Fft        *fourier.CmplxFFT `view:"-" desc:" struct for fast fourier transform"`
 
-	Sequence  speech.Sequence
-	SeqTable  giv.TableView
-	SndsTable Table
-
-	// internal state - view:"-"
-	ToolBar *gi.ToolBar `view:"-" desc:" the master toolbar"`
-	//SoundsToolBar *gi.ToolBar `view:"-" desc:"the master toolbar"`
-
-	MoreSegments bool `view:"-" desc:" are there more samples to process"`
-	FirstStep    bool `view:"-" desc:" if first frame to process -- turns off prv smoothing of dft power"`
+	Sequence     speech.Sequence
+	SeqTable     giv.TableView
+	SndsTable    Table
+	ToolBar      *gi.ToolBar `view:"-" desc:" the master toolbar"`
+	MoreSegments bool        `view:"-" desc:" are there more samples to process"`
+	FirstStep    bool        `view:"-" desc:" if first frame to process -- turns off prv smoothing of dft power"`
 }
 
 // this registers this Sim Type and gives it properties that e.g.,
@@ -168,6 +164,7 @@ func (ap *App) Config() {
 	ap.ConfigSoundsTable()
 }
 
+// InitGabors
 func (ap *App) InitGabors() {
 	ap.GaborSet.Filters.SetMetaData("min", "-.25")
 	ap.GaborSet.Filters.SetMetaData("max", ".25")
@@ -199,6 +196,7 @@ func (ap *App) InitGabors() {
 	}
 }
 
+// UpdateGabors rerenders based on current spec and filterset values
 func (ap *App) UpdateGabors() {
 	if ap.GaborSet.SizeX < ap.GaborSet.StrideX {
 		gi.PromptDialog(nil, gi.DlgOpts{Title: "Stride > size", Prompt: "The stride in X is greater than the filter size in X"}, gi.AddOk, gi.AddCancel, nil, nil)
@@ -208,6 +206,7 @@ func (ap *App) UpdateGabors() {
 	agabor.ToTensor(ap.GaborSpecs, &ap.GaborSet)
 }
 
+// Process generates the mel output and from that the result of the convolution with the gabor filters
 func (ap *App) Process() (err error) {
 	if ap.Sound.Buf == nil {
 		gi.PromptDialog(nil, gi.DlgOpts{Title: "Sound buffer is empty", Prompt: "Open a sound file before processing"}, gi.AddOk, gi.NoCancel, nil, nil)
@@ -313,12 +312,28 @@ func (ap *App) Process() (err error) {
 	return nil
 }
 
-// LoadSnd
-func (ap *App) LoadSnd(path string) {
+// ProcessStep processes a step worth of sound input from current input_pos, and increment input_pos by input.step_samples
+// Process the data by doing a fourier transform and computing the power spectrum, then apply mel filters to get the frequency
+// bands that mimic the non-linear human perception of sound
+func (ap *App) ProcessStep(ch int, step int) error {
+	offset := ap.Params.Steps[step]
+	start := sound.MSecToSamples(ap.Params.SegmentStart, ap.Sound.SampleRate()) + offset
+	err := ap.SndToWindow(start, ch)
+	if err == nil {
+		ap.Fft.Reset(ap.Params.WinSamples)
+		ap.Dft.Filter(int(ch), int(step), &ap.Window, ap.FirstStep, ap.Params.WinSamples, ap.FftCoefs, ap.Fft, &ap.Power, &ap.LogPower, &ap.PowerSegment, &ap.LogPowerSegment)
+		ap.Mel.Filter(int(ch), int(step), &ap.Window, &ap.MelFilters, &ap.Power, &ap.MelFBankSegment, &ap.MelFBank, &ap.MfccDctSegment, &ap.MfccDct)
+		ap.FirstStep = false
+	}
+	return err
+}
+
+// LoadFile loads the sound file and the transcription file
+func (ap *App) LoadFile(path string) {
 	ap.SndFile = path
 	err := ap.Sound.Load(path)
 	if err != nil {
-		log.Printf("LoadSnd: error loading sound -- %v\n, err", ap.Sequence.File)
+		log.Printf("LoadFile: error loading sound -- %v\n, err", ap.Sequence.File)
 		return
 	}
 	ap.LoadSound() // actually load the sound
@@ -333,7 +348,7 @@ func (ap *App) LoadSnd(path string) {
 		names := []string{}
 		ap.Sequence.Units, err = timit.LoadTimes(fnm, names) // names can be empty for timit, LoadTimes loads names
 		if err != nil {
-			fmt.Printf("LoadSnd: Problem loading %s transcription and timing data", fnm)
+			fmt.Printf("LoadFile: Problem loading %s transcription and timing data", fnm)
 			return
 		}
 	} else {
@@ -433,22 +448,6 @@ func (ap *App) SndFmIdx(idx int) (snd string, ok bool) {
 		fmt.Println("SndFmIdx: fell through corpus ifelse ")
 	}
 	return
-}
-
-// ProcessStep processes a step worth of sound input from current input_pos, and increment input_pos by input.step_samples
-// Process the data by doing a fourier transform and computing the power spectrum, then apply mel filters to get the frequency
-// bands that mimic the non-linear human perception of sound
-func (ap *App) ProcessStep(ch int, step int) error {
-	offset := ap.Params.Steps[step]
-	start := sound.MSecToSamples(ap.Params.SegmentStart, ap.Sound.SampleRate()) + offset
-	err := ap.SndToWindow(start, ch)
-	if err == nil {
-		ap.Fft.Reset(ap.Params.WinSamples)
-		ap.Dft.Filter(int(ch), int(step), &ap.Window, ap.FirstStep, ap.Params.WinSamples, ap.FftCoefs, ap.Fft, &ap.Power, &ap.LogPower, &ap.PowerSegment, &ap.LogPowerSegment)
-		ap.Mel.Filter(int(ch), int(step), &ap.Window, &ap.MelFilters, &ap.Power, &ap.MelFBankSegment, &ap.MelFBank, &ap.MfccDctSegment, &ap.MfccDct)
-		ap.FirstStep = false
-	}
-	return err
 }
 
 // SndToWindow gets sound from the signal (i.e. the slice of input values) at given position and channel, into Window
@@ -605,7 +604,7 @@ func (ap *App) ConfigGui() *gi.Window {
 						ap.Sequence.File = fn
 						ap.SndPath, ap.SndName = path.Split(fn)
 						ap.GUI.Win.UpdateSig()
-						ap.LoadSnd(ap.SndFile)
+						ap.LoadFile(ap.SndFile)
 						ap.Sound.Load(ap.SndFile)
 					}
 				})
@@ -690,6 +689,7 @@ func (ap *App) ConfigGui() *gi.Window {
 	return ap.GUI.Win
 }
 
+// CmdArgs
 func (ap *App) CmdArgs() {
 
 }
