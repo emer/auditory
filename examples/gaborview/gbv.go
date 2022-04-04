@@ -85,6 +85,7 @@ type App struct {
 	SndFile string `view:"-" desc:"full path of open sound file"`
 
 	GUI    egui.GUI        `view:"-" desc:"manages all the gui elements"`
+	ByTime bool            `desc:"order the gabor result by time and then by filter"`
 	Params Params          `view:"inline" desc:"fundamental processing parameters"`
 	Sound  sound.Wave      `view:"inline"`
 	Signal etensor.Float32 `view:"-" desc:" the full sound input obtained from the sound input - plus any added padding"`
@@ -141,6 +142,7 @@ func (ap *App) Init() {
 	ap.Mel.Defaults()
 	ap.InitGabors()
 	ap.UpdateGabors()
+	ap.ByTime = true
 }
 
 // ParamDefaults initializes the Input
@@ -176,6 +178,7 @@ func (ap *App) InitGabors() {
 	ap.GaborSet.StrideX = 6
 	ap.GaborSet.StrideY = 3
 	ap.GaborSet.Distribute = false
+	ap.GaborSet.OrderByTime = true
 
 	orient := []float32{0, 45, 90, 135}
 	wavelen := []float32{1.0, 2.0}
@@ -208,7 +211,7 @@ func (ap *App) UpdateGabors() {
 func (ap *App) Process() (err error) {
 	if ap.Sound.Buf == nil {
 		gi.PromptDialog(nil, gi.DlgOpts{Title: "Sound buffer is empty", Prompt: "Open a sound file before processing"}, gi.AddOk, gi.NoCancel, nil, nil)
-		errors.New("Load a sound and try again")
+		return errors.New("Load a sound and try again")
 	}
 
 	if ap.Params.SegmentEnd <= ap.Params.SegmentStart {
