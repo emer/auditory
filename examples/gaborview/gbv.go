@@ -227,7 +227,9 @@ func (ap *App) Process() (err error) {
 		d := duration
 		d -= sizeXMs
 		rem := float32(int(d) % int(strideXMs))
-		add = strideXMs - rem
+		if rem > 0 {
+			add = strideXMs - rem
+		}
 	}
 	if ap.Params.SegmentStart-add < 0 {
 		ap.Params.SegmentEnd += add
@@ -641,7 +643,7 @@ func (ap *App) ConfigGui() *gi.Window {
 	ap.ConfigTableView(ap.SndsTable.View)
 	ap.SndsTable.View.SetTable(ap.SndsTable.Table, nil)
 
-	//tbar.AddSeparator("filt")
+	ap.GUI.ToolBar.AddSeparator("filt")
 	ap.GUI.ToolBar.AddAction(gi.ActOpts{Label: "Filter sounds...", Icon: "search", Tooltip: "filter the table of sounds for sounds containing string..."}, ap.GUI.Win.This(),
 		func(recv, send ki.Ki, sig int64, data interface{}) {
 			giv.CallMethod(ap, "FilterSounds", ap.GUI.ViewPort)
