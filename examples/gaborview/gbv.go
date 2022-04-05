@@ -55,7 +55,7 @@ func guirun() {
 // Table contains all the info for one table
 type Table struct {
 	Table *etable.Table     `desc:"jobs table"`
-	View  *etview.TableView `desc:"view of table"`
+	View  *etview.TableView `view:"-" desc:"view of table"`
 	Sels  []string          `desc:"selected row ids in ascending order in view"`
 }
 
@@ -573,9 +573,9 @@ func (ap *App) ConfigTableView(tv *etview.TableView) {
 	tv.SliceViewSig.Connect(ap.GUI.ViewPort, func(recv, send ki.Ki, sig int64, data interface{}) {
 		if sig == int64(giv.SliceViewDoubleClicked) {
 			row := ap.SndsTable.View.SelectedIdx
-			u := ap.Sequence.Units[row]
-			ap.Params.SegmentStart = float32(u.AStart)
-			ap.Params.SegmentEnd = float32(u.AEnd)
+			idx := ap.SndsTable.View.Table.Idxs[row]
+			ap.Params.SegmentStart = float32(ap.SndsTable.Table.CellFloat("Start", idx))
+			ap.Params.SegmentEnd = float32(ap.SndsTable.Table.CellFloat("End", idx))
 			ap.GUI.UpdateWindow()
 		}
 	})
@@ -717,7 +717,7 @@ func (ap *App) ConfigGui() *gi.Window {
 	tg.SetTensor(&ap.GParams1.GborOutput)
 
 	tv2 := gi.AddNewTabView(split, "tv2")
-	split.SetSplits(.25, .2, .275, .275)
+	split.SetSplits(.2, .2, .2, .2, .2)
 
 	tg = tv2.AddNewTab(etview.KiT_TensorGrid, "Gabors").(*etview.TensorGrid)
 	tg.SetStretchMax()
