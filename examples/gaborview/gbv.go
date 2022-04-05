@@ -3,6 +3,11 @@ package main
 import (
 	"errors"
 	"fmt"
+	"log"
+	"os"
+	"path"
+	"strings"
+
 	"github.com/emer/auditory/agabor"
 	"github.com/emer/auditory/dft"
 	"github.com/emer/auditory/mel"
@@ -24,10 +29,6 @@ import (
 	"github.com/goki/ki/kit"
 	"github.com/goki/mat32"
 	"gonum.org/v1/gonum/dsp/fourier"
-	"log"
-	"os"
-	"path"
-	"strings"
 )
 
 func main() {
@@ -76,6 +77,19 @@ type Params struct {
 	Steps       []int `view:"-" desc:"pre-calculated start position for each step"`
 }
 
+type ProcessParams struct {
+	Dft             dft.Params      `view:"-" desc:" "`
+	Power           etensor.Float32 `view:"-" desc:" power of the dft, up to the nyquist limit frequency (1/2 input.WinSamples)"`
+	LogPower        etensor.Float32 `view:"-" desc:" log power of the dft, up to the nyquist liit frequency (1/2 input.WinSamples)"`
+	PowerSegment    etensor.Float32 `view:"no-inline" desc:" full segment's worth of power of the dft, up to the nyquist limit frequency (1/2 input.WinSamples)"`
+	LogPowerSegment etensor.Float32 `view:"no-inline" desc:" full segment's worth of log power of the dft, up to the nyquist limit frequency (1/2 input.WinSamples)"`
+	Mel             mel.Params      `view:"inline"`
+	MelFBank        etensor.Float32 `view:"no-inline" desc:" mel scale transformation of dft_power, using triangular filters, resulting in the mel filterbank output -- the natural log of this is typically applied"`
+	MelFBankSegment etensor.Float32 `view:"no-inline" desc:" full segment's worth of mel feature-bank output"`
+	MelFilters      etensor.Float32 `view:"no-inline" desc:" the actual filters"`
+	MfccDct         etensor.Float32 `view:"-" desc:" discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
+	MfccDctSegment  etensor.Float32 `view:"-" desc:" full segment's worth of discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
+}
 type App struct {
 	Nm      string `view:"-" desc:"name of this environment"`
 	Dsc     string `view:"-" desc:"description of this environment"`
@@ -329,9 +343,9 @@ func (ap *App) ProcessStep(ch int, step int) error {
 }
 
 // LoadFile loads the sound file and the transcription file
-func (ap *App) LoadFile(path string) {
-	ap.SndFile = path
-	err := ap.Sound.Load(path)
+func (ap *App) LoadFile(pth string) {
+	ap.SndFile = pth
+	err := ap.Sound.Load(pth)
 	if err != nil {
 		log.Printf("LoadFile: error loading sound -- %v\n, err", ap.Sequence.File)
 		return
@@ -371,7 +385,13 @@ func (ap *App) LoadFile(path string) {
 	}
 
 	ap.SndsTable.Table.AddRows(len(ap.Sequence.Units))
+	_, nm := path.Split(fn)
+	i := strings.LastIndex(nm, ".")
+	if i > 0 {
+		nm = nm[0:i]
+	}
 	for r, s := range ap.Sequence.Units {
+		ap.SndsTable.Table.SetCellString("File", r, nm)
 		ap.SndsTable.Table.SetCellString("Sound", r, s.Name)
 		ap.SndsTable.Table.SetCellFloat("Start", r, s.AStart)
 		ap.SndsTable.Table.SetCellFloat("End", r, s.AEnd)
@@ -544,6 +564,7 @@ func (ap *App) ConfigSoundsTable() {
 	ap.SndsTable.Table.SetMetaData("read-only", "true")
 
 	sch := etable.Schema{
+		{"File", etensor.STRING, nil, nil},
 		{"Sound", etensor.STRING, nil, nil},
 		{"Start", etensor.FLOAT32, nil, nil},
 		{"End", etensor.FLOAT32, nil, nil},
@@ -681,7 +702,7 @@ func (ap *App) ConfigGui() *gi.Window {
 	tg.SetStretchMax()
 	tg.SetTensor(&ap.MelFBankSegment)
 
-	tg = tv.AddNewTab(etview.KiT_TensorGrid, "Gabor Result").(*etview.TensorGrid)
+	tg = tv.AddNewTab(etview.KiT_TensorGrid, "Result").(*etview.TensorGrid)
 	tg.SetStretchMax()
 	tg.SetTensor(&ap.GborOutput)
 
