@@ -90,33 +90,8 @@ type ProcessParams struct {
 	MfccDct         etensor.Float32 `view:"-" desc:" discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
 	MfccDctSegment  etensor.Float32 `view:"-" desc:" full segment's worth of discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
 }
-type App struct {
-	Nm      string `view:"-" desc:"name of this environment"`
-	Dsc     string `view:"-" desc:"description of this environment"`
-	Corpus  string `desc:"the set of sound files"`
-	SndName string `desc:"name of the open sound file"`
-	SndPath string `desc:"path to the open sound file"`
-	SndFile string `view:"-" desc:"full path of open sound file"`
 
-	GUI    egui.GUI        `view:"-" desc:"manages all the gui elements"`
-	ByTime bool            `desc:"order the gabor result by time and then by filter"`
-	Params Params          `view:"inline" desc:"fundamental processing parameters"`
-	Sound  sound.Wave      `view:"inline"`
-	Signal etensor.Float32 `view:"-" desc:" the full sound input obtained from the sound input - plus any added padding"`
-	Window etensor.Float32 `view:"-" desc:" [Input.WinSamples] the raw sound input, one channel at a time"`
-
-	Dft             dft.Params      `view:"-" desc:" "`
-	Power           etensor.Float32 `view:"-" desc:" power of the dft, up to the nyquist limit frequency (1/2 input.WinSamples)"`
-	LogPower        etensor.Float32 `view:"-" desc:" log power of the dft, up to the nyquist liit frequency (1/2 input.WinSamples)"`
-	PowerSegment    etensor.Float32 `view:"no-inline" desc:" full segment's worth of power of the dft, up to the nyquist limit frequency (1/2 input.WinSamples)"`
-	LogPowerSegment etensor.Float32 `view:"no-inline" desc:" full segment's worth of log power of the dft, up to the nyquist limit frequency (1/2 input.WinSamples)"`
-	Mel             mel.Params      `view:"inline"`
-	MelFBank        etensor.Float32 `view:"no-inline" desc:" mel scale transformation of dft_power, using triangular filters, resulting in the mel filterbank output -- the natural log of this is typically applied"`
-	MelFBankSegment etensor.Float32 `view:"no-inline" desc:" full segment's worth of mel feature-bank output"`
-	MelFilters      etensor.Float32 `view:"no-inline" desc:" the actual filters"`
-	MfccDct         etensor.Float32 `view:"-" desc:" discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
-	MfccDctSegment  etensor.Float32 `view:"-" desc:" full segment's worth of discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
-
+type GaborParams struct {
 	GaborSpecs []agabor.Filter   `view:"no-inline" desc:"array of params describing each gabor filter"`
 	GaborSet   agabor.FilterSet  `view:"inline" desc:"a set of gabor filters with same x and y dimensions"`
 	GborOutput etensor.Float32   `view:"no-inline" desc:" raw output of Gabor -- full segment's worth of gabor steps"`
@@ -127,6 +102,26 @@ type App struct {
 	Kwta       kwta.KWTA         `desc:"kwta parameters, using FFFB form"`
 	FftCoefs   []complex128      `view:"-" desc:" discrete fourier transform (fft) output complex representation"`
 	Fft        *fourier.CmplxFFT `view:"-" desc:" struct for fast fourier transform"`
+}
+
+type App struct {
+	Nm      string   `view:"-" desc:"name of this environment"`
+	Dsc     string   `view:"-" desc:"description of this environment"`
+	GUI     egui.GUI `view:"-" desc:"manages all the gui elements"`
+	Corpus  string   `desc:"the set of sound files"`
+	SndName string   `desc:"name of the open sound file"`
+	SndPath string   `desc:"path to the open sound file"`
+	SndFile string   `view:"-" desc:"full path of open sound file"`
+
+	Params   Params          `view:"inline" desc:"fundamental processing parameters"`
+	PParams1 ProcessParams   `desc:"the power and mel parameters for processing the sound to generate a mel filter bank for sound 1"`
+	GParams1 GaborParams     `desc:"gabor filter specifications and parameters for applying gabors to the mel output for sound 1"`
+	PParams2 ProcessParams   `desc:"the power and mel parameters for processing the sound to generate a mel filter bank for sound 2"`
+	GParams2 GaborParams     `desc:"gabor filter specifications and parameters for applying gabors to the mel output for sound 2"`
+	Sound    sound.Wave      `view:"inline"`
+	Signal   etensor.Float32 `view:"-" desc:" the full sound input obtained from the sound input - plus any added padding"`
+	Window   etensor.Float32 `view:"-" desc:" [Input.WinSamples] the raw sound input, one channel at a time"`
+	ByTime   bool            `desc:"order the gabor result by time and then by filter"`
 
 	Sequence     speech.Sequence
 	SeqTable     giv.TableView
@@ -149,9 +144,12 @@ func (ss *App) New() {
 // Init
 func (ap *App) Init() {
 	ap.ParamDefaults()
-	ap.Mel.Defaults()
-	ap.InitGabors()
-	ap.UpdateGabors()
+	ap.PParams1.Mel.Defaults()
+	ap.PParams2.Mel.Defaults()
+	ap.InitGabors(&ap.GParams1)
+	ap.InitGabors(&ap.GParams2)
+	ap.UpdateGabors(&ap.GParams1)
+	ap.UpdateGabors(&ap.GParams2)
 	ap.ByTime = true
 }
 
@@ -179,31 +177,31 @@ func (ap *App) Config() {
 }
 
 // InitGabors
-func (ap *App) InitGabors() {
-	ap.GaborSet.Filters.SetMetaData("min", "-.25")
-	ap.GaborSet.Filters.SetMetaData("max", ".25")
+func (ap *App) InitGabors(params *GaborParams) {
+	params.GaborSet.Filters.SetMetaData("min", "-.25")
+	params.GaborSet.Filters.SetMetaData("max", ".25")
 
-	ap.GaborSet.SizeX = 9
-	ap.GaborSet.SizeY = 9
-	ap.GaborSet.Gain = 1.5
-	ap.GaborSet.StrideX = 6
-	ap.GaborSet.StrideY = 3
-	ap.GaborSet.Distribute = false
-	ap.GaborSet.OrderByTime = true
+	params.GaborSet.SizeX = 9
+	params.GaborSet.SizeY = 9
+	params.GaborSet.Gain = 1.5
+	params.GaborSet.StrideX = 6
+	params.GaborSet.StrideY = 3
+	params.GaborSet.Distribute = false
+	params.GaborSet.OrderByTime = true
 
 	orient := []float32{0, 45, 90, 135}
 	wavelen := []float32{1.0, 2.0}
 	phase := []float32{0}
 	sigma := []float32{0.5}
 
-	ap.GaborSpecs = nil // in case there are some specs already
+	params.GaborSpecs = nil // in case there are some specs already
 
 	for _, or := range orient {
 		for _, wv := range wavelen {
 			for _, ph := range phase {
 				for _, wl := range sigma {
 					spec := agabor.Filter{WaveLen: wv, Orientation: or, SigmaWidth: wl, SigmaLength: wl, PhaseOffset: ph, CircleEdge: true}
-					ap.GaborSpecs = append(ap.GaborSpecs, spec)
+					params.GaborSpecs = append(params.GaborSpecs, spec)
 				}
 			}
 		}
@@ -211,17 +209,17 @@ func (ap *App) InitGabors() {
 }
 
 // UpdateGabors rerenders based on current spec and filterset values
-func (ap *App) UpdateGabors() {
-	if ap.GaborSet.SizeX < ap.GaborSet.StrideX {
+func (ap *App) UpdateGabors(params *GaborParams) {
+	if params.GaborSet.SizeX < params.GaborSet.StrideX {
 		gi.PromptDialog(nil, gi.DlgOpts{Title: "Stride > size", Prompt: "The stride in X is greater than the filter size in X"}, gi.AddOk, gi.AddCancel, nil, nil)
 	}
-	active := agabor.Active(ap.GaborSpecs)
-	ap.GaborSet.Filters.SetShape([]int{len(active), ap.GaborSet.SizeY, ap.GaborSet.SizeX}, nil, nil)
-	agabor.ToTensor(ap.GaborSpecs, &ap.GaborSet)
+	active := agabor.Active(params.GaborSpecs)
+	params.GaborSet.Filters.SetShape([]int{len(active), params.GaborSet.SizeY, params.GaborSet.SizeX}, nil, nil)
+	agabor.ToTensor(params.GaborSpecs, &params.GaborSet)
 }
 
 // Process generates the mel output and from that the result of the convolution with the gabor filters
-func (ap *App) Process() (err error) {
+func (ap *App) Process(pparams *ProcessParams, gparams *GaborParams) (err error) {
 	if ap.Sound.Buf == nil {
 		gi.PromptDialog(nil, gi.DlgOpts{Title: "Sound buffer is empty", Prompt: "Open a sound file before processing"}, gi.AddOk, gi.NoCancel, nil, nil)
 		return errors.New("Load a sound and try again")
@@ -234,8 +232,8 @@ func (ap *App) Process() (err error) {
 
 	duration := ap.Params.SegmentEnd - ap.Params.SegmentStart
 	stepMs := ap.Params.StepMs
-	sizeXMs := float32(ap.GaborSet.SizeX) * stepMs
-	strideXMs := float32(ap.GaborSet.StrideX) * stepMs
+	sizeXMs := float32(gparams.GaborSet.SizeX) * stepMs
+	strideXMs := float32(gparams.GaborSet.StrideX) * stepMs
 	add := float32(0)
 	if duration < sizeXMs {
 		add = sizeXMs - duration
@@ -272,18 +270,18 @@ func (ap *App) Process() (err error) {
 	ap.Params.StepsTotal = steps + 2*ap.Params.BorderSteps
 
 	winSamplesHalf := ap.Params.WinSamples/2 + 1
-	ap.Dft.Initialize(ap.Params.WinSamples)
-	ap.Mel.InitFilters(ap.Params.WinSamples, ap.Sound.SampleRate(), &ap.MelFilters) // call after non-default values are set!
+	pparams.Dft.Initialize(ap.Params.WinSamples)
+	pparams.Mel.InitFilters(ap.Params.WinSamples, ap.Sound.SampleRate(), &pparams.MelFilters) // call after non-default values are set!
 	ap.Window.SetShape([]int{ap.Params.WinSamples}, nil, nil)
-	ap.Power.SetShape([]int{winSamplesHalf}, nil, nil)
-	ap.LogPower.CopyShapeFrom(&ap.Power)
-	ap.PowerSegment.SetShape([]int{ap.Params.StepsTotal, winSamplesHalf, ap.Sound.Channels()}, nil, nil)
-	if ap.Dft.CompLogPow {
-		ap.LogPowerSegment.CopyShapeFrom(&ap.PowerSegment)
+	pparams.Power.SetShape([]int{winSamplesHalf}, nil, nil)
+	pparams.LogPower.CopyShapeFrom(&pparams.Power)
+	pparams.PowerSegment.SetShape([]int{ap.Params.StepsTotal, winSamplesHalf, ap.Sound.Channels()}, nil, nil)
+	if pparams.Dft.CompLogPow {
+		pparams.LogPowerSegment.CopyShapeFrom(&pparams.PowerSegment)
 	}
 
-	ap.FftCoefs = make([]complex128, ap.Params.WinSamples)
-	ap.Fft = fourier.NewCmplxFFT(len(ap.FftCoefs))
+	gparams.FftCoefs = make([]complex128, ap.Params.WinSamples)
+	gparams.Fft = fourier.NewCmplxFFT(len(gparams.FftCoefs))
 
 	// 2 reasons for this code
 	// 1 - the amount of signal handed to the fft has a "border" (some extra signal) to avoid edge effects.
@@ -298,26 +296,26 @@ func (ap *App) Process() (err error) {
 		ap.Params.Steps[i] = ap.Params.StepSamples * (i - stepsBack)
 	}
 
-	ap.MelFBank.SetShape([]int{ap.Mel.FBank.NFilters}, nil, nil)
-	ap.MelFBankSegment.SetShape([]int{ap.Params.StepsTotal, ap.Mel.FBank.NFilters, ap.Sound.Channels()}, nil, nil)
-	if ap.Mel.MFCC {
-		ap.MfccDctSegment.CopyShapeFrom(&ap.MelFBankSegment)
-		ap.MfccDct.SetShape([]int{ap.Mel.FBank.NFilters}, nil, nil)
+	pparams.MelFBank.SetShape([]int{pparams.Mel.FBank.NFilters}, nil, nil)
+	pparams.MelFBankSegment.SetShape([]int{ap.Params.StepsTotal, pparams.Mel.FBank.NFilters, ap.Sound.Channels()}, nil, nil)
+	if pparams.Mel.MFCC {
+		pparams.MfccDctSegment.CopyShapeFrom(&pparams.MelFBankSegment)
+		pparams.MfccDct.SetShape([]int{pparams.Mel.FBank.NFilters}, nil, nil)
 	}
 	samples := sound.MSecToSamples(ap.Params.SegmentEnd-ap.Params.SegmentStart, ap.Sound.SampleRate())
 	siglen := len(ap.Signal.Values) - samples*ap.Sound.Channels()
 	siglen = siglen / ap.Sound.Channels()
 
-	ap.Power.SetZeros()
-	ap.LogPower.SetZeros()
-	ap.PowerSegment.SetZeros()
-	ap.LogPowerSegment.SetZeros()
-	ap.MelFBankSegment.SetZeros()
-	ap.MfccDctSegment.SetZeros()
+	pparams.Power.SetZeros()
+	pparams.LogPower.SetZeros()
+	pparams.PowerSegment.SetZeros()
+	pparams.LogPowerSegment.SetZeros()
+	pparams.MelFBankSegment.SetZeros()
+	pparams.MfccDctSegment.SetZeros()
 
 	for ch := int(0); ch < ap.Sound.Channels(); ch++ {
 		for s := 0; s < int(ap.Params.StepsTotal); s++ {
-			err := ap.ProcessStep(ch, s)
+			err := ap.ProcessStep(ch, s, pparams, gparams)
 			if err != nil {
 				break
 			}
@@ -329,14 +327,14 @@ func (ap *App) Process() (err error) {
 // ProcessStep processes a step worth of sound input from current input_pos, and increment input_pos by input.step_samples
 // Process the data by doing a fourier transform and computing the power spectrum, then apply mel filters to get the frequency
 // bands that mimic the non-linear human perception of sound
-func (ap *App) ProcessStep(ch int, step int) error {
+func (ap *App) ProcessStep(ch int, step int, pparams *ProcessParams, gparams *GaborParams) error {
 	offset := ap.Params.Steps[step]
 	start := sound.MSecToSamples(ap.Params.SegmentStart, ap.Sound.SampleRate()) + offset
 	err := ap.SndToWindow(start, ch)
 	if err == nil {
-		ap.Fft.Reset(ap.Params.WinSamples)
-		ap.Dft.Filter(int(ch), int(step), &ap.Window, ap.FirstStep, ap.Params.WinSamples, ap.FftCoefs, ap.Fft, &ap.Power, &ap.LogPower, &ap.PowerSegment, &ap.LogPowerSegment)
-		ap.Mel.Filter(int(ch), int(step), &ap.Window, &ap.MelFilters, &ap.Power, &ap.MelFBankSegment, &ap.MelFBank, &ap.MfccDctSegment, &ap.MfccDct)
+		gparams.Fft.Reset(ap.Params.WinSamples)
+		pparams.Dft.Filter(int(ch), int(step), &ap.Window, ap.FirstStep, ap.Params.WinSamples, gparams.FftCoefs, gparams.Fft, &pparams.Power, &pparams.LogPower, &pparams.PowerSegment, &pparams.LogPowerSegment)
+		pparams.Mel.Filter(int(ch), int(step), &ap.Window, &pparams.MelFilters, &pparams.Power, &pparams.MelFBankSegment, &pparams.MelFBank, &pparams.MfccDctSegment, &pparams.MfccDct)
 		ap.FirstStep = false
 	}
 	return err
@@ -498,60 +496,56 @@ func (ap *App) SndToWindow(start, ch int) error {
 }
 
 // ApplyGabor convolves the gabor filters with the mel output
-func (ap *App) ApplyGabor() (tsr *etensor.Float32) {
-	if ap.Params.SegmentEnd <= ap.Params.SegmentStart {
-		gi.PromptDialog(nil, gi.DlgOpts{Title: "End <= Start", Prompt: "SegmentEnd must be greater than SegmentStart."}, gi.AddOk, gi.NoCancel, nil, nil)
-		return
-	}
-
-	y1 := ap.MelFBank.Dim(0)
-	y2 := ap.GaborSet.SizeY
+func (ap *App) ApplyGabor(pparams *ProcessParams, gparams *GaborParams) {
+	// determine gabor output size
+	y1 := pparams.MelFBankSegment.Dim(1)
+	y2 := gparams.GaborSet.SizeY
 	y := float32(y1 - y2)
-	sy := (int(mat32.Floor(y/float32(ap.GaborSet.StrideY))) + 1) * 2 // double - two rows, off-center and on-center
+	sy := (int(mat32.Floor(y/float32(gparams.GaborSet.StrideY))) + 1) * 2 // double - two rows, off-center and on-center
 
-	x1 := float32(ap.Params.SegmentEnd-ap.Params.SegmentStart) / ap.Params.StepMs
-	x2 := float32(ap.GaborSet.SizeX)
+	x1 := pparams.MelFBankSegment.Dim(0)
+	x2 := gparams.GaborSet.SizeX
 	x := x1 - x2
-	active := agabor.Active(ap.GaborSpecs)
-	sx := (int(mat32.Floor(x/float32(ap.GaborSet.StrideX))) + 1) * len(active)
+	active := agabor.Active(gparams.GaborSpecs)
+	sx := (int(mat32.Floor(float32(x)/float32(gparams.GaborSet.StrideX))) + 1) * len(active)
 
-	ap.UpdateGabors()
-	ap.GborOutput.SetShape([]int{ap.Sound.Channels(), sy, sx}, nil, []string{"chan", "freq", "time"})
-	ap.ExtGi.SetShape([]int{sy, ap.GaborSet.Filters.Dim(0)}, nil, nil) // passed in for each channel
-	ap.GborOutput.SetMetaData("odd-row", "true")
-	ap.GborOutput.SetMetaData("grid-fill", ".9")
-	ap.GborKwta.CopyShapeFrom(&ap.GborOutput)
-	ap.GborKwta.CopyMetaData(&ap.GborOutput)
+	ap.UpdateGabors(gparams)
+	gparams.GborOutput.SetShape([]int{ap.Sound.Channels(), sy, sx}, nil, []string{"chan", "freq", "time"})
+	gparams.ExtGi.SetShape([]int{sy, gparams.GaborSet.Filters.Dim(0)}, nil, nil) // passed in for each channel
+	gparams.GborOutput.SetMetaData("odd-row", "true")
+	gparams.GborOutput.SetMetaData("grid-fill", ".9")
+	gparams.GborKwta.CopyShapeFrom(&gparams.GborOutput)
+	gparams.GborKwta.CopyMetaData(&gparams.GborOutput)
 
 	for ch := int(0); ch < ap.Sound.Channels(); ch++ {
-		agabor.Convolve(ch, &ap.MelFBankSegment, ap.GaborSet, &ap.GborOutput)
+		agabor.Convolve(ch, &pparams.MelFBankSegment, gparams.GaborSet, &gparams.GborOutput)
 		//if ap.NeighInhib.On {
-		//	ap.NeighInhib.Inhib4(&ap.GborOutput, &ap.ExtGi)
+		//	ap.NeighInhib.Inhib4(&gparams.GborOutput, &ap.ExtGi)
 		//} else {
 		//	ap.ExtGi.SetZeros()
 		//}
 
-		if ap.Kwta.On {
-			ap.ApplyKwta(ch)
-			tsr = &ap.GborKwta
-		} else {
-			tsr = &ap.GborOutput
+		if gparams.Kwta.On {
+			ap.ApplyKwta(ch, gparams)
+			//tsr = &gparams.GborKwta
+			//} else {
+			//	tsr = &gparams.GborOutput
 		}
 	}
-	return tsr
+	//return tsr
 }
 
 // ApplyKwta runs the kwta algorithm on the raw activations
-func (ap *App) ApplyKwta(ch int) {
-	ap.GborKwta.CopyFrom(&ap.GborOutput)
-	if ap.Kwta.On {
-		rawSS := ap.GborOutput.SubSpace([]int{ch}).(*etensor.Float32)
-		kwtaSS := ap.GborKwta.SubSpace([]int{ch}).(*etensor.Float32)
+func (ap *App) ApplyKwta(ch int, gparams *GaborParams) {
+	gparams.GborKwta.CopyFrom(&gparams.GborOutput)
+	if gparams.Kwta.On {
+		rawSS := gparams.GborOutput.SubSpace([]int{ch}).(*etensor.Float32)
+		kwtaSS := gparams.GborKwta.SubSpace([]int{ch}).(*etensor.Float32)
 		// This app is 2D only - no pools
 		//if ap.KwtaPool == true {
 		//	ap.Kwta.KWTAPool(rawSS, kwtaSS, &ap.Inhibs, &ap.ExtGi)
 		//} else {
-		ap.Kwta.KWTALayer(rawSS, kwtaSS, &ap.ExtGi)
+		gparams.Kwta.KWTALayer(rawSS, kwtaSS, &gparams.ExtGi)
 		//}
 	}
 }
@@ -632,13 +626,25 @@ func (ap *App) ConfigGui() *gi.Window {
 		},
 	})
 
-	ap.GUI.AddToolbarItem(egui.ToolbarItem{Label: "Process", Icon: "play",
+	ap.GUI.AddToolbarItem(egui.ToolbarItem{Label: "Process 1", Icon: "play",
 		Tooltip: "Process the segment of audio from SegmentStart to SegmentEnd applying the gabor filters to the Mel tensor",
 		Active:  egui.ActiveStopped,
 		Func: func() {
-			err := ap.Process()
+			err := ap.Process(&ap.PParams1, &ap.GParams1)
 			if err == nil {
-				ap.ApplyGabor()
+				ap.ApplyGabor(&ap.PParams1, &ap.GParams1)
+				ap.GUI.UpdateWindow()
+			}
+		},
+	})
+
+	ap.GUI.AddToolbarItem(egui.ToolbarItem{Label: "Process 2", Icon: "play",
+		Tooltip: "Process the segment of audio from SegmentStart to SegmentEnd applying the gabor filters to the Mel tensor",
+		Active:  egui.ActiveStopped,
+		Func: func() {
+			err := ap.Process(&ap.PParams2, &ap.GParams2)
+			if err == nil {
+				ap.ApplyGabor(&ap.PParams2, &ap.GParams2)
 				ap.GUI.UpdateWindow()
 			}
 		},
@@ -648,7 +654,8 @@ func (ap *App) ConfigGui() *gi.Window {
 		Tooltip: "Call this to see the result of changing the Gabor specifications",
 		Active:  egui.ActiveStopped,
 		Func: func() {
-			ap.UpdateGabors()
+			ap.UpdateGabors(&ap.GParams1)
+			ap.UpdateGabors(&ap.GParams2)
 			ap.GUI.UpdateWindow()
 		},
 	})
@@ -681,30 +688,53 @@ func (ap *App) ConfigGui() *gi.Window {
 	ap.GUI.StructView = giv.AddNewStructView(split, "app")
 	ap.GUI.StructView.SetStruct(ap)
 
-	specs := giv.AddNewTableView(split, "specs")
+	specs := giv.AddNewTableView(split, "specs1")
 	specs.Viewport = ap.GUI.ViewPort
-	specs.SetSlice(&ap.GaborSpecs)
+	specs.SetSlice(&ap.GParams1.GaborSpecs)
+
+	specs = giv.AddNewTableView(split, "specs2")
+	specs.Viewport = ap.GUI.ViewPort
+	specs.SetSlice(&ap.GParams2.GaborSpecs)
 
 	tv := gi.AddNewTabView(split, "tv")
-	split.SetSplits(.3, .3, .4)
 
 	tg := tv.AddNewTab(etview.KiT_TensorGrid, "Gabors").(*etview.TensorGrid)
 	tg.SetStretchMax()
-	//ap.LogPowerSegment.SetMetaData("grid-min", "10")
-	tg.SetTensor(&ap.GaborSet.Filters)
+	//ap.PParams1.LogPowerSegment.SetMetaData("grid-min", "10")
+	tg.SetTensor(&ap.GParams1.GaborSet.Filters)
 
 	tg = tv.AddNewTab(etview.KiT_TensorGrid, "Power").(*etview.TensorGrid)
 	tg.SetStretchMax()
-	ap.LogPowerSegment.SetMetaData("grid-min", "10")
-	tg.SetTensor(&ap.LogPowerSegment)
+	ap.PParams1.LogPowerSegment.SetMetaData("grid-min", "10")
+	tg.SetTensor(&ap.PParams1.LogPowerSegment)
 
 	tg = tv.AddNewTab(etview.KiT_TensorGrid, "Mel").(*etview.TensorGrid)
 	tg.SetStretchMax()
-	tg.SetTensor(&ap.MelFBankSegment)
+	tg.SetTensor(&ap.PParams1.MelFBankSegment)
 
 	tg = tv.AddNewTab(etview.KiT_TensorGrid, "Result").(*etview.TensorGrid)
 	tg.SetStretchMax()
-	tg.SetTensor(&ap.GborOutput)
+	tg.SetTensor(&ap.GParams1.GborOutput)
+
+	tv2 := gi.AddNewTabView(split, "tv2")
+	split.SetSplits(.25, .2, .275, .275)
+
+	tg = tv2.AddNewTab(etview.KiT_TensorGrid, "Gabors").(*etview.TensorGrid)
+	tg.SetStretchMax()
+	tg.SetTensor(&ap.GParams2.GaborSet.Filters)
+
+	tg = tv2.AddNewTab(etview.KiT_TensorGrid, "Power").(*etview.TensorGrid)
+	tg.SetStretchMax()
+	ap.PParams2.LogPowerSegment.SetMetaData("grid-min", "10")
+	tg.SetTensor(&ap.PParams2.LogPowerSegment)
+
+	tg = tv2.AddNewTab(etview.KiT_TensorGrid, "Mel").(*etview.TensorGrid)
+	tg.SetStretchMax()
+	tg.SetTensor(&ap.PParams2.MelFBankSegment)
+
+	tg = tv2.AddNewTab(etview.KiT_TensorGrid, "Result").(*etview.TensorGrid)
+	tg.SetStretchMax()
+	tg.SetTensor(&ap.GParams2.GborOutput)
 
 	ap.GUI.FinalizeGUI(false)
 	return ap.GUI.Win
