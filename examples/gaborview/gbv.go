@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"path"
+	"path/filepath"
 	"strings"
 
 	"github.com/emer/auditory/agabor"
@@ -105,13 +106,14 @@ type GaborParams struct {
 }
 
 type App struct {
-	Nm      string   `view:"-" desc:"name of this environment"`
-	Dsc     string   `view:"-" desc:"description of this environment"`
-	GUI     egui.GUI `view:"-" desc:"manages all the gui elements"`
-	Corpus  string   `desc:"the set of sound files"`
-	SndName string   `desc:"name of the open sound file"`
-	SndPath string   `desc:"path to the open sound file"`
-	SndFile string   `view:"-" desc:"full path of open sound file"`
+	Nm        string            `view:"-" desc:"name of this environment"`
+	Dsc       string            `view:"-" desc:"description of this environment"`
+	GUI       egui.GUI          `view:"-" desc:"manages all the gui elements"`
+	Corpus    string            `desc:"the set of sound files"`
+	SndPath   string            `desc:"path to the open sound file"`
+	SndFile   string            `view:"-" desc:"full path of open sound file"`
+	Sequence  []speech.Sequence `view:"no-inline" desc:"a slice of Sequence structs, one per open sound file"`
+	SndsTable Table             `desc:"Table of sounds from the open sound files"`
 
 	Params   Params          `view:"inline" desc:"fundamental processing parameters"`
 	PParams1 ProcessParams   `desc:"the power and mel parameters for processing the sound to generate a mel filter bank for sound 1"`
@@ -123,9 +125,6 @@ type App struct {
 	Window   etensor.Float32 `view:"-" desc:" [Input.WinSamples] the raw sound input, one channel at a time"`
 	ByTime   bool            `desc:"order the gabor result by time and then by filter"`
 
-	Sequence     speech.Sequence
-	SeqTable     giv.TableView
-	SndsTable    Table
 	ToolBar      *gi.ToolBar `view:"-" desc:" the master toolbar"`
 	MoreSegments bool        `view:"-" desc:" are there more samples to process"`
 	FirstStep    bool        `view:"-" desc:" if first frame to process -- turns off prv smoothing of dft power"`
@@ -160,7 +159,6 @@ func (ap *App) ParamDefaults() {
 	ap.Params.Channel = 0
 	ap.Params.PadValue = 0.0
 	ap.Params.BorderSteps = 0
-	ap.Sequence.Units = append(ap.Sequence.Units, *new(speech.Unit))
 	ap.Params.Resize = true
 }
 
@@ -190,7 +188,7 @@ func (ap *App) InitGabors(params *GaborParams) {
 	params.GaborSet.OrderByTime = true
 
 	orient := []float32{0, 45, 90, 135}
-	wavelen := []float32{1.0, 2.0}
+	wavelen := []float32{2.0}
 	phase := []float32{0}
 	sigma := []float32{0.5}
 
@@ -220,6 +218,8 @@ func (ap *App) UpdateGabors(params *GaborParams) {
 
 // Process generates the mel output and from that the result of the convolution with the gabor filters
 func (ap *App) Process(pparams *ProcessParams, gparams *GaborParams) (err error) {
+	ap.LoadSound() // actually load the sound
+
 	if ap.Sound.Buf == nil {
 		gi.PromptDialog(nil, gi.DlgOpts{Title: "Sound buffer is empty", Prompt: "Open a sound file before processing"}, gi.AddOk, gi.NoCancel, nil, nil)
 		return errors.New("Load a sound and try again")
@@ -340,25 +340,28 @@ func (ap *App) ProcessStep(ch int, step int, pparams *ProcessParams, gparams *Ga
 	return err
 }
 
-// LoadFile loads the sound file and the transcription file
-func (ap *App) LoadFile(pth string) {
-	ap.SndFile = pth
-	err := ap.Sound.Load(pth)
+// LoadFile loads the transcription file. The sound file is loaded at start of processing
+func (ap *App) LoadFile(fpth string) {
+	ap.SndFile = fpth
+	err := ap.Sound.Load(fpth)
 	if err != nil {
-		log.Printf("LoadFile: error loading sound -- %v\n, err", ap.Sequence.File)
+		log.Printf("LoadFile: error loading sound -- %v\n, err", fpth)
 		return
 	}
-	ap.LoadSound() // actually load the sound
 
-	fn := strings.TrimSuffix(ap.Sequence.File, ".wav")
-	ap.SndName = fn
+	seq := new(speech.Sequence)
+	seq.File = fpth
+	ap.Sequence = append(ap.Sequence, *seq)
+	ap.ConfigTableView(ap.SndsTable.View)
+	ap.GUI.Win.UpdateSig()
 
+	fn := strings.TrimSuffix(seq.File, ".wav")
 	if ap.Corpus == "TIMIT" {
 		fn := strings.Replace(fn, "ExpWavs", "", 1) // different directory for timing data
 		fn = strings.Replace(fn, ".WAV", "", 1)
 		fnm := fn + ".PHN.MS" // PHN is "Phone" and MS is milliseconds
 		names := []string{}
-		ap.Sequence.Units, err = timit.LoadTimes(fnm, names) // names can be empty for timit, LoadTimes loads names
+		seq.Units, err = timit.LoadTimes(fnm, names) // names can be empty for timit, LoadTimes loads names
 		if err != nil {
 			fmt.Printf("LoadFile: Problem loading %s transcription and timing data", fnm)
 			return
@@ -367,32 +370,45 @@ func (ap *App) LoadFile(pth string) {
 		fmt.Println("NextSound: ap.Corpus no match")
 	}
 
-	if ap.Sequence.Units == nil {
+	if seq.Units == nil {
 		fmt.Println("AdjSeqTimes: SpeechSeq.Units is nil. Some problem with loading file transcription and timing data")
 		return
 	}
-	ap.AdjSeqTimes()
+	ap.AdjSeqTimes(seq)
 
 	// todo: this works for timit - but need a more general solution
-	ap.Sequence.TimeCur = ap.Sequence.Units[0].AStart
-	n := len(ap.Sequence.Units) // find last unit
-	if ap.Sequence.Units[n-1].Name == "h#" {
-		ap.Sequence.TimeStop = ap.Sequence.Units[n-1].AStart
+	seq.TimeCur = seq.Units[0].AStart
+	n := len(seq.Units) // find last unit
+	if seq.Units[n-1].Name == "h#" {
+		seq.TimeStop = seq.Units[n-1].AStart
 	} else {
 		fmt.Println("last unit of speech sequence not silence")
 	}
 
-	ap.SndsTable.Table.AddRows(len(ap.Sequence.Units))
-	_, nm := path.Split(fn)
+	curRows := ap.SndsTable.Table.Rows
+	ap.SndsTable.Table.AddRows(len(seq.Units))
+	fpth, nm := path.Split(fn)
 	i := strings.LastIndex(nm, ".")
 	if i > 0 {
 		nm = nm[0:i]
 	}
-	for r, s := range ap.Sequence.Units {
-		ap.SndsTable.Table.SetCellString("File", r, nm)
+
+	fpth = strings.TrimSuffix(fpth, "/")
+	splits := strings.Split(fpth, "/")
+	n = len(splits)
+	if n >= 2 {
+		fpth = splits[n-2] + "/" + splits[n-1]
+	} else if n >= 1 {
+		fpth = splits[n-1]
+	}
+
+	for r, s := range seq.Units {
+		r = r + curRows
 		ap.SndsTable.Table.SetCellString("Sound", r, s.Name)
 		ap.SndsTable.Table.SetCellFloat("Start", r, s.AStart)
 		ap.SndsTable.Table.SetCellFloat("End", r, s.AEnd)
+		ap.SndsTable.Table.SetCellString("File", r, nm)
+		ap.SndsTable.Table.SetCellString("Dir", r, fpth)
 	}
 	ap.SndsTable.View.UpdateTable()
 	ap.GUI.UpdateWindow()
@@ -410,12 +426,6 @@ func (ap *App) LoadSound() bool {
 	return true
 }
 
-// ClearSoundsAndData empties the sound list, sets current sound to nothing, etc
-func ClearSoundsAndData(ap *App) {
-	ap.Sequence.File = ""
-	ap.MoreSegments = false // this will force a new sound to be loaded
-}
-
 // FilterSounds
 func (ap *App) FilterSounds(sound string) {
 	ap.SndsTable.View.Table.FilterColName("Sound", sound, false, true, true)
@@ -428,28 +438,28 @@ func (ap *App) UnFilterSounds() {
 
 // AdjSeqTimes adjust for any offset if the sequence doesn't start at 0 ms. Also adjust for random silence that
 // might have been added to front of signal
-func (ap *App) AdjSeqTimes() {
-	silence := ap.Sequence.Silence // random silence added to start of sequence for variability
+func (ap *App) AdjSeqTimes(seq *speech.Sequence) {
+	silence := seq.Silence // random silence added to start of sequence for variability
 	offset := 0.0
-	if ap.Sequence.Units[0].Start > 0 {
-		offset = ap.Sequence.Units[0].Start // some sequences are sections of longer ones so times don't start at zero (not true for timit)
+	if seq.Units[0].Start > 0 {
+		offset = seq.Units[0].Start // some sequences are sections of longer ones so times don't start at zero (not true for timit)
 	}
-	for i := range ap.Sequence.Units {
-		ap.Sequence.Units[i].AStart = ap.Sequence.Units[i].Start + silence - offset
-		ap.Sequence.Units[i].AEnd = ap.Sequence.Units[i].End + silence - offset
+	for i := range seq.Units {
+		seq.Units[i].AStart = seq.Units[i].Start + silence - offset
+		seq.Units[i].AEnd = seq.Units[i].End + silence - offset
 	}
 }
 
 // IdxFmSnd simplies the lookup by keeping the corpus conditional in one function
-func (ap *App) IdxFmSnd(s string) (idx int, ok bool) {
+func (ap *App) IdxFmSnd(seq speech.Sequence, s string) (idx int, ok bool) {
 	idx = -1
 	ok = false
 	if ap.Corpus == "TIMIT" {
-		idx, ok = timit.IdxFmSnd(s, ap.Sequence.ID)
+		idx, ok = timit.IdxFmSnd(s, seq.ID)
 	} else if ap.Corpus == "SYNTHCVS" {
-		idx, ok = synthcvs.IdxFmSnd(s, ap.Sequence.ID)
+		idx, ok = synthcvs.IdxFmSnd(s, seq.ID)
 	} else if ap.Corpus == "GRAFESTES" {
-		idx, ok = grafestes.IdxFmSnd(s, ap.Sequence.ID)
+		idx, ok = grafestes.IdxFmSnd(s, seq.ID)
 	} else {
 		fmt.Println("IdxFmSnd: fell through corpus ifelse ")
 	}
@@ -457,11 +467,11 @@ func (ap *App) IdxFmSnd(s string) (idx int, ok bool) {
 }
 
 // IdxFmSnd simplies the lookup by keeping the corpus conditional in one function
-func (ap *App) SndFmIdx(idx int) (snd string, ok bool) {
+func (ap *App) SndFmIdx(seq speech.Sequence, idx int) (snd string, ok bool) {
 	snd = ""
 	ok = false
 	if ap.Corpus == "TIMIT" {
-		snd, ok = timit.SndFmIdx(idx, ap.Sequence.ID)
+		snd, ok = timit.SndFmIdx(idx, seq.ID)
 	} else {
 		fmt.Println("SndFmIdx: fell through corpus ifelse ")
 	}
@@ -558,10 +568,11 @@ func (ap *App) ConfigSoundsTable() {
 	ap.SndsTable.Table.SetMetaData("read-only", "true")
 
 	sch := etable.Schema{
-		{"File", etensor.STRING, nil, nil},
 		{"Sound", etensor.STRING, nil, nil},
 		{"Start", etensor.FLOAT32, nil, nil},
 		{"End", etensor.FLOAT32, nil, nil},
+		{"File", etensor.STRING, nil, nil},
+		{"Dir", etensor.STRING, nil, nil},
 	}
 	ap.SndsTable.Table.SetFromSchema(sch, 0)
 }
@@ -576,6 +587,15 @@ func (ap *App) ConfigTableView(tv *etview.TableView) {
 			idx := ap.SndsTable.View.Table.Idxs[row]
 			ap.Params.SegmentStart = float32(ap.SndsTable.Table.CellFloat("Start", idx))
 			ap.Params.SegmentEnd = float32(ap.SndsTable.Table.CellFloat("End", idx))
+			d := ap.SndsTable.Table.CellString("Dir", idx)
+			f := ap.SndsTable.Table.CellString("File", idx)
+			id := d + "/" + f
+			for _, s := range ap.Sequence {
+				if strings.Contains(s.File, id) {
+					ap.SndFile = s.File
+				}
+			}
+			ap.Sound.Load(ap.SndFile)
 			ap.GUI.UpdateWindow()
 		}
 	})
@@ -615,14 +635,39 @@ func (ap *App) ConfigGui() *gi.Window {
 					if sig == int64(gi.DialogAccepted) {
 						dlg, _ := send.Embed(gi.KiT_Dialog).(*gi.Dialog)
 						fn := giv.FileViewDialogValue(dlg)
-						ap.SndFile = fn
-						ap.Sequence.File = fn
-						ap.SndPath, ap.SndName = path.Split(fn)
-						ap.GUI.Win.UpdateSig()
-						ap.LoadFile(ap.SndFile)
+						info, err := os.Stat(fn)
+						if err != nil {
+							fmt.Println("error stating %s", fn)
+							return
+						}
+						if info.IsDir() {
+							filepath.Walk(fn, func(path string, info os.FileInfo, err error) error {
+								if err != nil {
+									log.Fatalf(err.Error())
+								}
+								fmt.Printf("File Name: %s\n", info.Name())
+								fp := filepath.Join(fn, info.Name())
+								ap.LoadFile(fp)
+								return nil
+							})
+						} else {
+							ap.LoadFile(fn)
+						}
+						ap.ConfigTableView(ap.SndsTable.View)
 						ap.Sound.Load(ap.SndFile)
+						ap.GUI.Win.UpdateSig()
 					}
 				})
+		},
+	})
+
+	ap.GUI.AddToolbarItem(egui.ToolbarItem{Label: "Unload Sounds",
+		Icon:    "file-close",
+		Tooltip: "Clears the table of sounds and closes the open sound files",
+		Active:  egui.ActiveStopped,
+		Func: func() {
+			ap.SndsTable.Table.SetNumRows(0)
+			ap.SndsTable.View.UpdateTable()
 		},
 	})
 
@@ -683,7 +728,7 @@ func (ap *App) ConfigGui() *gi.Window {
 			giv.CallMethod(ap, "UnFilterSounds", ap.GUI.ViewPort)
 		})
 
-	split1.SetSplits(.80, .20)
+	split1.SetSplits(.75, .25)
 
 	ap.GUI.StructView = giv.AddNewStructView(split, "app")
 	ap.GUI.StructView.SetStruct(ap)
