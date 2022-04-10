@@ -90,6 +90,7 @@ type SndEnv struct {
 	KwtaPool      bool              `desc:"if Kwta.On == true, call KwtaPool (true) or KwtaLayer (false)"`
 	FftCoefs      []complex128      `view:"-" desc:" discrete fourier transform (fft) output complex representation"`
 	Fft           *fourier.CmplxFFT `view:"-" desc:" struct for fast fourier transform"`
+	ByTime        bool              `desc:"display the gabor filtering result by time and then by filter, default is to order by filter and then time"`
 
 	// internal state - view:"-"
 	FirstStep bool `view:"-" desc:" if first frame to process -- turns off prv smoothing of dft power"`
@@ -300,7 +301,7 @@ func (se *SndEnv) SndToWindow(stepOffset int, ch int) error {
 // ApplyGabor convolves the gabor filters with the mel output
 func (se *SndEnv) ApplyGabor() (tsr *etensor.Float32) {
 	for ch := int(0); ch < se.Sound.Channels(); ch++ {
-		agabor.Convolve(ch, &se.MelFBankSegment, se.GaborFilters, &se.GborOutput)
+		agabor.Convolve(ch, &se.MelFBankSegment, se.GaborFilters, &se.GborOutput, se.ByTime)
 		//if se.NeighInhib.On {
 		//	se.NeighInhib.Inhib4(&se.GborOutput, &se.ExtGi)
 		//} else {
