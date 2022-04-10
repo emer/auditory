@@ -27,15 +27,14 @@ type Filter struct {
 
 // FilterSet, a struct holding a set of gabor filters stored as a tensor. Though individual filters can vary in size, when used as a set they should all have the same size.
 type FilterSet struct {
-	SizeX       int             `desc:"size of each filter in X"`
-	SizeY       int             `desc:"size of each filter in Y"`
-	StrideX     int             `desc:"how far to move the filter in X each step"`
-	StrideY     int             `desc:"how far to move the filter in Y each step"`
-	Gain        float32         `desc:"overall gain multiplier applied after gabor filtering -- only relevant if not using renormalization (otherwize it just gets renormed away)"`
-	Distribute  bool            `desc:"if multiple horiz or vertical distribute evenly"`
-	Filters     etensor.Float64 `view:"no-inline" desc:"actual gabor filters"`
-	Table       etable.Table    `view:"-" desc:"simple gabor filter table (view only)"`
-	OrderByTime bool            `desc:"if true the gabor result columns will ordered by time within filter, default is filter within time"`
+	SizeX      int             `desc:"size of each filter in X"`
+	SizeY      int             `desc:"size of each filter in Y"`
+	StrideX    int             `desc:"how far to move the filter in X each step"`
+	StrideY    int             `desc:"how far to move the filter in Y each step"`
+	Gain       float32         `desc:"overall gain multiplier applied after gabor filtering -- only relevant if not using renormalization (otherwize it just gets renormed away)"`
+	Distribute bool            `desc:"if multiple horiz or vertical distribute evenly"`
+	Filters    etensor.Float64 `view:"no-inline" desc:"actual gabor filters"`
+	Table      etable.Table    `view:"-" desc:"simple gabor filter table (view only)"`
 }
 
 // Defaults sets default values for any filter fields where 0 is not a reasonable value
@@ -191,7 +190,7 @@ func ToTensor(specs []Filter, set *FilterSet) { // i is filter index in
 }
 
 // Convolve processes input using filters that operate over an entire segment of samples
-func Convolve(ch int, melData *etensor.Float32, filters FilterSet, rawOut *etensor.Float32) {
+func Convolve(ch int, melData *etensor.Float32, filters FilterSet, rawOut *etensor.Float32, byTime bool) {
 	if melData.Dim(0) < filters.SizeX {
 		log.Println("Gabor filter width can not be larger than the width of the mel matrix")
 		return
@@ -255,7 +254,7 @@ func Convolve(ch int, melData *etensor.Float32, filters FilterSet, rawOut *etens
 				if rawOut.NumDims() == 3 {
 					y := fIdx * 2 // we are populating 2 rows, off-center and on-center, thus we need to jump by 2 when populating the output tensor
 					x := 0
-					if filters.OrderByTime {
+					if byTime {
 						x = tIdx + tMaxStrides*flt
 					} else { // default
 						x = flt + tIdx*filters.Filters.Dim(0) // tIdx increments for each stride, flt increments stepping through the filters
