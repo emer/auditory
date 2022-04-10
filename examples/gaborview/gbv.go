@@ -47,6 +47,7 @@ func main() {
 func guirun() {
 	TheApp.Init()
 	win := TheApp.ConfigGui()
+	TheApp.GUI.ToolBar.UpdateActions()
 	win.StartEventLoop()
 }
 
@@ -113,21 +114,19 @@ type App struct {
 	SndPath   string            `desc:"path to the open sound file"`
 	SndFile   string            `view:"-" desc:"full path of open sound file"`
 	Sequence  []speech.Sequence `view:"no-inline" desc:"a slice of Sequence structs, one per open sound file"`
-	SndsTable Table             `desc:"Table of sounds from the open sound files"`
+	SndsTable Table             `desc:"table of sounds from the open sound files"`
+	Row       int               `view:"-" desc:"SndsTable selected row, as seen by user"`
 
-	Params   Params          `view:"inline" desc:"fundamental processing parameters"`
-	PParams1 ProcessParams   `desc:"the power and mel parameters for processing the sound to generate a mel filter bank for sound 1"`
-	GParams1 GaborParams     `desc:"gabor filter specifications and parameters for applying gabors to the mel output for sound 1"`
-	PParams2 ProcessParams   `desc:"the power and mel parameters for processing the sound to generate a mel filter bank for sound 2"`
-	GParams2 GaborParams     `desc:"gabor filter specifications and parameters for applying gabors to the mel output for sound 2"`
-	Sound    sound.Wave      `view:"inline"`
-	Signal   etensor.Float32 `view:"-" desc:" the full sound input obtained from the sound input - plus any added padding"`
-	Window   etensor.Float32 `view:"-" desc:" [Input.WinSamples] the raw sound input, one channel at a time"`
-	ByTime   bool            `desc:"order the gabor result by time and then by filter"`
-
-	ToolBar      *gi.ToolBar `view:"-" desc:" the master toolbar"`
-	MoreSegments bool        `view:"-" desc:" are there more samples to process"`
-	FirstStep    bool        `view:"-" desc:" if first frame to process -- turns off prv smoothing of dft power"`
+	Params    Params          `view:"inline" desc:"fundamental processing parameters"`
+	PParams1  ProcessParams   `desc:"the power and mel parameters for processing the sound to generate a mel filter bank for sound 1"`
+	GParams1  GaborParams     `desc:"gabor filter specifications and parameters for applying gabors to the mel output for sound 1"`
+	PParams2  ProcessParams   `desc:"the power and mel parameters for processing the sound to generate a mel filter bank for sound 2"`
+	GParams2  GaborParams     `desc:"gabor filter specifications and parameters for applying gabors to the mel output for sound 2"`
+	Sound     sound.Wave      `view:"inline"`
+	Signal    etensor.Float32 `view:"-" desc:" the full sound input obtained from the sound input - plus any added padding"`
+	Window    etensor.Float32 `view:"-" desc:" [Input.WinSamples] the raw sound input, one channel at a time"`
+	ByTime    bool            `desc:"display the gabor filtering result by time and then by filter, default is to order by filter and then time"`
+	FirstStep bool            `view:"-" desc:" if first frame to process -- turns off prv smoothing of dft power"`
 }
 
 // this registers this Sim Type and gives it properties that e.g.,
@@ -150,9 +149,10 @@ func (ap *App) Init() {
 	ap.UpdateGabors(&ap.GParams1)
 	ap.UpdateGabors(&ap.GParams2)
 	ap.ByTime = true
+	ap.GUI.Active = false
 }
 
-// ParamDefaults initializes the Input
+// ParamDefaults initializes the sound processing parameters
 func (ap *App) ParamDefaults() {
 	ap.Params.WinMs = 25.0
 	ap.Params.StepMs = 10.0
@@ -162,7 +162,7 @@ func (ap *App) ParamDefaults() {
 	ap.Params.Resize = true
 }
 
-// Config configures all the elements using the standard functions
+// Config configures environment elements
 func (ap *App) Config() {
 	ap.Corpus = "TIMIT"
 	if ap.Corpus == "TIMIT" {
@@ -174,7 +174,7 @@ func (ap *App) Config() {
 	ap.ConfigSoundsTable()
 }
 
-// InitGabors
+// InitGabors renders the gabor filters using the gabor specifications
 func (ap *App) InitGabors(params *GaborParams) {
 	params.GaborSet.Filters.SetMetaData("min", "-.25")
 	params.GaborSet.Filters.SetMetaData("max", ".25")
@@ -185,7 +185,6 @@ func (ap *App) InitGabors(params *GaborParams) {
 	params.GaborSet.StrideX = 6
 	params.GaborSet.StrideY = 3
 	params.GaborSet.Distribute = false
-	params.GaborSet.OrderByTime = true
 
 	orient := []float32{0, 45, 90, 135}
 	wavelen := []float32{2.0}
@@ -217,12 +216,13 @@ func (ap *App) UpdateGabors(params *GaborParams) {
 }
 
 // Process generates the mel output and from that the result of the convolution with the gabor filters
+// Must call ProcessSetup() first !
 func (ap *App) Process(pparams *ProcessParams, gparams *GaborParams) (err error) {
 	ap.LoadSound() // actually load the sound
 
 	if ap.Sound.Buf == nil {
 		gi.PromptDialog(nil, gi.DlgOpts{Title: "Sound buffer is empty", Prompt: "Open a sound file before processing"}, gi.AddOk, gi.NoCancel, nil, nil)
-		return errors.New("Load a sound and try again")
+		return errors.New("Load a sound file and try again")
 	}
 
 	if ap.Params.SegmentEnd <= ap.Params.SegmentStart {
@@ -340,12 +340,12 @@ func (ap *App) ProcessStep(ch int, step int, pparams *ProcessParams, gparams *Ga
 	return err
 }
 
-// LoadFile loads the transcription file. The sound file is loaded at start of processing
-func (ap *App) LoadFile(fpth string) {
+// LoadTranscription loads the transcription file. The sound file is loaded at start of processing by calling LoadSound()
+func (ap *App) LoadTranscription(fpth string) {
 	ap.SndFile = fpth
 	err := ap.Sound.Load(fpth)
 	if err != nil {
-		log.Printf("LoadFile: error loading sound -- %v\n, err", fpth)
+		log.Printf("LoadTranscription: error loading sound -- %v\n, err", fpth)
 		return
 	}
 
@@ -363,7 +363,7 @@ func (ap *App) LoadFile(fpth string) {
 		names := []string{}
 		seq.Units, err = timit.LoadTimes(fnm, names) // names can be empty for timit, LoadTimes loads names
 		if err != nil {
-			fmt.Printf("LoadFile: Problem loading %s transcription and timing data", fnm)
+			fmt.Printf("LoadTranscription: Problem loading %s transcription and timing data", fnm)
 			return
 		}
 	} else {
@@ -411,12 +411,13 @@ func (ap *App) LoadFile(fpth string) {
 		ap.SndsTable.Table.SetCellString("Dir", r, fpth)
 	}
 	ap.SndsTable.View.UpdateTable()
+	ap.GUI.Active = true
 	ap.GUI.UpdateWindow()
 
 	return
 }
 
-// LoadSound
+// LoadSound loads the sound file, e.g. .wav file, the transcription is loaded in LoadTranscription()
 func (ap *App) LoadSound() bool {
 	if ap.Sound.Channels() > 1 {
 		ap.Sound.SoundToTensor(&ap.Signal, -1)
@@ -426,13 +427,13 @@ func (ap *App) LoadSound() bool {
 	return true
 }
 
-// FilterSounds
+// FilterSounds filters the table available sounds
 func (ap *App) FilterSounds(sound string) {
 	ap.SndsTable.View.Table.FilterColName("Sound", sound, false, true, true)
 }
 
-// UnFilterSounds
-func (ap *App) UnFilterSounds() {
+// UnfilterSounds clears the table of sounds
+func (ap *App) UnfilterSounds() {
 	ap.SndsTable.View.Table.Sequential()
 }
 
@@ -528,7 +529,7 @@ func (ap *App) ApplyGabor(pparams *ProcessParams, gparams *GaborParams) {
 	gparams.GborKwta.CopyMetaData(&gparams.GborOutput)
 
 	for ch := int(0); ch < ap.Sound.Channels(); ch++ {
-		agabor.Convolve(ch, &pparams.MelFBankSegment, gparams.GaborSet, &gparams.GborOutput)
+		agabor.Convolve(ch, &pparams.MelFBankSegment, gparams.GaborSet, &gparams.GborOutput, ap.ByTime)
 		//if ap.NeighInhib.On {
 		//	ap.NeighInhib.Inhib4(&gparams.GborOutput, &ap.ExtGi)
 		//} else {
@@ -560,6 +561,27 @@ func (ap *App) ApplyKwta(ch int, gparams *GaborParams) {
 	}
 }
 
+// ProcessSetup grabs params from the selected sounds table row and sets params for the actual processing step
+func (ap *App) ProcessSetup() error {
+	if ap.SndsTable.Table.Rows == 0 {
+		gi.PromptDialog(nil, gi.DlgOpts{Title: "Sounds table empty", Prompt: "Open a sound file before processing"}, gi.AddOk, gi.NoCancel, nil, nil)
+		return errors.New("Load a sound file and try again")
+	}
+	ap.Row = ap.SndsTable.View.SelectedIdx
+	idx := ap.SndsTable.View.Table.Idxs[ap.Row]
+	ap.Params.SegmentStart = float32(ap.SndsTable.Table.CellFloat("Start", idx))
+	ap.Params.SegmentEnd = float32(ap.SndsTable.Table.CellFloat("End", idx))
+	d := ap.SndsTable.Table.CellString("Dir", idx)
+	f := ap.SndsTable.Table.CellString("File", idx)
+	id := d + "/" + f
+	for _, s := range ap.Sequence {
+		if strings.Contains(s.File, id) {
+			ap.SndFile = s.File
+		}
+	}
+	return nil
+}
+
 // ConfigSoundsTable
 func (ap *App) ConfigSoundsTable() {
 	ap.SndsTable.Table = &etable.Table{}
@@ -581,24 +603,13 @@ func (ap *App) ConfigSoundsTable() {
 func (ap *App) ConfigTableView(tv *etview.TableView) {
 	tv.SetProp("inactive", true)
 	tv.SetInactive()
-	tv.SliceViewSig.Connect(ap.GUI.ViewPort, func(recv, send ki.Ki, sig int64, data interface{}) {
-		if sig == int64(giv.SliceViewDoubleClicked) {
-			row := ap.SndsTable.View.SelectedIdx
-			idx := ap.SndsTable.View.Table.Idxs[row]
-			ap.Params.SegmentStart = float32(ap.SndsTable.Table.CellFloat("Start", idx))
-			ap.Params.SegmentEnd = float32(ap.SndsTable.Table.CellFloat("End", idx))
-			d := ap.SndsTable.Table.CellString("Dir", idx)
-			f := ap.SndsTable.Table.CellString("File", idx)
-			id := d + "/" + f
-			for _, s := range ap.Sequence {
-				if strings.Contains(s.File, id) {
-					ap.SndFile = s.File
-				}
-			}
-			ap.Sound.Load(ap.SndFile)
-			ap.GUI.UpdateWindow()
-		}
-	})
+	//tv.SliceViewSig.Connect(ap.GUI.ViewPort, func(recv, send ki.Ki, sig int64, data interface{}) {
+	//if sig == int64(giv.SliceViewDoubleClicked) {
+	//	ap.ProcessSetup()
+	//	ap.Sound.Load(ap.SndFile)
+	//	ap.GUI.UpdateWindow()
+	//}
+	//})
 }
 
 // ConfigGui configures the GoGi gui interface for this simulation,
@@ -627,7 +638,7 @@ func (ap *App) ConfigGui() *gi.Window {
 	ap.GUI.AddToolbarItem(egui.ToolbarItem{Label: "Open Sound File",
 		Icon:    "file-open",
 		Tooltip: "Opens a file dialog for selecting a sound file",
-		Active:  egui.ActiveStopped,
+		Active:  egui.ActiveAlways,
 		Func: func() {
 			exts := ".wav"
 			giv.FileViewDialog(ap.GUI.ViewPort, ap.SndPath, exts, giv.DlgOpts{Title: "Open .wav Sound File", Prompt: "Open a .wav file to load for sound processing."}, nil,
@@ -647,14 +658,15 @@ func (ap *App) ConfigGui() *gi.Window {
 								}
 								fmt.Printf("File Name: %s\n", info.Name())
 								fp := filepath.Join(fn, info.Name())
-								ap.LoadFile(fp)
+								ap.LoadTranscription(fp)
 								return nil
 							})
 						} else {
-							ap.LoadFile(fn)
+							ap.LoadTranscription(fn)
 						}
 						ap.ConfigTableView(ap.SndsTable.View)
-						ap.Sound.Load(ap.SndFile)
+						ap.GUI.IsRunning = true
+						ap.GUI.ToolBar.UpdateActions()
 						ap.GUI.Win.UpdateSig()
 					}
 				})
@@ -664,44 +676,119 @@ func (ap *App) ConfigGui() *gi.Window {
 	ap.GUI.AddToolbarItem(egui.ToolbarItem{Label: "Unload Sounds",
 		Icon:    "file-close",
 		Tooltip: "Clears the table of sounds and closes the open sound files",
-		Active:  egui.ActiveStopped,
+		Active:  egui.ActiveRunning,
 		Func: func() {
 			ap.SndsTable.Table.SetNumRows(0)
 			ap.SndsTable.View.UpdateTable()
+			ap.GUI.IsRunning = false
+			ap.GUI.ToolBar.UpdateActions()
 		},
 	})
 
 	ap.GUI.AddToolbarItem(egui.ToolbarItem{Label: "Process 1", Icon: "play",
 		Tooltip: "Process the segment of audio from SegmentStart to SegmentEnd applying the gabor filters to the Mel tensor",
-		Active:  egui.ActiveStopped,
+		Active:  egui.ActiveRunning,
 		Func: func() {
-			err := ap.Process(&ap.PParams1, &ap.GParams1)
+			ap.GUI.ToolBar.UpdateActions()
+			err := ap.ProcessSetup()
 			if err == nil {
-				ap.ApplyGabor(&ap.PParams1, &ap.GParams1)
-				ap.GUI.UpdateWindow()
+				err = ap.Process(&ap.PParams1, &ap.GParams1)
+				if err == nil {
+					ap.ApplyGabor(&ap.PParams1, &ap.GParams1)
+					ap.GUI.UpdateWindow()
+				}
 			}
 		},
 	})
 
 	ap.GUI.AddToolbarItem(egui.ToolbarItem{Label: "Process 2", Icon: "play",
 		Tooltip: "Process the segment of audio from SegmentStart to SegmentEnd applying the gabor filters to the Mel tensor",
-		Active:  egui.ActiveStopped,
+		Active:  egui.ActiveRunning,
 		Func: func() {
-			err := ap.Process(&ap.PParams2, &ap.GParams2)
+			err := ap.ProcessSetup()
 			if err == nil {
-				ap.ApplyGabor(&ap.PParams2, &ap.GParams2)
-				ap.GUI.UpdateWindow()
+				err = ap.Process(&ap.PParams2, &ap.GParams2)
+				if err == nil {
+					ap.ApplyGabor(&ap.PParams2, &ap.GParams2)
+					ap.GUI.UpdateWindow()
+				}
+			}
+		},
+	})
+
+	ap.GUI.AddToolbarItem(egui.ToolbarItem{Label: "Next 1", Icon: "fast-fwd",
+		Tooltip: "Process the next segment of audio",
+		Active:  egui.ActiveRunning,
+		Func: func() {
+			// setup the next segment of sound
+			ap.SndsTable.View.ResetSelectedIdxs()
+			if ap.Row == ap.SndsTable.View.DispRows-1 {
+				ap.Row = 0
+			} else {
+				ap.Row += 1
+			}
+			ap.SndsTable.View.SelectedIdx = ap.Row
+			ap.SndsTable.View.SelectIdx(ap.Row)
+			err := ap.ProcessSetup()
+			if err == nil {
+				err = ap.Process(&ap.PParams1, &ap.GParams1)
+				if err == nil {
+					ap.ApplyGabor(&ap.PParams1, &ap.GParams1)
+					ap.GUI.UpdateWindow()
+				}
+			}
+		},
+	})
+
+	ap.GUI.AddToolbarItem(egui.ToolbarItem{Label: "Next 2", Icon: "fast-fwd",
+		Tooltip: "Process the next segment of audio",
+		Active:  egui.ActiveRunning,
+		Func: func() {
+			// setup the next segment of sound
+			ap.SndsTable.View.ResetSelectedIdxs()
+			if ap.Row == ap.SndsTable.View.DispRows-1 {
+				ap.Row = 0
+			} else {
+				ap.Row += 1
+			}
+			ap.SndsTable.View.SelectedIdx = ap.Row
+			ap.SndsTable.View.SelectIdx(ap.Row)
+			err := ap.ProcessSetup()
+			if err == nil {
+				err = ap.Process(&ap.PParams2, &ap.GParams2)
+				if err == nil {
+					ap.ApplyGabor(&ap.PParams2, &ap.GParams2)
+					ap.GUI.UpdateWindow()
+				}
 			}
 		},
 	})
 
 	ap.GUI.AddToolbarItem(egui.ToolbarItem{Label: "Update Gabors", Icon: "update",
 		Tooltip: "Call this to see the result of changing the Gabor specifications",
-		Active:  egui.ActiveStopped,
+		Active:  egui.ActiveAlways,
 		Func: func() {
 			ap.UpdateGabors(&ap.GParams1)
 			ap.UpdateGabors(&ap.GParams2)
 			ap.GUI.UpdateWindow()
+		},
+	})
+
+	ap.GUI.ToolBar.AddSeparator("filt")
+
+	ap.GUI.AddToolbarItem(egui.ToolbarItem{Label: "Filter sounds...", Icon: "search",
+		Tooltip: "filter the table of sounds for sounds containing string...",
+		Active:  egui.ActiveRunning,
+		Func: func() {
+			giv.CallMethod(ap, "FilterSounds", ap.GUI.ViewPort)
+		},
+	})
+
+	ap.GUI.AddToolbarItem(egui.ToolbarItem{Label: "Unilter sounds...", Icon: "reset",
+		Tooltip: "clear sounds table filter",
+		Active:  egui.ActiveRunning,
+		Func: func() {
+			giv.CallMethod(ap, "UnfilterSounds", ap.GUI.ViewPort)
 		},
 	})
 
@@ -717,16 +804,6 @@ func (ap *App) ConfigGui() *gi.Window {
 	ap.SndsTable.View = tv1.AddNewTab(etview.KiT_TableView, "Sounds").(*etview.TableView)
 	ap.ConfigTableView(ap.SndsTable.View)
 	ap.SndsTable.View.SetTable(ap.SndsTable.Table, nil)
-
-	ap.GUI.ToolBar.AddSeparator("filt")
-	ap.GUI.ToolBar.AddAction(gi.ActOpts{Label: "Filter sounds...", Icon: "search", Tooltip: "filter the table of sounds for sounds containing string..."}, ap.GUI.Win.This(),
-		func(recv, send ki.Ki, sig int64, data interface{}) {
-			giv.CallMethod(ap, "FilterSounds", ap.GUI.ViewPort)
-		})
-	ap.GUI.ToolBar.AddAction(gi.ActOpts{Label: "UnFilter sounds...", Icon: "search", Tooltip: "clear sounds table filter"}, ap.GUI.Win.This(),
-		func(recv, send ki.Ki, sig int64, data interface{}) {
-			giv.CallMethod(ap, "UnFilterSounds", ap.GUI.ViewPort)
-		})
 
 	split1.SetSplits(.75, .25)
 
@@ -800,8 +877,8 @@ var AppProps = ki.Props{
 				}},
 			},
 		}},
-		{"UnFilterSounds", ki.Props{
-			"desc": "UnFilter sounds table...",
+		{"UnfilterSounds", ki.Props{
+			"desc": "Unfilter sounds table...",
 		}},
 	},
 }
