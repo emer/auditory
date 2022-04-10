@@ -51,7 +51,7 @@ func (dft *Params) Power(ch, step int, firstStep bool, winSamples int, fftCoefs 
 	for k := 0; k < winSamples/2+1; k++ {
 		rl := real(fftCoefs[k])
 		im := imag(fftCoefs[k])
-		powr := float64(rl*rl + im*im) // why is complex converted to float here
+		powr := float64(rl*rl + im*im)
 		if firstStep == false {
 			powr = float64(dft.PrevSmooth)*power.FloatVal1D(k) + float64(dft.CurSmooth)*powr
 		}
