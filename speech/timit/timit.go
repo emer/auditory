@@ -156,7 +156,10 @@ func LoadTimes(fn string, names []string) ([]speech.Unit, error) {
 			units[i].Start = f
 		}
 		if len(units) > 1 {
-			units[i-1].End = units[i].Start
+			if cvs[1] == "h#" { // tail silence - set unknown end as start plus one
+				units[i].End = units[i].Start + 1
+			}
+			units[i-1].End = units[i].Start // all units up till final silence
 		}
 		units[i].Name = cvs[1] //
 		i++
