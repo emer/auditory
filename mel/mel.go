@@ -135,12 +135,12 @@ func FreqToBin(freq, nFft, sampleRate float32) int {
 func (mfb *FilterBank) Defaults() {
 	mfb.LoHz = 300
 	mfb.HiHz = 8000.0
-	mfb.NFilters = 39
+	mfb.NFilters = 40
 	mfb.LogOff = 0.0
 	mfb.LogMin = -10.0
 	mfb.Renorm = true
-	mfb.RenormMin = -5.0
-	mfb.RenormMax = 9.0
+	mfb.RenormMin = -6.0
+	mfb.RenormMax = 4.0
 }
 
 // Filter filters the current window_in input data according to current settings -- called by ProcessStep, but can be called separately
