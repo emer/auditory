@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
 	"path"
 	"path/filepath"
 	"strings"
@@ -61,8 +62,8 @@ type Table struct {
 	Sels  []string          `desc:"selected row ids in ascending order in view"`
 }
 
-// Params defines the sound input parameters for auditory processing
-type Params struct {
+// WinParams defines the sound input parameters for auditory processing
+type WinParams struct {
 	WinMs        float32 `def:"25" desc:"input window -- number of milliseconds worth of sound to filter at a time"`
 	StepMs       float32 `def:"10" desc:"input step -- number of milliseconds worth of sound that the input is stepped along to obtain the next window sample"`
 	SegmentStart float32 `desc:"start of sound segment in milliseconds"`
@@ -71,6 +72,7 @@ type Params struct {
 	Channel      int     `view:"-" desc:"specific channel to process, if input has multiple channels, and we only process one of them (-1 = process all)"`
 	PadValue     float32 `view:"-"`
 	Resize       bool    `desc:"if resize is true segment durations will be lengthened (a bit before and a bit after) to be a multiple of the filter width"`
+	//Threshold    int     `viewif:"Resize" desc:"only resize if the overage exceeds Threshold percent''"`
 
 	// these are calculated
 	WinSamples  int   `view:"-" desc:"number of samples to process each step"`
@@ -117,10 +119,11 @@ type App struct {
 	SndsTable Table             `desc:"table of sounds from the open sound files"`
 	Row       int               `view:"-" desc:"SndsTable selected row, as seen by user"`
 
-	Params    Params          `view:"inline" desc:"fundamental processing parameters"`
+	WParams1  WinParams       `view:"inline" desc:"fundamental processing parameters for sound 1"`
+	WParams2  WinParams       `view:"inline" desc:"fundamental processing parameters for sound 2"`
 	PParams1  ProcessParams   `desc:"the power and mel parameters for processing the sound to generate a mel filter bank for sound 1"`
-	GParams1  GaborParams     `desc:"gabor filter specifications and parameters for applying gabors to the mel output for sound 1"`
 	PParams2  ProcessParams   `desc:"the power and mel parameters for processing the sound to generate a mel filter bank for sound 2"`
+	GParams1  GaborParams     `desc:"gabor filter specifications and parameters for applying gabors to the mel output for sound 1"`
 	GParams2  GaborParams     `desc:"gabor filter specifications and parameters for applying gabors to the mel output for sound 2"`
 	Sound     sound.Wave      `view:"inline"`
 	Signal    etensor.Float32 `view:"-" desc:" the full sound input obtained from the sound input - plus any added padding"`
@@ -141,7 +144,8 @@ func (ss *App) New() {
 
 // Init
 func (ap *App) Init() {
-	ap.ParamDefaults()
+	ap.WinDefaults(&ap.WParams1)
+	ap.WinDefaults(&ap.WParams2)
 	ap.PParams1.Mel.Defaults()
 	ap.PParams2.Mel.Defaults()
 	ap.InitGabors(&ap.GParams1)
@@ -152,14 +156,14 @@ func (ap *App) Init() {
 	ap.GUI.Active = false
 }
 
-// ParamDefaults initializes the sound processing parameters
-func (ap *App) ParamDefaults() {
-	ap.Params.WinMs = 25.0
-	ap.Params.StepMs = 10.0
-	ap.Params.Channel = 0
-	ap.Params.PadValue = 0.0
-	ap.Params.BorderSteps = 0
-	ap.Params.Resize = true
+// WinDefaults initializes the sound processing parameters
+func (ap *App) WinDefaults(wparams *WinParams) {
+	wparams.WinMs = 25.0
+	wparams.StepMs = 10.0
+	wparams.Channel = 0
+	wparams.PadValue = 0.0
+	wparams.BorderSteps = 0
+	wparams.Resize = true
 }
 
 // Config configures environment elements
@@ -217,41 +221,43 @@ func (ap *App) UpdateGabors(params *GaborParams) {
 
 // Process generates the mel output and from that the result of the convolution with the gabor filters
 // Must call ProcessSetup() first !
-func (ap *App) Process(pparams *ProcessParams, gparams *GaborParams) (err error) {
-	ap.LoadSound() // actually load the sound
+func (ap *App) Process(wparams *WinParams, pparams *ProcessParams, gparams *GaborParams) (err error) {
+	ap.LoadSound(wparams) // actually load the sound
 
 	if ap.Sound.Buf == nil {
 		gi.PromptDialog(nil, gi.DlgOpts{Title: "Sound buffer is empty", Prompt: "Open a sound file before processing"}, gi.AddOk, gi.NoCancel, nil, nil)
 		return errors.New("Load a sound file and try again")
 	}
 
-	if ap.Params.SegmentEnd <= ap.Params.SegmentStart {
+	if wparams.SegmentEnd <= wparams.SegmentStart {
 		gi.PromptDialog(nil, gi.DlgOpts{Title: "End <= Start", Prompt: "SegmentEnd must be greater than SegmentStart."}, gi.AddOk, gi.NoCancel, nil, nil)
 		return errors.New("SegmentEnd <= SegmentStart")
 	}
 
-	duration := ap.Params.SegmentEnd - ap.Params.SegmentStart
-	stepMs := ap.Params.StepMs
-	sizeXMs := float32(gparams.GaborSet.SizeX) * stepMs
-	strideXMs := float32(gparams.GaborSet.StrideX) * stepMs
-	add := float32(0)
-	if duration < sizeXMs {
-		add = sizeXMs - duration
-	} else { // duration is longer than one filter so find the next stride end
-		d := duration
-		d -= sizeXMs
-		rem := float32(int(d) % int(strideXMs))
-		if rem > 0 {
-			add = strideXMs - rem
+	if wparams.Resize {
+		duration := wparams.SegmentEnd - wparams.SegmentStart
+		stepMs := wparams.StepMs
+		sizeXMs := float32(gparams.GaborSet.SizeX) * stepMs
+		strideXMs := float32(gparams.GaborSet.StrideX) * stepMs
+		add := float32(0)
+		if duration < sizeXMs {
+			add = sizeXMs - duration
+		} else { // duration is longer than one filter so find the next stride end
+			d := duration
+			d -= sizeXMs
+			rem := float32(int(d) % int(strideXMs))
+			if rem > 0 {
+				add = strideXMs - rem
+			}
 		}
+		if wparams.SegmentStart-add < 0 {
+			wparams.SegmentEnd += add
+		} else {
+			wparams.SegmentStart -= add / 2
+			wparams.SegmentEnd += add / 2
+		}
+		ap.GUI.UpdateWindow()
 	}
-	if ap.Params.SegmentStart-add < 0 {
-		ap.Params.SegmentEnd += add
-	} else {
-		ap.Params.SegmentStart -= add / 2
-		ap.Params.SegmentEnd += add / 2
-	}
-	ap.GUI.UpdateWindow()
 
 	sr := ap.Sound.SampleRate()
 	if sr <= 0 {
@@ -259,28 +265,28 @@ func (ap *App) Process(pparams *ProcessParams, gparams *GaborParams) (err error)
 		return errors.New("sample rate <= 0")
 
 	}
-	ap.Params.WinSamples = sound.MSecToSamples(ap.Params.WinMs, sr)
-	ap.Params.StepSamples = sound.MSecToSamples(ap.Params.StepMs, sr)
+	wparams.WinSamples = sound.MSecToSamples(wparams.WinMs, sr)
+	wparams.StepSamples = sound.MSecToSamples(wparams.StepMs, sr)
 
 	// round up to nearest step interval
-	segmentMs := ap.Params.SegmentEnd - ap.Params.SegmentStart
-	segmentMs = segmentMs + ap.Params.StepMs*float32(int(segmentMs)%int(ap.Params.StepMs))
+	segmentMs := wparams.SegmentEnd - wparams.SegmentStart
+	segmentMs = segmentMs + wparams.StepMs*float32(int(segmentMs)%int(wparams.StepMs))
 
-	steps := int(segmentMs / ap.Params.StepMs)
-	ap.Params.StepsTotal = steps + 2*ap.Params.BorderSteps
+	steps := int(segmentMs / wparams.StepMs)
+	wparams.StepsTotal = steps + 2*wparams.BorderSteps
 
-	winSamplesHalf := ap.Params.WinSamples/2 + 1
-	pparams.Dft.Initialize(ap.Params.WinSamples)
-	pparams.Mel.InitFilters(ap.Params.WinSamples, ap.Sound.SampleRate(), &pparams.MelFilters) // call after non-default values are set!
-	ap.Window.SetShape([]int{ap.Params.WinSamples}, nil, nil)
+	winSamplesHalf := wparams.WinSamples/2 + 1
+	pparams.Dft.Initialize(wparams.WinSamples)
+	pparams.Mel.InitFilters(wparams.WinSamples, ap.Sound.SampleRate(), &pparams.MelFilters) // call after non-default values are set!
+	ap.Window.SetShape([]int{wparams.WinSamples}, nil, nil)
 	pparams.Power.SetShape([]int{winSamplesHalf}, nil, nil)
 	pparams.LogPower.CopyShapeFrom(&pparams.Power)
-	pparams.PowerSegment.SetShape([]int{ap.Params.StepsTotal, winSamplesHalf, ap.Sound.Channels()}, nil, nil)
+	pparams.PowerSegment.SetShape([]int{wparams.StepsTotal, winSamplesHalf, ap.Sound.Channels()}, nil, nil)
 	if pparams.Dft.CompLogPow {
 		pparams.LogPowerSegment.CopyShapeFrom(&pparams.PowerSegment)
 	}
 
-	gparams.FftCoefs = make([]complex128, ap.Params.WinSamples)
+	gparams.FftCoefs = make([]complex128, wparams.WinSamples)
 	gparams.Fft = fourier.NewCmplxFFT(len(gparams.FftCoefs))
 
 	// 2 reasons for this code
@@ -290,19 +296,19 @@ func (ap *App) Process(pparams *ProcessParams, gparams *GaborParams) (err error)
 	// so that the leading edge (right edge) is the same time point.
 	// This code does this by generating negative offsets for the start of the processing.
 	// Also see SndToWindow for the use of the step values
-	stepsBack := ap.Params.BorderSteps
-	ap.Params.Steps = make([]int, ap.Params.StepsTotal)
-	for i := 0; i < ap.Params.StepsTotal; i++ {
-		ap.Params.Steps[i] = ap.Params.StepSamples * (i - stepsBack)
+	stepsBack := wparams.BorderSteps
+	wparams.Steps = make([]int, wparams.StepsTotal)
+	for i := 0; i < wparams.StepsTotal; i++ {
+		wparams.Steps[i] = wparams.StepSamples * (i - stepsBack)
 	}
 
 	pparams.MelFBank.SetShape([]int{pparams.Mel.FBank.NFilters}, nil, nil)
-	pparams.MelFBankSegment.SetShape([]int{ap.Params.StepsTotal, pparams.Mel.FBank.NFilters, ap.Sound.Channels()}, nil, nil)
+	pparams.MelFBankSegment.SetShape([]int{wparams.StepsTotal, pparams.Mel.FBank.NFilters, ap.Sound.Channels()}, nil, nil)
 	if pparams.Mel.MFCC {
 		pparams.MfccDctSegment.CopyShapeFrom(&pparams.MelFBankSegment)
 		pparams.MfccDct.SetShape([]int{pparams.Mel.FBank.NFilters}, nil, nil)
 	}
-	samples := sound.MSecToSamples(ap.Params.SegmentEnd-ap.Params.SegmentStart, ap.Sound.SampleRate())
+	samples := sound.MSecToSamples(wparams.SegmentEnd-wparams.SegmentStart, ap.Sound.SampleRate())
 	siglen := len(ap.Signal.Values) - samples*ap.Sound.Channels()
 	siglen = siglen / ap.Sound.Channels()
 
@@ -314,9 +320,10 @@ func (ap *App) Process(pparams *ProcessParams, gparams *GaborParams) (err error)
 	pparams.MfccDctSegment.SetZeros()
 
 	for ch := int(0); ch < ap.Sound.Channels(); ch++ {
-		for s := 0; s < int(ap.Params.StepsTotal); s++ {
-			err := ap.ProcessStep(ch, s, pparams, gparams)
+		for s := 0; s < int(wparams.StepsTotal); s++ {
+			err := ap.ProcessStep(ch, s, wparams, pparams, gparams)
 			if err != nil {
+				fmt.Println(err)
 				break
 			}
 		}
@@ -327,13 +334,14 @@ func (ap *App) Process(pparams *ProcessParams, gparams *GaborParams) (err error)
 // ProcessStep processes a step worth of sound input from current input_pos, and increment input_pos by input.step_samples
 // Process the data by doing a fourier transform and computing the power spectrum, then apply mel filters to get the frequency
 // bands that mimic the non-linear human perception of sound
-func (ap *App) ProcessStep(ch int, step int, pparams *ProcessParams, gparams *GaborParams) error {
-	offset := ap.Params.Steps[step]
-	start := sound.MSecToSamples(ap.Params.SegmentStart, ap.Sound.SampleRate()) + offset
-	err := ap.SndToWindow(start, ch)
+func (ap *App) ProcessStep(ch int, step int, wparams *WinParams, pparams *ProcessParams, gparams *GaborParams) error {
+	offset := wparams.Steps[step]
+	start := sound.MSecToSamples(wparams.SegmentStart, ap.Sound.SampleRate()) + offset
+	err := ap.SndToWindow(start, ch, wparams)
+	fmt.Println(err)
 	if err == nil {
-		gparams.Fft.Reset(ap.Params.WinSamples)
-		pparams.Dft.Filter(int(ch), int(step), &ap.Window, ap.FirstStep, ap.Params.WinSamples, gparams.FftCoefs, gparams.Fft, &pparams.Power, &pparams.LogPower, &pparams.PowerSegment, &pparams.LogPowerSegment)
+		gparams.Fft.Reset(wparams.WinSamples)
+		pparams.Dft.Filter(int(ch), int(step), &ap.Window, ap.FirstStep, wparams.WinSamples, gparams.FftCoefs, gparams.Fft, &pparams.Power, &pparams.LogPower, &pparams.PowerSegment, &pparams.LogPowerSegment)
 		pparams.Mel.Filter(int(ch), int(step), &ap.Window, &pparams.MelFilters, &pparams.Power, &pparams.MelFBankSegment, &pparams.MelFBank, &pparams.MfccDctSegment, &pparams.MfccDct)
 		ap.FirstStep = false
 	}
@@ -418,11 +426,11 @@ func (ap *App) LoadTranscription(fpth string) {
 }
 
 // LoadSound loads the sound file, e.g. .wav file, the transcription is loaded in LoadTranscription()
-func (ap *App) LoadSound() bool {
+func (ap *App) LoadSound(wparams *WinParams) bool {
 	if ap.Sound.Channels() > 1 {
 		ap.Sound.SoundToTensor(&ap.Signal, -1)
 	} else {
-		ap.Sound.SoundToTensor(&ap.Signal, ap.Params.Channel)
+		ap.Sound.SoundToTensor(&ap.Signal, wparams.Channel)
 	}
 	return true
 }
@@ -480,10 +488,10 @@ func (ap *App) SndFmIdx(seq speech.Sequence, idx int) (snd string, ok bool) {
 }
 
 // SndToWindow gets sound from the signal (i.e. the slice of input values) at given position and channel, into Window
-func (ap *App) SndToWindow(start, ch int) error {
+func (ap *App) SndToWindow(start, ch int, wparams *WinParams) error {
 	if ap.Signal.NumDims() == 1 {
-		//start := ap.Segment*int(ap.Params.StrideSamples) + stepOffset // segments start at zero
-		end := start + ap.Params.WinSamples
+		//start := ap.Segment*int(ap.WinParams.StrideSamples) + stepOffset // segments start at zero
+		end := start + wparams.WinSamples
 		if end > len(ap.Signal.Values) {
 			return errors.New("SndToWindow: end beyond signal length!!")
 		}
@@ -562,15 +570,15 @@ func (ap *App) ApplyKwta(ch int, gparams *GaborParams) {
 }
 
 // ProcessSetup grabs params from the selected sounds table row and sets params for the actual processing step
-func (ap *App) ProcessSetup() error {
+func (ap *App) ProcessSetup(wparams *WinParams) error {
 	if ap.SndsTable.Table.Rows == 0 {
 		gi.PromptDialog(nil, gi.DlgOpts{Title: "Sounds table empty", Prompt: "Open a sound file before processing"}, gi.AddOk, gi.NoCancel, nil, nil)
 		return errors.New("Load a sound file and try again")
 	}
 	ap.Row = ap.SndsTable.View.SelectedIdx
 	idx := ap.SndsTable.View.Table.Idxs[ap.Row]
-	ap.Params.SegmentStart = float32(ap.SndsTable.Table.CellFloat("Start", idx))
-	ap.Params.SegmentEnd = float32(ap.SndsTable.Table.CellFloat("End", idx))
+	wparams.SegmentStart = float32(ap.SndsTable.Table.CellFloat("Start", idx))
+	wparams.SegmentEnd = float32(ap.SndsTable.Table.CellFloat("End", idx))
 	d := ap.SndsTable.Table.CellString("Dir", idx)
 	f := ap.SndsTable.Table.CellString("File", idx)
 	id := d + "/" + f
@@ -603,13 +611,35 @@ func (ap *App) ConfigSoundsTable() {
 func (ap *App) ConfigTableView(tv *etview.TableView) {
 	tv.SetProp("inactive", true)
 	tv.SetInactive()
-	//tv.SliceViewSig.Connect(ap.GUI.ViewPort, func(recv, send ki.Ki, sig int64, data interface{}) {
-	//if sig == int64(giv.SliceViewDoubleClicked) {
-	//	ap.ProcessSetup()
-	//	ap.Sound.Load(ap.SndFile)
-	//	ap.GUI.UpdateWindow()
-	//}
-	//})
+	tv.SliceViewSig.Connect(ap.GUI.ViewPort, func(recv, send ki.Ki, sig int64, data interface{}) {
+		// ToDo: add option modifier for Process params 2
+		if sig == int64(giv.SliceViewDoubleClicked) {
+			ap.GUI.ToolBar.UpdateActions()
+			err := ap.ProcessSetup(&ap.WParams1)
+			if err == nil {
+				err = ap.Process(&ap.WParams1, &ap.PParams1, &ap.GParams1)
+				if err == nil {
+					ap.ApplyGabor(&ap.PParams1, &ap.GParams1)
+					ap.GUI.UpdateWindow()
+				}
+			}
+
+		}
+	})
+}
+
+// View opens the file with the selected sound in a spectrogram viewer application (currently Audacity)
+func (ap *App) View() {
+	//f := gn.WavsPath + ks + "_" + cs + "_" + vs + ".wav"
+	arg1 := ap.SndFile
+	arg2 := "-a"
+	arg3 := "Audacity"
+	cmd := exec.Command("open", arg1, arg2, arg3)
+	cmd.Stdout = os.Stdout
+	err := cmd.Run()
+	if err != nil {
+		log.Fatal(err)
+	}
 }
 
 // ConfigGui configures the GoGi gui interface for this simulation,
@@ -628,20 +658,20 @@ func (ap *App) ConfigGui() *gi.Window {
 
 	ap.GUI.AddToolbarItem(egui.ToolbarItem{Label: "Init", Icon: "update",
 		Tooltip: "Initialize everything including network weights, and start over.  Also applies current params.",
-		Active:  egui.ActiveStopped,
+		Active:  egui.ActiveAlways,
 		Func: func() {
 			ap.Init()
 			ap.GUI.UpdateWindow()
 		},
 	})
 
-	ap.GUI.AddToolbarItem(egui.ToolbarItem{Label: "Open Sound File",
+	ap.GUI.AddToolbarItem(egui.ToolbarItem{Label: "Open Sound Files",
 		Icon:    "file-open",
-		Tooltip: "Opens a file dialog for selecting a sound file",
+		Tooltip: "Opens a file dialog for selecting a single sound file or a directory of sound files (only .wav files work at this time)",
 		Active:  egui.ActiveAlways,
 		Func: func() {
 			exts := ".wav"
-			giv.FileViewDialog(ap.GUI.ViewPort, ap.SndPath, exts, giv.DlgOpts{Title: "Open .wav Sound File", Prompt: "Open a .wav file to load for sound processing."}, nil,
+			giv.FileViewDialog(ap.GUI.ViewPort, ap.SndPath, exts, giv.DlgOpts{Title: "Open .wav Sound File", Prompt: "Open a .wav file, or directory of .wav files, for sound processing."}, nil,
 				ap.GUI.Win.This(), func(recv, send ki.Ki, sig int64, data interface{}) {
 					if sig == int64(gi.DialogAccepted) {
 						dlg, _ := send.Embed(gi.KiT_Dialog).(*gi.Dialog)
@@ -656,9 +686,11 @@ func (ap *App) ConfigGui() *gi.Window {
 								if err != nil {
 									log.Fatalf(err.Error())
 								}
-								fmt.Printf("File Name: %s\n", info.Name())
-								fp := filepath.Join(fn, info.Name())
-								ap.LoadTranscription(fp)
+								if info.IsDir() == false {
+									//fmt.Printf("File Name: %s\n", info.Name())
+									fp := filepath.Join(fn, info.Name())
+									ap.LoadTranscription(fp)
+								}
 								return nil
 							})
 						} else {
@@ -689,10 +721,9 @@ func (ap *App) ConfigGui() *gi.Window {
 		Tooltip: "Process the segment of audio from SegmentStart to SegmentEnd applying the gabor filters to the Mel tensor",
 		Active:  egui.ActiveRunning,
 		Func: func() {
-			ap.GUI.ToolBar.UpdateActions()
-			err := ap.ProcessSetup()
+			err := ap.ProcessSetup(&ap.WParams1)
 			if err == nil {
-				err = ap.Process(&ap.PParams1, &ap.GParams1)
+				err = ap.Process(&ap.WParams1, &ap.PParams1, &ap.GParams1)
 				if err == nil {
 					ap.ApplyGabor(&ap.PParams1, &ap.GParams1)
 					ap.GUI.UpdateWindow()
@@ -705,9 +736,9 @@ func (ap *App) ConfigGui() *gi.Window {
 		Tooltip: "Process the segment of audio from SegmentStart to SegmentEnd applying the gabor filters to the Mel tensor",
 		Active:  egui.ActiveRunning,
 		Func: func() {
-			err := ap.ProcessSetup()
+			err := ap.ProcessSetup(&ap.WParams2)
 			if err == nil {
-				err = ap.Process(&ap.PParams2, &ap.GParams2)
+				err = ap.Process(&ap.WParams2, &ap.PParams2, &ap.GParams2)
 				if err == nil {
 					ap.ApplyGabor(&ap.PParams2, &ap.GParams2)
 					ap.GUI.UpdateWindow()
@@ -729,9 +760,9 @@ func (ap *App) ConfigGui() *gi.Window {
 			}
 			ap.SndsTable.View.SelectedIdx = ap.Row
 			ap.SndsTable.View.SelectIdx(ap.Row)
-			err := ap.ProcessSetup()
+			err := ap.ProcessSetup(&ap.WParams2)
 			if err == nil {
-				err = ap.Process(&ap.PParams1, &ap.GParams1)
+				err = ap.Process(&ap.WParams2, &ap.PParams1, &ap.GParams1)
 				if err == nil {
 					ap.ApplyGabor(&ap.PParams1, &ap.GParams1)
 					ap.GUI.UpdateWindow()
@@ -753,9 +784,9 @@ func (ap *App) ConfigGui() *gi.Window {
 			}
 			ap.SndsTable.View.SelectedIdx = ap.Row
 			ap.SndsTable.View.SelectIdx(ap.Row)
-			err := ap.ProcessSetup()
+			err := ap.ProcessSetup(&ap.WParams2)
 			if err == nil {
-				err = ap.Process(&ap.PParams2, &ap.GParams2)
+				err = ap.Process(&ap.WParams2, &ap.PParams2, &ap.GParams2)
 				if err == nil {
 					ap.ApplyGabor(&ap.PParams2, &ap.GParams2)
 					ap.GUI.UpdateWindow()
@@ -788,7 +819,17 @@ func (ap *App) ConfigGui() *gi.Window {
 		Tooltip: "clear sounds table filter",
 		Active:  egui.ActiveRunning,
 		Func: func() {
-			giv.CallMethod(ap, "UnfilterSounds", ap.GUI.ViewPort)
+			ap.UnfilterSounds()
+			ap.GUI.UpdateWindow()
+		},
+	})
+
+	ap.GUI.AddToolbarItem(egui.ToolbarItem{Label: "View", Icon: "file-open",
+		Tooltip: "opens spectrogram view of selected sound",
+		Active:  egui.ActiveRunning,
+		Func: func() {
+			ap.View()
+			//giv.CallMethod(ap, "ViewSpectrogram", ap.GUI.ViewPort)
 		},
 	})
 
@@ -822,7 +863,7 @@ func (ap *App) ConfigGui() *gi.Window {
 
 	tg := tv.AddNewTab(etview.KiT_TensorGrid, "Gabors").(*etview.TensorGrid)
 	tg.SetStretchMax()
-	//ap.PParams1.LogPowerSegment.SetMetaData("grid-min", "10")
+	ap.PParams1.LogPowerSegment.SetMetaData("grid-min", "10")
 	tg.SetTensor(&ap.GParams1.GaborSet.Filters)
 
 	tg = tv.AddNewTab(etview.KiT_TensorGrid, "Power").(*etview.TensorGrid)
@@ -839,7 +880,7 @@ func (ap *App) ConfigGui() *gi.Window {
 	tg.SetTensor(&ap.GParams1.GborOutput)
 
 	tv2 := gi.AddNewTabView(split, "tv2")
-	split.SetSplits(.2, .2, .2, .2, .2)
+	split.SetSplits(.3, .15, .15, .2, .2)
 
 	tg = tv2.AddNewTab(etview.KiT_TensorGrid, "Gabors").(*etview.TensorGrid)
 	tg.SetStretchMax()

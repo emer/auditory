@@ -44,30 +44,29 @@ type Params struct {
 	PadValue    float32
 
 	// these are calculated
-	WinSamples        int   `inactive:"+" desc:"number of samples to process each step"`
-	StepSamples       int   `inactive:"+" desc:"number of samples to step input by"`
-	SegmentSamples    int   `inactive:"+" desc:"number of samples in a segment"`
-	StrideSamples     int   `inactive:"+" desc:"number of samples converted from StrideMS"`
-	SegmentSteps      int   `inactive:"+" desc:"number of steps in a segment"`
-	SegmentStepsTotal int   `inactive:"+" desc:"SegmentSteps plus steps overlapping next segment or for padding if no next segment"`
-	Steps             []int `inactive:"+" desc:"pre-calculated start position for each step"`
+	WinSamples     int   `inactive:"+" desc:"number of samples to process each step"`
+	StepSamples    int   `inactive:"+" desc:"number of samples to step input by"`
+	SegmentSamples int   `inactive:"+" desc:"number of samples in a segment"`
+	StrideSamples  int   `inactive:"+" desc:"number of samples converted from StrideMS"`
+	SegmentSteps   int   `inactive:"+" desc:"SegmentSteps plus steps overlapping next segment or for padding if no next segment"`
+	Steps          []int `inactive:"+" desc:"pre-calculated start position for each step"`
 }
 
 // ParamDefaults initializes the Input
 func (sp *SndProcess) ParamDefaults() {
 	sp.Params.WinMs = 25.0
-	sp.Params.StepMs = 5.0
+	sp.Params.StepMs = 10.0
 	sp.Params.SegmentMs = 100.0
 	sp.Params.Channel = 0
 	sp.Params.PadValue = 0.0
 	sp.Params.StrideMs = 100.0
-	sp.Params.BorderSteps = 6
+	sp.Params.BorderSteps = 2
 }
 
 // SndProcess encapsulates a specific auditory processing pipeline in
 // use in a given case -- can add / modify this as needed
 type SndProcess struct {
-	Params          Params
+	Params          Params            `desc:"basic window and time parameters"`
 	Sound           sound.Wave        `view:"no-inline"`
 	Signal          etensor.Float32   `view:"-" desc:" the full sound input obtained from the sound input - plus any added padding"`
 	Samples         etensor.Float32   `view:"-" desc:" a window's worth of raw sound input, one channel at a time"`
@@ -83,7 +82,7 @@ type SndProcess struct {
 	MfccDct         etensor.Float32   `view:"-" desc:" discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
 	MfccDctSegment  etensor.Float32   `view:"-" desc:" full segment's worth of discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
 	GaborSpecs      []agabor.Filter   `view:" no-inline" desc:"array of params describing each gabor filter"`
-	GaborFilters    agabor.FilterSet  `view:"no-inline" desc:"a set of gabor filters with same x and y dimensions"`
+	GaborFilters    agabor.FilterSet  `desc:"a set of gabor filters with same x and y dimensions"`
 	GaborTsr        etensor.Float32   `view:"no-inline" desc:" raw output of Gabor -- full segment's worth of gabor steps"`
 	GaborTab        etable.Table      `view:"no-inline" desc:"gabor filter table (view only)"`
 	Segment         int               `inactive:"+" desc:"current segment of full sound (zero based)"`
@@ -103,6 +102,7 @@ type SndProcess struct {
 	MelGrid    *etview.TensorGrid `view:"-" desc:"melfbank grid view for the current segment"`
 	GaborGrid  *etview.TensorGrid `view:"-" desc:"gabor grid view for the result of applying gabor filters to mel output"`
 	SndName    string             `view:"inactive" desc:"just the name, no path"`
+	ByTime     bool               `desc:"display the gabor filtering result by time and then by filter, default is to order by filter and then time"`
 }
 
 func (sp *SndProcess) Config() {
@@ -111,8 +111,8 @@ func (sp *SndProcess) Config() {
 	sp.Params.WinSamples = MSecToSamples(sp.Params.WinMs, sr)
 	sp.Params.StepSamples = MSecToSamples(sp.Params.StepMs, sr)
 	sp.Params.SegmentSamples = MSecToSamples(sp.Params.SegmentMs, sr)
-	sp.Params.SegmentSteps = int(math.Round(float64(sp.Params.SegmentMs / sp.Params.StepMs)))
-	sp.Params.SegmentStepsTotal = sp.Params.SegmentSteps + 2*sp.Params.BorderSteps
+	steps := int(math.Round(float64(sp.Params.SegmentMs / sp.Params.StepMs)))
+	sp.Params.SegmentSteps = steps + 2*sp.Params.BorderSteps
 	sp.Params.StrideSamples = MSecToSamples(sp.Params.StrideMs, sr)
 
 	sp.Dft.Initialize(sp.Params.WinSamples)
@@ -122,18 +122,18 @@ func (sp *SndProcess) Config() {
 	sp.Samples.SetShape([]int{sp.Params.WinSamples}, nil, nil)
 	sp.Power.SetShape([]int{sp.Params.WinSamples/2 + 1}, nil, nil)
 	sp.LogPower.SetShape([]int{sp.Params.WinSamples/2 + 1}, nil, nil)
-	sp.PowerSegment.SetShape([]int{sp.Params.SegmentStepsTotal, sp.Params.WinSamples/2 + 1, sp.Sound.Channels()}, nil, nil)
+	sp.PowerSegment.SetShape([]int{sp.Params.SegmentSteps, sp.Params.WinSamples/2 + 1, sp.Sound.Channels()}, nil, nil)
 	if sp.Dft.CompLogPow {
-		sp.LogPowerSegment.SetShape([]int{sp.Params.SegmentStepsTotal, sp.Params.WinSamples/2 + 1, sp.Sound.Channels()}, nil, nil)
+		sp.LogPowerSegment.SetShape([]int{sp.Params.SegmentSteps, sp.Params.WinSamples/2 + 1, sp.Sound.Channels()}, nil, nil)
 	}
 
 	sp.FftCoefs = make([]complex128, sp.Params.WinSamples)
 	sp.Fft = fourier.NewCmplxFFT(len(sp.FftCoefs))
 
 	sp.MelFBank.SetShape([]int{sp.Mel.FBank.NFilters}, nil, nil)
-	sp.MelFBankSegment.SetShape([]int{sp.Params.SegmentStepsTotal, sp.Mel.FBank.NFilters, sp.Sound.Channels()}, nil, nil)
+	sp.MelFBankSegment.SetShape([]int{sp.Params.SegmentSteps, sp.Mel.FBank.NFilters, sp.Sound.Channels()}, nil, nil)
 	if sp.Mel.MFCC {
-		sp.MfccDctSegment.SetShape([]int{sp.Params.SegmentStepsTotal, sp.Mel.FBank.NFilters, sp.Sound.Channels()}, nil, nil)
+		sp.MfccDctSegment.SetShape([]int{sp.Params.SegmentSteps, sp.Mel.FBank.NFilters, sp.Sound.Channels()}, nil, nil)
 		sp.MfccDct.SetShape([]int{sp.Mel.FBank.NFilters}, nil, nil)
 	}
 
@@ -141,8 +141,8 @@ func (sp *SndProcess) Config() {
 	sp.Segment = -1
 	sp.MoreSegments = true
 
-	sp.GaborFilters.SizeX = 15
-	sp.GaborFilters.SizeY = 15
+	sp.GaborFilters.SizeX = 9
+	sp.GaborFilters.SizeY = 9
 	sp.GaborFilters.StrideX = 3
 	sp.GaborFilters.StrideY = 3
 	sp.GaborFilters.Gain = 2
@@ -150,6 +150,7 @@ func (sp *SndProcess) Config() {
 
 	// for orientation 0 (horiz) length is height as you view the filter
 	sp.GaborSpecs = nil // in case there are some specs already
+	sp.ByTime = false
 
 	i := 0
 	var w float32
@@ -193,8 +194,8 @@ func (sp *SndProcess) Config() {
 	strides := int(sp.Params.SegmentMs / sp.Params.StrideMs)
 	stepsPerStride := int(sp.Params.StrideMs / sp.Params.StepMs)
 	stepsBack := stepsPerStride*(strides-1) + sp.Params.BorderSteps
-	sp.Params.Steps = make([]int, sp.Params.SegmentStepsTotal)
-	for i := 0; i < sp.Params.SegmentStepsTotal; i++ {
+	sp.Params.Steps = make([]int, sp.Params.SegmentSteps)
+	for i := 0; i < sp.Params.SegmentSteps; i++ {
 		sp.Params.Steps[i] = sp.Params.StepSamples * (i - stepsBack)
 	}
 }
@@ -253,7 +254,7 @@ func (sp *SndProcess) ProcessSegment() {
 		moreSamples := true
 		sp.Segment++
 		for ch := int(0); ch < sp.Sound.Channels(); ch++ {
-			for s := 0; s < int(sp.Params.SegmentStepsTotal); s++ {
+			for s := 0; s < int(sp.Params.SegmentSteps); s++ {
 				moreSamples = sp.ProcessStep(ch, s)
 				if !moreSamples {
 					sp.MoreSegments = false
@@ -282,7 +283,7 @@ func (sp *SndProcess) ProcessStep(ch, step int) bool {
 // ApplyGabor convolves the gabor filters with the mel output
 func (sp *SndProcess) ApplyGabor() {
 	for ch := int(0); ch < sp.Sound.Channels(); ch++ {
-		agabor.Convolve(ch, &sp.MelFBankSegment, sp.GaborFilters, &sp.GaborTsr)
+		agabor.Convolve(ch, &sp.MelFBankSegment, sp.GaborFilters, &sp.GaborTsr, sp.ByTime)
 	}
 }
 
