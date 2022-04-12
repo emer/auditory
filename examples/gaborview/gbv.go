@@ -118,6 +118,8 @@ type App struct {
 	Sequence  []speech.Sequence `view:"no-inline" desc:"a slice of Sequence structs, one per open sound file"`
 	SndsTable Table             `desc:"table of sounds from the open sound files"`
 	Row       int               `view:"-" desc:"SndsTable selected row, as seen by user"`
+	LastFile  string            `view:"-" desc:"name of the last sound file loaded, compare with this and don't reload if processing sound from same file'"`
+	Load      bool              `view:"-" desc:"used to prevent reloading a file we are already processing"`
 
 	WParams1  WinParams       `view:"inline" desc:"fundamental processing parameters for sound 1"`
 	WParams2  WinParams       `view:"inline" desc:"fundamental processing parameters for sound 2"`
@@ -222,7 +224,9 @@ func (ap *App) UpdateGabors(params *GaborParams) {
 // Process generates the mel output and from that the result of the convolution with the gabor filters
 // Must call ProcessSetup() first !
 func (ap *App) Process(wparams *WinParams, pparams *ProcessParams, gparams *GaborParams) (err error) {
-	ap.LoadSound(wparams) // actually load the sound
+	if ap.Load {
+		ap.LoadSound(wparams) // actually load the sound
+	}
 
 	if ap.Sound.Buf == nil {
 		gi.PromptDialog(nil, gi.DlgOpts{Title: "Sound buffer is empty", Prompt: "Open a sound file before processing"}, gi.AddOk, gi.NoCancel, nil, nil)
@@ -587,6 +591,12 @@ func (ap *App) ProcessSetup(wparams *WinParams) error {
 			ap.SndFile = s.File
 		}
 	}
+	if ap.SndFile == ap.LastFile {
+		ap.Load = false
+	} else {
+		ap.LastFile = ap.SndFile
+		ap.Load = true
+	}
 	return nil
 }
 
@@ -682,6 +692,9 @@ func (ap *App) ConfigGui() *gi.Window {
 							return
 						}
 						if info.IsDir() {
+							// Could do fully recursive by passing path var to LoadTranscription but I
+							// tried it and it didn't return from TIMIT/TRAIN/DR1 even after 10 minutes
+							// This way it does one level directory only and is fast
 							filepath.Walk(fn, func(path string, info os.FileInfo, err error) error {
 								if err != nil {
 									log.Fatalf(err.Error())
