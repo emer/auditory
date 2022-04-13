@@ -53,7 +53,6 @@ func (snd *Wave) Load(fn string) error {
 // WriteWave encodes the signal data and writes it to file using the sample rate and
 // other values of the buf object
 func (snd *Wave) WriteWave(fn string) error {
-	//func (snd *Wave) WavToFile(fn string, sampleRate int, bitDepth int, numChannels int, format int) error {
 	out, err := os.Create(fn)
 	if err != nil {
 		log.Printf("unable to create %s: %v", fn, err)
