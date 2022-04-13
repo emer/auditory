@@ -29,11 +29,11 @@ func (dft *Params) Initialize(winSamples int) {
 }
 
 // Filter filters the current window_in input data according to current settings -- called by ProcessStep, but can be called separately
-func (dft *Params) Filter(ch int, step int, windowIn *etensor.Float32, firstStep bool, winSamples int, fftCoefs []complex128, fft *fourier.CmplxFFT, power *etensor.Float32, logPower *etensor.Float32, powerForSegment *etensor.Float32, logPowerForSegment *etensor.Float32) {
+func (dft *Params) Filter(ch int, step int, windowIn *etensor.Float32, winSamples int, fftCoefs []complex128, fft *fourier.CmplxFFT, power *etensor.Float32, logPower *etensor.Float32, powerForSegment *etensor.Float32, logPowerForSegment *etensor.Float32) {
 	dft.FftReal(fftCoefs, windowIn)
 	fft = fourier.NewCmplxFFT(len(fftCoefs))
 	fftCoefs = fft.Coefficients(nil, fftCoefs)
-	dft.Power(ch, step, firstStep, winSamples, fftCoefs, power, logPower, powerForSegment, logPowerForSegment)
+	dft.Power(ch, step, winSamples, fftCoefs, power, logPower, powerForSegment, logPowerForSegment)
 }
 
 // FftReal
@@ -46,13 +46,12 @@ func (dft *Params) FftReal(fftCoefs []complex128, in *etensor.Float32) {
 }
 
 // Power
-func (dft *Params) Power(ch, step int, firstStep bool, winSamples int, fftCoefs []complex128, power *etensor.Float32, logPower *etensor.Float32, powerForSegment *etensor.Float32, logPowerForSegment *etensor.Float32) {
-	// Mag() is absolute value   SqMag is square of it - r*r + i*i
+func (dft *Params) Power(ch, step int, winSamples int, fftCoefs []complex128, power *etensor.Float32, logPower *etensor.Float32, powerForSegment *etensor.Float32, logPowerForSegment *etensor.Float32) {
 	for k := 0; k < winSamples/2+1; k++ {
 		rl := real(fftCoefs[k])
 		im := imag(fftCoefs[k])
 		powr := float64(rl*rl + im*im)
-		if firstStep == false {
+		if step > 0 {
 			powr = float64(dft.PrevSmooth)*power.FloatVal1D(k) + float64(dft.CurSmooth)*powr
 		}
 		power.SetFloat1D(k, powr)
