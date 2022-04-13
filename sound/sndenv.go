@@ -265,7 +265,10 @@ func (se *SndEnv) ProcessStep(ch int, step int) error {
 	if err == nil {
 		se.Fft.Reset(se.Params.WinSamples)
 		se.Dft.Filter(int(ch), int(step), &se.Window, se.FirstStep, se.Params.WinSamples, se.FftCoefs, se.Fft, &se.Power, &se.LogPower, &se.PowerSegment, &se.LogPowerSegment)
-		se.Mel.Filter(int(ch), int(step), &se.Window, &se.MelFilters, &se.Power, &se.MelFBankSegment, &se.MelFBank, &se.MfccDctSegment, &se.MfccDct)
+		se.Mel.FilterDft(int(ch), int(step), &se.Power, &se.MelFBankSegment, &se.MelFBank, &se.MelFilters)
+		if se.Mel.MFCC {
+			se.Mel.CepstrumDct(ch, step, &se.MelFBank, &se.MfccDctSegment, &se.MfccDct)
+		}
 		se.FirstStep = false
 	}
 	return err

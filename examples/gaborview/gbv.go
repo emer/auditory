@@ -82,17 +82,17 @@ type WinParams struct {
 }
 
 type ProcessParams struct {
-	Dft             dft.Params      `view:"-" desc:" "`
-	Power           etensor.Float32 `view:"-" desc:" power of the dft, up to the nyquist limit frequency (1/2 input.WinSamples)"`
-	LogPower        etensor.Float32 `view:"-" desc:" log power of the dft, up to the nyquist liit frequency (1/2 input.WinSamples)"`
+	Dft             dft.Params      `view:"inline" desc:" "`
+	Power           etensor.Float32 `view:"+" desc:" power of the dft, up to the nyquist limit frequency (1/2 input.WinSamples)"`
+	LogPower        etensor.Float32 `view:"+" desc:" log power of the dft, up to the nyquist liit frequency (1/2 input.WinSamples)"`
 	PowerSegment    etensor.Float32 `view:"no-inline" desc:" full segment's worth of power of the dft, up to the nyquist limit frequency (1/2 input.WinSamples)"`
 	LogPowerSegment etensor.Float32 `view:"no-inline" desc:" full segment's worth of log power of the dft, up to the nyquist limit frequency (1/2 input.WinSamples)"`
 	Mel             mel.Params      `view:"inline"`
 	MelFBank        etensor.Float32 `view:"no-inline" desc:" mel scale transformation of dft_power, using triangular filters, resulting in the mel filterbank output -- the natural log of this is typically applied"`
 	MelFBankSegment etensor.Float32 `view:"no-inline" desc:" full segment's worth of mel feature-bank output"`
 	MelFilters      etensor.Float32 `view:"no-inline" desc:" the actual filters"`
-	MfccDct         etensor.Float32 `view:"-" desc:" discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
-	MfccDctSegment  etensor.Float32 `view:"-" desc:" full segment's worth of discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
+	MfccDct         etensor.Float32 `view:"no-inline" desc:" discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
+	MfccDctSegment  etensor.Float32 `view:"no-inline" desc:" full segment's worth of discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
 }
 
 type GaborParams struct {
@@ -102,8 +102,8 @@ type GaborParams struct {
 	GborKwta   etensor.Float32   `view:"no-inline" desc:" post-kwta output of full segment's worth of gabor steps"`
 	Inhibs     fffb.Inhibs       `view:"no-inline" desc:"inhibition values for A1 KWTA"`
 	ExtGi      etensor.Float32   `view:"no-inline" desc:"A1 simple extra Gi from neighbor inhibition tensor"`
-	NeighInhib kwta.NeighInhib   `desc:"neighborhood inhibition for V1s -- each unit gets inhibition from same feature in nearest orthogonal neighbors -- reduces redundancy of feature code"`
-	Kwta       kwta.KWTA         `desc:"kwta parameters, using FFFB form"`
+	NeighInhib kwta.NeighInhib   `view:"no-inline" desc:"neighborhood inhibition for V1s -- each unit gets inhibition from same feature in nearest orthogonal neighbors -- reduces redundancy of feature code"`
+	Kwta       kwta.KWTA         `view:"no-inline" desc:"kwta parameters, using FFFB form"`
 	FftCoefs   []complex128      `view:"-" desc:" discrete fourier transform (fft) output complex representation"`
 	Fft        *fourier.CmplxFFT `view:"-" desc:" struct for fast fourier transform"`
 }
@@ -132,6 +132,7 @@ type App struct {
 	Window    etensor.Float32 `view:"-" desc:" [Input.WinSamples] the raw sound input, one channel at a time"`
 	ByTime    bool            `desc:"display the gabor filtering result by time and then by filter, default is to order by filter and then time"`
 	FirstStep bool            `view:"-" desc:" if first frame to process -- turns off prv smoothing of dft power"`
+	DetailTab gi.Node2D
 }
 
 // this registers this Sim Type and gives it properties that e.g.,
@@ -346,7 +347,10 @@ func (ap *App) ProcessStep(ch int, step int, wparams *WinParams, pparams *Proces
 	if err == nil {
 		gparams.Fft.Reset(wparams.WinSamples)
 		pparams.Dft.Filter(int(ch), int(step), &ap.Window, ap.FirstStep, wparams.WinSamples, gparams.FftCoefs, gparams.Fft, &pparams.Power, &pparams.LogPower, &pparams.PowerSegment, &pparams.LogPowerSegment)
-		pparams.Mel.Filter(int(ch), int(step), &ap.Window, &pparams.MelFilters, &pparams.Power, &pparams.MelFBankSegment, &pparams.MelFBank, &pparams.MfccDctSegment, &pparams.MfccDct)
+		pparams.Mel.FilterDft(int(ch), int(step), &pparams.Power, &pparams.MelFBankSegment, &pparams.MelFBank, &pparams.MelFilters)
+		if pparams.Mel.MFCC {
+			pparams.Mel.CepstrumDct(ch, step, &pparams.MelFBank, &pparams.MfccDctSegment, &pparams.MfccDct)
+		}
 		ap.FirstStep = false
 	}
 	return err
@@ -838,7 +842,7 @@ func (ap *App) ConfigGui() *gi.Window {
 	})
 
 	ap.GUI.AddToolbarItem(egui.ToolbarItem{Label: "View", Icon: "file-open",
-		Tooltip: "opens spectrogram view of selected sound",
+		Tooltip: "opens spectrogram view of selected sound in external application 'Audacity' - edit code to use a different application",
 		Active:  egui.ActiveRunning,
 		Func: func() {
 			ap.View()
@@ -891,6 +895,9 @@ func (ap *App) ConfigGui() *gi.Window {
 	tg = tv.AddNewTab(etview.KiT_TensorGrid, "Result").(*etview.TensorGrid)
 	tg.SetStretchMax()
 	tg.SetTensor(&ap.GParams1.GborOutput)
+
+	//ap.DetailTab = tv.AddNewTab(etview.KiT_TensorGrid, "Detail").(*etview.TensorGrid)
+	//ap.DetailTab.SetName("Detail")
 
 	tv2 := gi.AddNewTabView(split, "tv2")
 	split.SetSplits(.3, .15, .15, .2, .2)
