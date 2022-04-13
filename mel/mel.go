@@ -81,7 +81,7 @@ func (mel *Params) InitFilters(dftSize int, sampleRate int, filters *etensor.Flo
 }
 
 // FilterDft applies the mel filters to power of dft
-func (mel *Params) FilterDft(ch, step int, dftPowerOut etensor.Float32, segmentData *etensor.Float32, fBankData *etensor.Float32, filters *etensor.Float32) {
+func (mel *Params) FilterDft(ch, step int, dftPowerOut *etensor.Float32, segmentData *etensor.Float32, fBankData *etensor.Float32, filters *etensor.Float32) {
 	mi := 0
 	for flt := 0; flt < int(mel.FBank.NFilters); flt, mi = flt+1, mi+1 {
 		minBin := mel.BinPts[flt]
