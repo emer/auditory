@@ -131,7 +131,6 @@ type App struct {
 	Signal    etensor.Float32 `view:"-" desc:" the full sound input obtained from the sound input - plus any added padding"`
 	Window    etensor.Float32 `view:"-" desc:" [Input.WinSamples] the raw sound input, one channel at a time"`
 	ByTime    bool            `desc:"display the gabor filtering result by time and then by filter, default is to order by filter and then time"`
-	FirstStep bool            `view:"-" desc:" if first frame to process -- turns off prv smoothing of dft power"`
 	DetailTab gi.Node2D
 }
 
@@ -225,8 +224,15 @@ func (ap *App) UpdateGabors(params *GaborParams) {
 // Process generates the mel output and from that the result of the convolution with the gabor filters
 // Must call ProcessSetup() first !
 func (ap *App) Process(wparams *WinParams, pparams *ProcessParams, gparams *GaborParams) (err error) {
+	//ap.SndFile = fpth
+	err = ap.Sound.Load(ap.SndFile)
+	if err != nil {
+		log.Printf("LoadTranscription: error loading sound -- %v\n, err", ap.SndFile)
+		return
+	}
+
 	if ap.Load {
-		ap.LoadSound(wparams) // actually load the sound
+		ap.ToTensor(wparams) // actually load the sound
 	}
 
 	if ap.Sound.Buf == nil {
@@ -346,24 +352,23 @@ func (ap *App) ProcessStep(ch int, step int, wparams *WinParams, pparams *Proces
 	fmt.Println(err)
 	if err == nil {
 		gparams.Fft.Reset(wparams.WinSamples)
-		pparams.Dft.Filter(int(ch), int(step), &ap.Window, ap.FirstStep, wparams.WinSamples, gparams.FftCoefs, gparams.Fft, &pparams.Power, &pparams.LogPower, &pparams.PowerSegment, &pparams.LogPowerSegment)
+		pparams.Dft.Filter(int(ch), int(step), &ap.Window, wparams.WinSamples, gparams.FftCoefs, gparams.Fft, &pparams.Power, &pparams.LogPower, &pparams.PowerSegment, &pparams.LogPowerSegment)
 		pparams.Mel.FilterDft(int(ch), int(step), &pparams.Power, &pparams.MelFBankSegment, &pparams.MelFBank, &pparams.MelFilters)
 		if pparams.Mel.MFCC {
 			pparams.Mel.CepstrumDct(ch, step, &pparams.MelFBank, &pparams.MfccDctSegment, &pparams.MfccDct)
 		}
-		ap.FirstStep = false
 	}
 	return err
 }
 
-// LoadTranscription loads the transcription file. The sound file is loaded at start of processing by calling LoadSound()
+// LoadTranscription loads the transcription file. The sound file is loaded at start of processing by calling ToTensor()
 func (ap *App) LoadTranscription(fpth string) {
-	ap.SndFile = fpth
-	err := ap.Sound.Load(fpth)
-	if err != nil {
-		log.Printf("LoadTranscription: error loading sound -- %v\n, err", fpth)
-		return
-	}
+	//ap.SndFile = fpth
+	//err := ap.Sound.Load(fpth)
+	//if err != nil {
+	//	log.Printf("LoadTranscription: error loading sound -- %v\n, err", fpth)
+	//	return
+	//}
 
 	seq := new(speech.Sequence)
 	seq.File = fpth
@@ -377,6 +382,7 @@ func (ap *App) LoadTranscription(fpth string) {
 		fn = strings.Replace(fn, ".WAV", "", 1)
 		fnm := fn + ".PHN.MS" // PHN is "Phone" and MS is milliseconds
 		names := []string{}
+		var err error
 		seq.Units, err = timit.LoadTimes(fnm, names) // names can be empty for timit, LoadTimes loads names
 		if err != nil {
 			fmt.Printf("LoadTranscription: Problem loading %s transcription and timing data", fnm)
@@ -433,8 +439,8 @@ func (ap *App) LoadTranscription(fpth string) {
 	return
 }
 
-// LoadSound loads the sound file, e.g. .wav file, the transcription is loaded in LoadTranscription()
-func (ap *App) LoadSound(wparams *WinParams) bool {
+// ToTensor loads the sound file, e.g. .wav file, the transcription is loaded in LoadTranscription()
+func (ap *App) ToTensor(wparams *WinParams) bool {
 	if ap.Sound.Channels() > 1 {
 		ap.Sound.SoundToTensor(&ap.Signal, -1)
 	} else {

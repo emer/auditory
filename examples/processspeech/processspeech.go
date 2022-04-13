@@ -91,7 +91,6 @@ type SndProcess struct {
 	SndFile         gi.FileName       `view:"-" desc:" holds the full path & name of the file to be loaded/processed"`
 
 	// internal state - view:"-"
-	FirstStep    bool `view:"-" desc:" if first frame to process -- turns off prv smoothing of dft power"`
 	MoreSegments bool `view:"-" desc:" are there more samples to process"`
 
 	// gui
@@ -137,7 +136,6 @@ func (sp *SndProcess) Config() {
 		sp.MfccDct.SetShape([]int{sp.Mel.FBank.NFilters}, nil, nil)
 	}
 
-	sp.FirstStep = true
 	sp.Segment = -1
 	sp.MoreSegments = true
 
@@ -274,9 +272,11 @@ func (sp *SndProcess) ProcessSegment() {
 // bands that mimic the non-linear human perception of sound
 func (sp *SndProcess) ProcessStep(ch, step int) bool {
 	available := sp.SoundToWindow(sp.Segment, sp.Params.Steps[step], ch)
-	sp.Dft.Filter(int(ch), int(step), &sp.Samples, sp.FirstStep, sp.Params.WinSamples, sp.FftCoefs, sp.Fft, &sp.Power, &sp.LogPower, &sp.PowerSegment, &sp.LogPowerSegment)
-	sp.Mel.Filter(int(ch), int(step), &sp.Samples, &sp.MelFilters, &sp.Power, &sp.MelFBankSegment, &sp.MelFBank, &sp.MfccDctSegment, &sp.MfccDct)
-	sp.FirstStep = false
+	sp.Dft.Filter(int(ch), int(step), &sp.Samples, sp.Params.WinSamples, sp.FftCoefs, sp.Fft, &sp.Power, &sp.LogPower, &sp.PowerSegment, &sp.LogPowerSegment)
+	sp.Mel.FilterDft(int(ch), int(step), &sp.Power, &sp.MelFBankSegment, &sp.MelFBank, &sp.MelFilters)
+	if sp.Mel.MFCC {
+		sp.Mel.CepstrumDct(ch, step, &sp.MelFBank, &sp.MfccDctSegment, &sp.MfccDct)
+	}
 	return available
 }
 
