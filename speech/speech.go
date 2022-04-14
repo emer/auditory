@@ -32,6 +32,7 @@ type Sequence struct {
 	File     string  `desc:""`
 	ID       string  `desc:"an id to use if the corpus has subsets"`
 	Sequence string  `desc:"the full sequence of CVs, Phones, Words or whatever the unit"`
+	Text     string  `desc:"the full readable transcription"`
 	Units    []Unit  `desc:"the units of the sequence"`
 	Silence  float64 `desc:"milliseconds of silence added at start of sequence to add variability"`
 	TimeCur  float64 `desc:"current time in milliseconds since start of sequence"`
