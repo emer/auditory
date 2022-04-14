@@ -166,3 +166,27 @@ func LoadTimes(fn string, names []string) ([]speech.Unit, error) {
 	}
 	return units, nil
 }
+
+// LoadText retrieves the full text of the timit transcription
+func LoadText(fn string) (string, error) {
+	fp, err := os.Open(fn)
+	if err != nil {
+		log.Println(err)
+		return "", err
+	}
+	defer fp.Close() // we will be done with the file within this function
+
+	s := ""
+	scanner := bufio.NewScanner(fp)
+	scanner.Split(bufio.ScanLines)
+	for scanner.Scan() {
+		s = scanner.Text()
+	}
+	// format is 'start time' 'space' 'end time' 'space' text
+	cutset := "0123456789"
+	s = strings.TrimLeft(s, cutset)
+	s = strings.TrimLeft(s, " ")
+	s = strings.TrimLeft(s, cutset)
+	s = strings.TrimLeft(s, " ")
+	return s, nil
+}
