@@ -72,7 +72,6 @@ type WinParams struct {
 	Channel      int     `view:"-" desc:"specific channel to process, if input has multiple channels, and we only process one of them (-1 = process all)"`
 	PadValue     float32 `view:"-"`
 	Resize       bool    `desc:"if resize is true segment durations will be lengthened (a bit before and a bit after) to be a multiple of the filter width"`
-	//Threshold    int     `viewif:"Resize" desc:"only resize if the overage exceeds Threshold percent''"`
 
 	// these are calculated
 	WinSamples  int   `view:"-" desc:"number of samples to process each step"`
@@ -113,25 +112,26 @@ type App struct {
 	Dsc       string            `view:"-" desc:"description of this environment"`
 	GUI       egui.GUI          `view:"-" desc:"manages all the gui elements"`
 	Corpus    string            `desc:"the set of sound files"`
-	SndPath   string            `desc:"path to the open sound file"`
-	SndFile   string            `view:"-" desc:"full path of open sound file"`
+	OpenPath  string            `desc:"start here when opening the load sounds dialog"`
+	SndFile   string            `inactive:"+" desc:"full path of open sound file"`
+	Text      string            `inactive:"+" desc:"the text of the current sound file if available"`
 	Sequence  []speech.Sequence `view:"no-inline" desc:"a slice of Sequence structs, one per open sound file"`
 	SndsTable Table             `desc:"table of sounds from the open sound files"`
 	Row       int               `view:"-" desc:"SndsTable selected row, as seen by user"`
 	LastFile  string            `view:"-" desc:"name of the last sound file loaded, compare with this and don't reload if processing sound from same file'"`
 	Load      bool              `view:"-" desc:"used to prevent reloading a file we are already processing"`
 
-	WParams1  WinParams       `view:"inline" desc:"fundamental processing parameters for sound 1"`
-	WParams2  WinParams       `view:"inline" desc:"fundamental processing parameters for sound 2"`
-	PParams1  ProcessParams   `desc:"the power and mel parameters for processing the sound to generate a mel filter bank for sound 1"`
-	PParams2  ProcessParams   `desc:"the power and mel parameters for processing the sound to generate a mel filter bank for sound 2"`
-	GParams1  GaborParams     `desc:"gabor filter specifications and parameters for applying gabors to the mel output for sound 1"`
-	GParams2  GaborParams     `desc:"gabor filter specifications and parameters for applying gabors to the mel output for sound 2"`
-	Sound     sound.Wave      `view:"inline"`
-	Signal    etensor.Float32 `view:"-" desc:" the full sound input obtained from the sound input - plus any added padding"`
-	Window    etensor.Float32 `view:"-" desc:" [Input.WinSamples] the raw sound input, one channel at a time"`
-	ByTime    bool            `desc:"display the gabor filtering result by time and then by filter, default is to order by filter and then time"`
-	DetailTab gi.Node2D
+	WParams1 WinParams       `view:"inline" desc:"fundamental processing parameters for sound 1"`
+	WParams2 WinParams       `view:"inline" desc:"fundamental processing parameters for sound 2"`
+	PParams1 ProcessParams   `desc:"the power and mel parameters for processing the sound to generate a mel filter bank for sound 1"`
+	PParams2 ProcessParams   `desc:"the power and mel parameters for processing the sound to generate a mel filter bank for sound 2"`
+	GParams1 GaborParams     `desc:"gabor filter specifications and parameters for applying gabors to the mel output for sound 1"`
+	GParams2 GaborParams     `desc:"gabor filter specifications and parameters for applying gabors to the mel output for sound 2"`
+	Sound    sound.Wave      `view:"inline"`
+	Signal   etensor.Float32 `view:"-" desc:" the full sound input obtained from the sound input - plus any added padding"`
+	Window   etensor.Float32 `view:"-" desc:" [Input.WinSamples] the raw sound input, one channel at a time"`
+	ByTime   bool            `desc:"display the gabor filtering result by time and then by filter, default is to order by filter and then time"`
+	TimeMode bool            `desc:"use the user entered start/end times, ignoring the current sound selection"`
 }
 
 // this registers this Sim Type and gives it properties that e.g.,
@@ -172,9 +172,9 @@ func (ap *App) WinDefaults(wparams *WinParams) {
 func (ap *App) Config() {
 	ap.Corpus = "TIMIT"
 	if ap.Corpus == "TIMIT" {
-		ap.SndPath = "/Users/rohrlich/ccn_images/sound/timit/TIMIT/TRAIN/"
+		ap.OpenPath = "~/ccn_images/sound/timit/TIMIT/TRAIN/"
 	} else {
-		ap.SndPath = "~"
+		ap.OpenPath = "~"
 	}
 
 	ap.ConfigSoundsTable()
@@ -224,7 +224,6 @@ func (ap *App) UpdateGabors(params *GaborParams) {
 // Process generates the mel output and from that the result of the convolution with the gabor filters
 // Must call ProcessSetup() first !
 func (ap *App) Process(wparams *WinParams, pparams *ProcessParams, gparams *GaborParams) (err error) {
-	//ap.SndFile = fpth
 	err = ap.Sound.Load(ap.SndFile)
 	if err != nil {
 		log.Printf("LoadTranscription: error loading sound -- %v\n, err", ap.SndFile)
@@ -282,7 +281,6 @@ func (ap *App) Process(wparams *WinParams, pparams *ProcessParams, gparams *Gabo
 	// round up to nearest step interval
 	segmentMs := wparams.SegmentEnd - wparams.SegmentStart
 	segmentMs = segmentMs + wparams.StepMs*float32(int(segmentMs)%int(wparams.StepMs))
-
 	steps := int(segmentMs / wparams.StepMs)
 	wparams.StepsTotal = steps + 2*wparams.BorderSteps
 
@@ -296,7 +294,6 @@ func (ap *App) Process(wparams *WinParams, pparams *ProcessParams, gparams *Gabo
 	if pparams.Dft.CompLogPow {
 		pparams.LogPowerSegment.CopyShapeFrom(&pparams.PowerSegment)
 	}
-
 	gparams.FftCoefs = make([]complex128, wparams.WinSamples)
 	gparams.Fft = fourier.NewCmplxFFT(len(gparams.FftCoefs))
 
@@ -349,7 +346,6 @@ func (ap *App) ProcessStep(ch int, step int, wparams *WinParams, pparams *Proces
 	offset := wparams.Steps[step]
 	start := sound.MSecToSamples(wparams.SegmentStart, ap.Sound.SampleRate()) + offset
 	err := ap.SndToWindow(start, ch, wparams)
-	fmt.Println(err)
 	if err == nil {
 		gparams.Fft.Reset(wparams.WinSamples)
 		pparams.Dft.Filter(int(ch), int(step), &ap.Window, wparams.WinSamples, gparams.FftCoefs, gparams.Fft, &pparams.Power, &pparams.LogPower, &pparams.PowerSegment, &pparams.LogPowerSegment)
@@ -363,16 +359,8 @@ func (ap *App) ProcessStep(ch int, step int, wparams *WinParams, pparams *Proces
 
 // LoadTranscription loads the transcription file. The sound file is loaded at start of processing by calling ToTensor()
 func (ap *App) LoadTranscription(fpth string) {
-	//ap.SndFile = fpth
-	//err := ap.Sound.Load(fpth)
-	//if err != nil {
-	//	log.Printf("LoadTranscription: error loading sound -- %v\n, err", fpth)
-	//	return
-	//}
-
 	seq := new(speech.Sequence)
 	seq.File = fpth
-	ap.Sequence = append(ap.Sequence, *seq)
 	ap.ConfigTableView(ap.SndsTable.View)
 	ap.GUI.Win.UpdateSig()
 
@@ -388,10 +376,13 @@ func (ap *App) LoadTranscription(fpth string) {
 			fmt.Printf("LoadTranscription: Problem loading %s transcription and timing data", fnm)
 			return
 		}
+		fnm = fn + ".TXT" // full text transcription
+		seq.Text, err = timit.LoadText(fnm)
 	} else {
 		fmt.Println("NextSound: ap.Corpus no match")
 	}
 
+	ap.Sequence = append(ap.Sequence, *seq)
 	if seq.Units == nil {
 		fmt.Println("AdjSeqTimes: SpeechSeq.Units is nil. Some problem with loading file transcription and timing data")
 		return
@@ -589,16 +580,21 @@ func (ap *App) ProcessSetup(wparams *WinParams) error {
 		gi.PromptDialog(nil, gi.DlgOpts{Title: "Sounds table empty", Prompt: "Open a sound file before processing"}, gi.AddOk, gi.NoCancel, nil, nil)
 		return errors.New("Load a sound file and try again")
 	}
+
 	ap.Row = ap.SndsTable.View.SelectedIdx
 	idx := ap.SndsTable.View.Table.Idxs[ap.Row]
-	wparams.SegmentStart = float32(ap.SndsTable.Table.CellFloat("Start", idx))
-	wparams.SegmentEnd = float32(ap.SndsTable.Table.CellFloat("End", idx))
+	if ap.TimeMode == false {
+		wparams.SegmentStart = float32(ap.SndsTable.Table.CellFloat("Start", idx))
+		wparams.SegmentEnd = float32(ap.SndsTable.Table.CellFloat("End", idx))
+	}
+
 	d := ap.SndsTable.Table.CellString("Dir", idx)
 	f := ap.SndsTable.Table.CellString("File", idx)
 	id := d + "/" + f
 	for _, s := range ap.Sequence {
 		if strings.Contains(s.File, id) {
 			ap.SndFile = s.File
+			ap.Text = s.Text
 		}
 	}
 	if ap.SndFile == ap.LastFile {
@@ -691,7 +687,7 @@ func (ap *App) ConfigGui() *gi.Window {
 		Active:  egui.ActiveAlways,
 		Func: func() {
 			exts := ".wav"
-			giv.FileViewDialog(ap.GUI.ViewPort, ap.SndPath, exts, giv.DlgOpts{Title: "Open .wav Sound File", Prompt: "Open a .wav file, or directory of .wav files, for sound processing."}, nil,
+			giv.FileViewDialog(ap.GUI.ViewPort, ap.OpenPath, exts, giv.DlgOpts{Title: "Open .wav Sound File", Prompt: "Open a .wav file, or directory of .wav files, for sound processing."}, nil,
 				ap.GUI.Win.This(), func(recv, send ki.Ki, sig int64, data interface{}) {
 					if sig == int64(gi.DialogAccepted) {
 						dlg, _ := send.Embed(gi.KiT_Dialog).(*gi.Dialog)
@@ -775,17 +771,23 @@ func (ap *App) ConfigGui() *gi.Window {
 		Active:  egui.ActiveRunning,
 		Func: func() {
 			// setup the next segment of sound
-			ap.SndsTable.View.ResetSelectedIdxs()
-			if ap.Row == ap.SndsTable.View.DispRows-1 {
-				ap.Row = 0
+			if ap.TimeMode == false { // default
+				ap.SndsTable.View.ResetSelectedIdxs()
+				if ap.Row == ap.SndsTable.View.DispRows-1 {
+					ap.Row = 0
+				} else {
+					ap.Row += 1
+				}
+				ap.SndsTable.View.SelectedIdx = ap.Row
+				ap.SndsTable.View.SelectIdx(ap.Row)
 			} else {
-				ap.Row += 1
+				d := ap.WParams1.SegmentEnd - ap.WParams1.SegmentStart
+				ap.WParams1.SegmentStart += d
+				ap.WParams1.SegmentEnd += d
 			}
-			ap.SndsTable.View.SelectedIdx = ap.Row
-			ap.SndsTable.View.SelectIdx(ap.Row)
-			err := ap.ProcessSetup(&ap.WParams2)
+			err := ap.ProcessSetup(&ap.WParams1)
 			if err == nil {
-				err = ap.Process(&ap.WParams2, &ap.PParams1, &ap.GParams1)
+				err = ap.Process(&ap.WParams1, &ap.PParams1, &ap.GParams1)
 				if err == nil {
 					ap.ApplyGabor(&ap.PParams1, &ap.GParams1)
 					ap.GUI.UpdateWindow()
@@ -799,14 +801,20 @@ func (ap *App) ConfigGui() *gi.Window {
 		Active:  egui.ActiveRunning,
 		Func: func() {
 			// setup the next segment of sound
-			ap.SndsTable.View.ResetSelectedIdxs()
-			if ap.Row == ap.SndsTable.View.DispRows-1 {
-				ap.Row = 0
+			if ap.TimeMode == false { // default
+				ap.SndsTable.View.ResetSelectedIdxs()
+				if ap.Row == ap.SndsTable.View.DispRows-1 {
+					ap.Row = 0
+				} else {
+					ap.Row += 1
+				}
+				ap.SndsTable.View.SelectedIdx = ap.Row
+				ap.SndsTable.View.SelectIdx(ap.Row)
 			} else {
-				ap.Row += 1
+				d := ap.WParams2.SegmentEnd - ap.WParams2.SegmentStart
+				ap.WParams2.SegmentStart += d
+				ap.WParams2.SegmentEnd += d
 			}
-			ap.SndsTable.View.SelectedIdx = ap.Row
-			ap.SndsTable.View.SelectIdx(ap.Row)
 			err := ap.ProcessSetup(&ap.WParams2)
 			if err == nil {
 				err = ap.Process(&ap.WParams2, &ap.PParams2, &ap.GParams2)
