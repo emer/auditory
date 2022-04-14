@@ -30,7 +30,7 @@ const (
 )
 
 type Wave struct {
-	Buf *audio.IntBuffer
+	Buf *audio.IntBuffer `inactive:"+"`
 }
 
 // Load loads the sound file and decodes it
