@@ -28,6 +28,7 @@ type Params struct {
 	StrideMs    float32 `def:"100" desc:"how far to move on each trial"`
 	BorderSteps int     `def:"6" view:"+" desc:"overlap with previous and next segment"`
 	Channel     int     `viewif:"Channels=1" desc:"specific channel to process, if input has multiple channels, and we only process one of them (-1 = process all)"`
+	PadEnd      bool    `desc:"should the end of the sequence be padded. Can be used to ensure pull segment at end"`
 	PadValue    float32 `desc:"value to use of signal when padding"`
 
 	// these are calculated
@@ -133,7 +134,9 @@ func (se *SndEnv) Init(msSilenceAdd, msSilenceRmStart, msSilenceRmEnd float64) (
 		n := int((msSilenceAdd * float64(se.Params.StrideSamples)) / 100.0)
 		silence := make([]float32, n)
 		se.Signal.Values = append(silence, se.Signal.Values...)
-		se.Signal.Values = se.Pad(se.Signal.Values)
+		if se.Params.PadEnd == true { // default false
+			se.Signal.Values = se.Pad(se.Signal.Values)
+		}
 	}
 
 	specs := agabor.Active(se.GaborSpecs)
