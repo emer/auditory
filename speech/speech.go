@@ -17,6 +17,8 @@ var KiT_Units = kit.Types.AddType(&Units{}, UnitProps)
 // UnitProps - none at this time
 var UnitProps = ki.Props{}
 
+// ToDo: consider making Type an enum with values of phone, phoneme, word, etc
+
 // Unit
 type Unit struct {
 	Name    string  `desc:"the CV (e.g. -- da, go, ku ...), or phones (g, ah, ix ...)"`
@@ -36,7 +38,6 @@ type Sequence struct {
 	Text     string  `desc:"the full readable transcription"`
 	Units    []Unit  `desc:"the units of the sequence"`
 	Silence  float64 `desc:"milliseconds of silence added at start of sequence to add variability"`
-	TimeCur  float64 `desc:"current time in milliseconds since start of sequence"`
 	Start    float64 `desc:"start of sound in milliseconds, many files have initial silence"`
 	Stop     float64 `desc:"start of final silence in milliseconds"`
 }
