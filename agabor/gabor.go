@@ -15,7 +15,7 @@ import (
 
 // Filter, a struct of gabor filter parameters
 type Filter struct {
-	Off         bool    `desc:"filter on or off"`
+	Off         bool    `desc:"filter on is default - set to true to exclude filter"`
 	WaveLen     float32 `desc:"wavelength of the sine waves in normalized units, 1.5 and 2 are reasonable values"`
 	Orientation float32 `desc:"orientation of the gabor in degrees, e.g. 0, 45, 90, 135. Multiple of the same orientation will get evenly distributed with the filter matrix"`
 	SigmaWidth  float32 `def:"0.6" desc:"gaussian sigma for the width dimension (in the direction of the sine waves) -- normalized as a function of filter size in relevant dimension"`
@@ -280,50 +280,6 @@ func Convolve(ch int, melData *etensor.Float32, filters FilterSet, rawOut *etens
 			}
 		}
 	}
-
-	//tIdx := 0
-	//for t := 0; t < tMax; t, tIdx = t+filters.StrideX, tIdx+1 { // t for time
-	//	fIdx := 0
-	//	for f := 0; f < fMax; f, fIdx = f+filters.StrideY, fIdx+1 { // f for frequency
-	//		nf := filters.Filters.Dim(0)         // number of filters
-	//		for flt := int(0); flt < nf; flt++ { // which filter
-	//			fSum := float32(0.0)
-	//			for ff := int(0); ff < filters.SizeY; ff++ { // size of gabor filter in Y (frequency)
-	//				for ft := int(0); ft < filters.SizeX; ft++ { // size of gabor filter in X (time)
-	//					fVal := filters.Filters.Value([]int{flt, ff, ft})
-	//					iVal := float64(melData.Value([]int{t + ft, f + ff, ch}))
-	//					if math.IsNaN(iVal) {
-	//						iVal = .5
-	//					}
-	//					fSum += float32(fVal * iVal)
-	//				}
-	//			}
-	//			pos := fSum >= 0.0
-	//			act := filters.Gain * mat32.Abs(fSum)
-	//			if rawOut.NumDims() == 3 {
-	//				y := fIdx * 2                          // we are populating 2 rows, off-center and on-center, thus we need to jump by 2 when populating the output tensor
-	//				x := flt + tIdx*filters.Filters.Dim(0) // tIdx increments for each stride, flt increments stepping through the filters
-	//				if pos {
-	//					rawOut.SetFloat([]int{ch, y, x}, float64(act))
-	//					rawOut.SetFloat([]int{ch, y + 1, x}, 0)
-	//				} else {
-	//					rawOut.SetFloat([]int{ch, y, x}, 0)
-	//					rawOut.SetFloat([]int{ch, y + 1, x}, float64(act))
-	//				}
-	//			} else if rawOut.NumDims() == 5 { // in the 4D case we have pools no need for the multiplication we have in the 2D setting of the output tensor
-	//				if pos {
-	//					rawOut.SetFloat([]int{ch, fIdx, tIdx, 0, flt}, float64(act))
-	//					rawOut.SetFloat([]int{ch, fIdx, tIdx, 1, flt}, 0)
-	//				} else {
-	//					rawOut.SetFloat([]int{ch, fIdx, tIdx, 0, flt}, 0)
-	//					rawOut.SetFloat([]int{ch, fIdx, tIdx, 1, flt}, float64(act))
-	//				}
-	//			} else {
-	//				log.Println("The output tensor should have 3 or 5 dimensions (1 for number of channels plus 2 or 4 for 2D or 4D result")
-	//			}
-	//		}
-	//	}
-	//}
 }
 
 // ToDo: don't renorm
