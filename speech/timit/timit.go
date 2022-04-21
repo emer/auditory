@@ -28,7 +28,12 @@ var PhoneList = []string{"iy", "ih", "eh", "ae", "ix", "ah", "ax", "ax-h", "uw",
 	"hh", "hv", "cl", "pcl", "tcl", "kcl", "qcl", "vcl", "bcl", "dcl", "gcl", "epi", "sil", "h#", "#h", "pau"}
 
 // PhoneCats and PhoneMap must maintain same order!
-var PhoneCats = []string{"iy", "ih", "eh", "ae", "ix", "ah", "uw", "uh", "ao", "ey",
+var PhoneCats = []string{"iy", "ih", "eh", "ae", "ix", "ah", "uw", "ao", "ey",
+	"ay", "ow", "l", "r", "y", "w", "er", "m", "n", "ch", "jh", "dh", "b", "d", "dx",
+	"p", "t", "k", "z", "zh", "v", "f", "th", "s", "hh", "pcl", "q"}
+
+// PhoneCats and PhoneMap must maintain same order!
+var PhoneCats2 = []string{"iy", "ih", "eh", "ae", "ix", "ah", "uw", "uh", "ao", "ey",
 	"ay", "oy", "aw", "ow", "l", "r", "y", "w", "er", "m", "n", "ng",
 	"ch", "jh", "dh", "b", "d", "dx", "g", "p", "t", "k", "z", "zh", "v", "f", "th", "s",
 	"hh", "pcl", "q"}
@@ -97,10 +102,81 @@ var Phones = map[string]int{
 	"q":    40,
 }
 
+var Phones2 = map[string]int{
+	"iy":   0,
+	"ih":   1,
+	"eh":   2,
+	"ae":   3,
+	"ix":   4,
+	"ah":   5,
+	"ax":   5,
+	"ax-h": 5,
+	"uw":   6,
+	"ux":   6,
+	//"uh":   7,
+	"ao": 7,
+	"aa": 7,
+	"ey": 8,
+	"ay": 9,
+	//"oy":   11,
+	//"aw":  12,
+	"ow":  10,
+	"l":   11,
+	"el":  11,
+	"r":   12,
+	"y":   13,
+	"w":   14,
+	"er":  15,
+	"axr": 15,
+	"m":   16,
+	"em":  16,
+	"n":   17,
+	"nx":  17,
+	"en":  17,
+	//"ng":  21,
+	//"eng": 21,
+	"ch": 18,
+	"jh": 19,
+	"dh": 20,
+	"b":  21,
+	"d":  22,
+	"dx": 23,
+	//"g":   28,
+	"p":   24,
+	"t":   25,
+	"k":   26,
+	"z":   27,
+	"zh":  28,
+	"sh":  28,
+	"v":   29,
+	"f":   30,
+	"th":  31,
+	"s":   32,
+	"hh":  33,
+	"hv":  33,
+	"pcl": 34,
+	"tcl": 34,
+	"kcl": 34,
+	"bcl": 34,
+	"dcl": 34,
+	"gcl": 34,
+	"h#":  34,
+	"pau": 34,
+	"epi": 34,
+	"q":   35,
+}
+
 // IdxFmSnd returns the slice index of the snd if found.
 // id is ignored if the corpus doesn't have subsets of sounds
 func IdxFmSnd(s string, id string) (v int, ok bool) {
 	v, ok = Phones[s]
+	return
+}
+
+// IdxFmSnd returns the slice index of the snd if found.
+// id is ignored if the corpus doesn't have subsets of sounds
+func IdxFmSnd2(s string, id string) (v int, ok bool) {
+	v, ok = Phones2[s]
 	return
 }
 
@@ -110,6 +186,21 @@ func SndFmIdx(idx int, id string) (phone string, ok bool) {
 	phone = ""
 	ok = false
 	for k, v := range Phones {
+		if v == idx {
+			phone = k
+			ok = true
+			return
+		}
+	}
+	return
+}
+
+// SndFmIdx returns the sound if found in the map of sounds of the corpus.
+// id is ignored if the corpus doesn't have subsets of sounds
+func SndFmIdx2(idx int, id string) (phone string, ok bool) {
+	phone = ""
+	ok = false
+	for k, v := range Phones2 {
 		if v == idx {
 			phone = k
 			ok = true
