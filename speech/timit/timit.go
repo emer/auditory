@@ -25,12 +25,12 @@ import (
 var PhoneList = []string{"iy", "ih", "eh", "ae", "ix", "ah", "ax", "ax-h", "uw", "ux", "uh", "ao", "aa", "ey",
 	"ay", "oy", "aw", "ow", "l", "el", "r", "y", "w", "er", "axr", "m", "em", "n", "nx", "en", "ng",
 	"eng", "ch", "jh", "dh", "b", "d", "dx", "g", "p", "t", "k", "z", "zh", "v", "f", "th", "s", "sh",
-	"hh", "hv", "pcl", "tcl", "kcl", "bcl", "dcl", "gcl", "epi", "h#", "pau"}
+	"hh", "hv", "pcl", "tcl", "kcl", "bcl", "dcl", "gcl", "epi", "h#", "pau", "q"}
 
 var PhoneCats = []string{"iy", "ih", "eh", "ae", "ix", "ah", "ax", "ax-h", "uw", "ux", "uh", "ao", "aa", "ey",
 	"ay", "oy", "aw", "ow", "l", "el", "r", "y", "w", "er", "axr", "m", "em", "n", "nx", "en", "ng",
 	"eng", "ch", "jh", "dh", "b", "d", "dx", "g", "p", "t", "k", "z", "zh", "v", "f", "th", "s", "sh",
-	"hh", "hv", "pcl", "tcl", "kcl", "bcl", "dcl", "gcl", "epi", "h#", "pau"}
+	"hh", "hv", "pcl", "tcl", "kcl", "bcl", "dcl", "gcl", "epi", "h#", "pau", "q"}
 
 // PhoneCats and PhoneMap must maintain same order!
 //var PhoneCats = []string{"iy", "ih", "eh", "ae", "ix", "ah", "uw", "ao", "ey",
@@ -88,11 +88,11 @@ var Phones = map[string]int{
 	"k":    41,
 	"z":    42,
 	"zh":   43,
-	"sh":   44,
-	"v":    45,
-	"f":    46,
-	"th":   47,
-	"s":    48,
+	"v":    44,
+	"f":    45,
+	"th":   46,
+	"s":    47,
+	"sh":   48,
 	"hh":   49,
 	"hv":   50,
 	"pcl":  51,
@@ -101,9 +101,9 @@ var Phones = map[string]int{
 	"bcl":  54,
 	"dcl":  55,
 	"gcl":  56,
-	"h#":   57,
-	"pau":  58,
-	"epi":  59,
+	"epi":  57,
+	"h#":   58,
+	"pau":  59,
 	"q":    60,
 }
 
