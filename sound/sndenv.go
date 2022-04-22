@@ -103,10 +103,10 @@ func (se *SndEnv) Defaults() {
 }
 
 // Init sets various sound processing params based on default params and user overrides
-// Can pass milliseconds of silence to remove at start and milliseconds at which to cut off sound (to remove silence at end)
-// Can also pass milliseconds of silence to prepend to start of signal if you want some random amount of silence
-// at start for variability
-func (se *SndEnv) Init(msSilenceAdd, msSilenceRmStart, msSilenceRmEnd float64) (err error, segments int) {
+// add is the amount of random silence that should precede the start of the sequence
+// start is the amount of silence preexisting at start
+// All values milliseconds
+func (se *SndEnv) Init(add, existing float64) (err error, offset int) {
 	sr := se.Sound.SampleRate()
 	if sr <= 0 {
 		fmt.Println("sample rate <= 0")
@@ -120,22 +120,16 @@ func (se *SndEnv) Init(msSilenceAdd, msSilenceRmStart, msSilenceRmEnd float64) (
 	se.Params.SegmentSteps = steps + 2*se.Params.BorderSteps
 	se.Params.StrideSamples = MSecToSamples(se.Params.StrideMs, sr)
 
-	// remove any silence at beginning of signal
-	if msSilenceRmStart >= 0 && msSilenceRmEnd > msSilenceRmStart {
-		st := MSecToSamples(float32(msSilenceRmStart), se.Sound.SampleRate())
-		end := MSecToSamples(float32(msSilenceRmEnd), se.Sound.SampleRate())
-		tmp := make([]float32, end-st)
-		copy(tmp, se.Signal.Values[st:end])
-		se.Signal.Values = make([]float32, len(tmp))
-		copy(se.Signal.Values, tmp)
-	}
-
-	if msSilenceAdd > 0 {
-		n := int((msSilenceAdd * float64(se.Params.StrideSamples)) / 100.0)
-		silence := make([]float32, n)
-		se.Signal.Values = append(silence, se.Signal.Values...)
-		if se.Params.PadEnd == true { // default false
-			se.Signal.Values = se.Pad(se.Signal.Values)
+	offset = 0.0
+	if add > 0 {
+		if add < existing {
+			offset = int(existing - add)
+			se.Signal.Values = se.Signal.Values[int(offset):len(se.Signal.Values)]
+		} else if add > existing {
+			offset = int(add - existing)
+			n := int((float64(offset) * float64(se.Params.StrideSamples)) / 100.0)
+			silence := make([]float32, n)
+			se.Signal.Values = append(silence, se.Signal.Values...)
 		}
 	}
 
@@ -153,7 +147,7 @@ func (se *SndEnv) Init(msSilenceAdd, msSilenceRmStart, msSilenceRmEnd float64) (
 		se.ExtGi.SetShape([]int{se.GborOutPoolsY, se.GborOutPoolsX, 2, nfilters}, nil, nil) // passed in for each channel
 	} else {
 		log.Println("GborOutPoolsX & GborOutPoolsY must both be == 0 or > 0 (i.e. 2D or 4D)")
-		return
+		return err, 0
 	}
 	se.GborOutput.SetMetaData("odd-row", "true")
 	se.GborOutput.SetMetaData("grid-fill", ".9")
@@ -198,7 +192,7 @@ func (se *SndEnv) Init(msSilenceAdd, msSilenceRmStart, msSilenceRmEnd float64) (
 	siglen = siglen / se.Sound.Channels()
 	se.SegCnt = siglen/se.Params.StrideSamples + 1 // add back the first segment subtracted at from siglen calculation
 	se.Segment = -1
-	return nil, se.SegCnt
+	return nil, offset
 }
 
 // ToTensor
