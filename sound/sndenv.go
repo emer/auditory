@@ -121,7 +121,7 @@ func (se *SndEnv) Init(add, existing float64) (err error, offset int) {
 	se.Params.StrideSamples = MSecToSamples(se.Params.StrideMs, sr)
 
 	offset = 0.0
-	if add > 0 {
+	if add >= 0 {
 		if add < existing {
 			offset = int(existing - add)
 			se.Signal.Values = se.Signal.Values[int(offset):len(se.Signal.Values)]
