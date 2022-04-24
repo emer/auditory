@@ -19,7 +19,7 @@ var UnitProps = ki.Props{}
 
 // ToDo: consider making Type an enum with values of phone, phoneme, word, etc
 
-// Unit
+// Unit some unit of sound of whatever type
 type Unit struct {
 	Name    string  `desc:"the CV (e.g. -- da, go, ku ...), or phones (g, ah, ix ...)"`
 	Start   float64 `desc:"start time of this unit in milliseconds"`
@@ -40,4 +40,7 @@ type Sequence struct {
 	Silence  float64 `desc:"milliseconds of silence added at start of sequence to add variability"`
 	Start    float64 `desc:"start of sound in milliseconds, many files have initial silence"`
 	Stop     float64 `desc:"start of final silence in milliseconds"`
+	Offset   int     `desc:"amount to adjust for random silence added (or subtracted) at start of sequence. Negative value means the existing silence was less than the random amount to be added"`
+	CurTime  float64 `desc:"current time in ms as we stride through the sound sequence"`
+	NextTime float64 `desc:"time in ms that it will be after processing the next segment"`
 }
