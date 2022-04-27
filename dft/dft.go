@@ -5,7 +5,9 @@
 package dft
 
 import (
+	"fmt"
 	"math"
+	"runtime"
 
 	"github.com/emer/etable/etensor"
 	"gonum.org/v1/gonum/dsp/fourier"
@@ -28,12 +30,29 @@ func (dft *Params) Initialize(winSamples int) {
 	dft.LogMin = -100
 }
 
+func bToMb(b uint64) uint64 {
+	return b / 1024 / 1024
+}
+
+func PrintMemUsage() {
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+	// For info on each, see: https://golang.org/pkg/runtime/#MemStats
+	//fmt.Printf("Alloc = %v MiB", bToMb(m.Alloc))
+	//fmt.Printf("\tTotalAlloc = %v MiB", bToMb(m.TotalAlloc))
+	fmt.Printf("Alloc = %v B", m.Alloc)
+	fmt.Printf("\tTotalAlloc = %v B", m.TotalAlloc)
+	fmt.Printf("\tSys = %v MiB", bToMb(m.Sys))
+	fmt.Printf("\tNumGC = %v\n", m.NumGC)
+}
+
 // Filter filters the current window_in input data according to current settings -- called by ProcessStep, but can be called separately
 func (dft *Params) Filter(ch int, step int, windowIn *etensor.Float32, winSamples int, fftCoefs []complex128, fft *fourier.CmplxFFT, power *etensor.Float32, logPower *etensor.Float32, powerForSegment *etensor.Float32, logPowerForSegment *etensor.Float32) {
 	dft.FftReal(fftCoefs, windowIn)
 	fft = fourier.NewCmplxFFT(len(fftCoefs))
 	fftCoefs = fft.Coefficients(nil, fftCoefs)
 	dft.Power(ch, step, winSamples, fftCoefs, power, logPower, powerForSegment, logPowerForSegment)
+	fft = nil
 }
 
 // FftReal
