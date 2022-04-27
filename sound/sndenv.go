@@ -51,14 +51,13 @@ func (se *SndEnv) ParamDefaults() {
 type SndEnv struct {
 	// the environment has the training/test data and the procedures for creating/choosing the input to the model
 	// "Segment" in var name indicates that the data or value only applies to a segment of samples rather than the entire signal
-	Nm      string `desc:"name of this environment"`
-	Dsc     string `desc:"description of this environment"`
-	Sound   Wave   `desc:"specifications of the raw sensory input"`
-	Params  Params
-	Signal  etensor.Float32 `view:"no-inline" desc:" the full sound input"`
-	SegCnt  int             `desc:"the number of segments in this sound file (based on current segment size)"`
-	Window  etensor.Float32 `inactive:"+" desc:" [Input.WinSamples] the raw sound input, one channel at a time"`
-	Segment int             `inactive:"no-inline" desc:" the current chunk of samples (a full segment's' worth) - zero is first chunk"`
+	Nm     string `desc:"name of this environment"`
+	Dsc    string `desc:"description of this environment"`
+	Sound  Wave   `desc:"specifications of the raw sensory input"`
+	Params Params
+	Signal etensor.Float32 `view:"no-inline" desc:" the full sound input"`
+	SegCnt int             `desc:"the number of segments in this sound file (based on current segment size)"`
+	Window etensor.Float32 `inactive:"+" desc:" [Input.WinSamples] the raw sound input, one channel at a time"`
 
 	Dft             dft.Params
 	Power           etensor.Float32 `view:"-" desc:" power of the dft, up to the nyquist limit frequency (1/2 input.WinSamples)"`
@@ -188,7 +187,6 @@ func (se *SndEnv) Init(add, existing float64) (err error, offset int) {
 	siglen := len(se.Signal.Values) - se.Params.SegmentSamples*se.Sound.Channels()
 	siglen = siglen / se.Sound.Channels()
 	se.SegCnt = siglen/se.Params.StrideSamples + 1 // add back the first segment subtracted at from siglen calculation
-	se.Segment = -1
 	return nil, offset
 }
 
@@ -217,17 +215,16 @@ func (se *SndEnv) ApplyKwta(ch int) {
 }
 
 // ProcessSegment processes the entire segment's input by processing a small overlapping set of samples on each pass
-func (se *SndEnv) ProcessSegment() {
+func (se *SndEnv) ProcessSegment(segment int) {
 	se.Power.SetZeros()
 	se.LogPower.SetZeros()
 	se.PowerSegment.SetZeros()
 	se.LogPowerSegment.SetZeros()
 	se.MelFBankSegment.SetZeros()
 	se.MfccDctSegment.SetZeros()
-	se.Segment++
 	for ch := int(0); ch < se.Sound.Channels(); ch++ {
 		for s := 0; s < int(se.Params.SegmentSteps); s++ {
-			err := se.ProcessStep(ch, s)
+			err := se.ProcessStep(segment, ch, s)
 			if err != nil {
 				break
 			}
@@ -238,9 +235,9 @@ func (se *SndEnv) ProcessSegment() {
 // ProcessStep processes a step worth of sound input from current input_pos, and increment input_pos by input.step_samples
 // Process the data by doing a fourier transform and computing the power spectrum, then apply mel filters to get the frequency
 // bands that mimic the non-linear human perception of sound
-func (se *SndEnv) ProcessStep(ch int, step int) error {
+func (se *SndEnv) ProcessStep(segment, ch, step int) error {
 	offset := se.Params.Steps[step]
-	err := se.SndToWindow(offset, ch)
+	err := se.SndToWindow(segment, offset, ch)
 	if err == nil {
 		se.Fft.Reset(se.Params.WinSamples)
 		se.Dft.Filter(int(ch), int(step), &se.Window, se.Params.WinSamples, se.FftCoefs, se.Fft, &se.Power, &se.LogPower, &se.PowerSegment, &se.LogPowerSegment)
@@ -253,9 +250,9 @@ func (se *SndEnv) ProcessStep(ch int, step int) error {
 }
 
 // SndToWindow gets sound from the signal (i.e. the slice of input values) at given position and channel, into Window
-func (se *SndEnv) SndToWindow(stepOffset int, ch int) error {
+func (se *SndEnv) SndToWindow(segment, stepOffset, ch int) error {
 	if se.Signal.NumDims() == 1 {
-		start := se.Segment*int(se.Params.StrideSamples) + stepOffset // segments start at zero
+		start := segment*int(se.Params.StrideSamples) + stepOffset // segments start at zero
 		end := start + se.Params.WinSamples
 		if end > len(se.Signal.Values) {
 			return errors.New("SndToWindow: end beyond signal length!!")
