@@ -28,8 +28,6 @@ type Params struct {
 	StrideMs    float32 `def:"100" desc:"how far to move on each trial"`
 	BorderSteps int     `def:"6" view:"+" desc:"overlap with previous and next segment"`
 	Channel     int     `viewif:"Channels=1" desc:"specific channel to process, if input has multiple channels, and we only process one of them (-1 = process all)"`
-	PadEnd      bool    `desc:"should the end of the sequence be padded. Can be used to ensure pull segment at end"`
-	PadValue    float32 `desc:"value to use of signal when padding"`
 
 	// these are calculated
 	WinSamples     int   `inactive:"+" desc:"number of samples to process each step"`
@@ -46,7 +44,6 @@ func (se *SndEnv) ParamDefaults() {
 	se.Params.StepMs = 10.0
 	se.Params.SegmentMs = 100.0
 	se.Params.Channel = 0
-	se.Params.PadValue = 0.0
 	se.Params.StrideMs = 100.0
 	se.Params.BorderSteps = 2
 }
@@ -313,12 +310,12 @@ func (se *SndEnv) Tail(signal []float32) int {
 }
 
 // Pad pads the signal so that the length of signal divided by stride has no remainder
-func (se *SndEnv) Pad(signal []float32) (padded []float32) {
+func (se *SndEnv) Pad(signal []float32, value float32) (padded []float32) {
 	tail := se.Tail(signal)
 	padLen := se.Params.SegmentSamples - se.Params.StepSamples - tail%se.Params.StepSamples
 	pad := make([]float32, padLen)
 	for i := range pad {
-		pad[i] = se.Params.PadValue
+		pad[i] = value
 	}
 	padded = append(signal, pad...)
 	return padded
