@@ -220,17 +220,14 @@ func (se *SndEnv) ApplyKwta(ch int) {
 }
 
 // ProcessSegment processes the entire segment's input by processing a small overlapping set of samples on each pass
-func (se *SndEnv) ProcessSegment() (moreSegments bool) {
-	moreSegments = true
+func (se *SndEnv) ProcessSegment() {
 	se.Power.SetZeros()
 	se.LogPower.SetZeros()
 	se.PowerSegment.SetZeros()
 	se.LogPowerSegment.SetZeros()
 	se.MelFBankSegment.SetZeros()
 	se.MfccDctSegment.SetZeros()
-	//moreSamples := true
 	se.Segment++
-	//fmt.Printf("Segment: %d\n", se.Segment)
 	for ch := int(0); ch < se.Sound.Channels(); ch++ {
 		for s := 0; s < int(se.Params.SegmentSteps); s++ {
 			err := se.ProcessStep(ch, s)
@@ -239,14 +236,6 @@ func (se *SndEnv) ProcessSegment() (moreSegments bool) {
 			}
 		}
 	}
-	remaining := len(se.Signal.Values) - (se.Segment+1)*se.Params.StrideSamples
-	//fmt.Printf("total length = %v, remaining = %v\n", len(se.Signal.Values), remaining)
-	if remaining < se.Params.SegmentSamples {
-		moreSegments = false
-		//fmt.Printf("Last Segment for %v: %d\n", se.SndFileCur, se.Segment)
-	}
-	se.ApplyGabor()
-	return moreSegments
 }
 
 // ProcessStep processes a step worth of sound input from current input_pos, and increment input_pos by input.step_samples
