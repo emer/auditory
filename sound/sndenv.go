@@ -49,10 +49,10 @@ func (se *SndEnv) ParamDefaults() {
 }
 
 type SndEnv struct {
-	// the environment has the training/test data and the procedures for creating/choosing the input to the model
-	// "Segment" in var name indicates that the data or value only applies to a segment of samples rather than the entire signal
+	// "Segment" in var name indicates that the data applies to a segment of samples rather than the entire signal
 	Nm     string `desc:"name of this environment"`
 	Dsc    string `desc:"description of this environment"`
+	On     bool   `desc:"false turns off processing of this sound"`
 	Sound  Wave   `desc:"specifications of the raw sensory input"`
 	Params Params
 	Signal etensor.Float32 `view:"no-inline" desc:" the full sound input"`
@@ -93,6 +93,7 @@ type SndEnv struct {
 // Defaults
 func (se *SndEnv) Defaults() {
 	se.ParamDefaults()
+	se.On = true
 	se.Mel.Defaults() // calls melfbank defaults
 	se.Kwta.Defaults()
 	se.KwtaPool = true
@@ -222,6 +223,7 @@ func (se *SndEnv) ProcessSegment(segment int) {
 	se.LogPowerSegment.SetZeros()
 	se.MelFBankSegment.SetZeros()
 	se.MfccDctSegment.SetZeros()
+
 	for ch := int(0); ch < se.Sound.Channels(); ch++ {
 		for s := 0; s < int(se.Params.SegmentSteps); s++ {
 			err := se.ProcessStep(segment, ch, s)
