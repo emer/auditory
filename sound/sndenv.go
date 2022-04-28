@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"runtime"
 
 	"github.com/emer/auditory/agabor"
 	"github.com/emer/auditory/dft"
@@ -17,7 +18,6 @@ import (
 	"github.com/emer/etable/etensor"
 	"github.com/emer/leabra/fffb"
 	"github.com/emer/vision/kwta"
-	"gonum.org/v1/gonum/dsp/fourier"
 )
 
 // Params defines the sound input parameters for auditory processing
@@ -71,23 +71,21 @@ type SndEnv struct {
 	MfccDctSegment  etensor.Float32 `view:"no-inline" desc:" full segment's worth of discrete cosine transform of log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
 	MfccDct         etensor.Float32 `view:"no-inline" desc:" discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
 
-	GaborSpecs    []agabor.Filter   `view:"no-inline" desc:" a set of gabor filter specifications, one spec per filter'"`
-	GaborFilters  agabor.FilterSet  `desc:"the actual gabor filters, the first spec determines the size of all filters in the set"`
-	GaborTab      etable.Table      `view:"no-inline" desc:"gabor filter table (view only)"`
-	GborOutPoolsX int               `view:"+" desc:" the number of neuron pools along the time dimension in the input layer"`
-	GborOutPoolsY int               `view:"+" desc:" the number of neuron pools along the frequency dimension in the input layer"`
-	GborOutUnitsX int               `view:"+" desc:" the number of neurons in a pool (typically the number of gabor filters) along the time dimension in the input layer"`
-	GborOutUnitsY int               `view:"+" desc:" the number of neurons in a pool along the frequency dimension in the input layer"`
-	GborOutput    etensor.Float32   `view:"no-inline" desc:" raw output of Gabor -- full segment's worth of gabor steps"`
-	GborKwta      etensor.Float32   `view:"no-inline" desc:" post-kwta output of full segment's worth of gabor steps"`
-	Inhibs        fffb.Inhibs       `view:"no-inline" desc:"inhibition values for A1 KWTA"`
-	ExtGi         etensor.Float32   `view:"no-inline" desc:"A1 simple extra Gi from neighbor inhibition tensor"`
-	NeighInhib    kwta.NeighInhib   `desc:"neighborhood inhibition for V1s -- each unit gets inhibition from same feature in nearest orthogonal neighbors -- reduces redundancy of feature code"`
-	Kwta          kwta.KWTA         `desc:"kwta parameters, using FFFB form"`
-	KwtaPool      bool              `desc:"if Kwta.On == true, call KwtaPool (true) or KwtaLayer (false)"`
-	FftCoefs      []complex128      `view:"-" desc:" discrete fourier transform (fft) output complex representation"`
-	Fft           *fourier.CmplxFFT `view:"-" desc:" struct for fast fourier transform"`
-	ByTime        bool              `desc:"display the gabor filtering result by time and then by filter, default is to order by filter and then time"`
+	GaborSpecs    []agabor.Filter  `view:"no-inline" desc:" a set of gabor filter specifications, one spec per filter'"`
+	GaborFilters  agabor.FilterSet `desc:"the actual gabor filters, the first spec determines the size of all filters in the set"`
+	GaborTab      etable.Table     `view:"no-inline" desc:"gabor filter table (view only)"`
+	GborOutPoolsX int              `view:"+" desc:" the number of neuron pools along the time dimension in the input layer"`
+	GborOutPoolsY int              `view:"+" desc:" the number of neuron pools along the frequency dimension in the input layer"`
+	GborOutUnitsX int              `view:"+" desc:" the number of neurons in a pool (typically the number of gabor filters) along the time dimension in the input layer"`
+	GborOutUnitsY int              `view:"+" desc:" the number of neurons in a pool along the frequency dimension in the input layer"`
+	GborOutput    etensor.Float32  `view:"no-inline" desc:" raw output of Gabor -- full segment's worth of gabor steps"`
+	GborKwta      etensor.Float32  `view:"no-inline" desc:" post-kwta output of full segment's worth of gabor steps"`
+	Inhibs        fffb.Inhibs      `view:"no-inline" desc:"inhibition values for A1 KWTA"`
+	ExtGi         etensor.Float32  `view:"no-inline" desc:"A1 simple extra Gi from neighbor inhibition tensor"`
+	NeighInhib    kwta.NeighInhib  `desc:"neighborhood inhibition for V1s -- each unit gets inhibition from same feature in nearest orthogonal neighbors -- reduces redundancy of feature code"`
+	Kwta          kwta.KWTA        `desc:"kwta parameters, using FFFB form"`
+	KwtaPool      bool             `desc:"if Kwta.On == true, call KwtaPool (true) or KwtaLayer (false)"`
+	ByTime        bool             `desc:"display the gabor filtering result by time and then by filter, default is to order by filter and then time"`
 }
 
 // Defaults
@@ -162,9 +160,6 @@ func (se *SndEnv) Init(add, existing float64) (err error, offset int) {
 		se.LogPowerSegment.CopyShapeFrom(&se.PowerSegment)
 	}
 
-	se.FftCoefs = make([]complex128, se.Params.WinSamples)
-	se.Fft = fourier.NewCmplxFFT(len(se.FftCoefs))
-
 	// 2 reasons for this code
 	// 1 - the amount of signal handed to the fft has a "border" (some extra signal) to avoid edge effects.
 	// On the first step there is no signal to act as the "border" so we pad the data handed on the front.
@@ -238,11 +233,11 @@ func (se *SndEnv) ProcessSegment(segment int) {
 // Process the data by doing a fourier transform and computing the power spectrum, then apply mel filters to get the frequency
 // bands that mimic the non-linear human perception of sound
 func (se *SndEnv) ProcessStep(segment, ch, step int) error {
+	//fmt.Println("step: ", step)
 	offset := se.Params.Steps[step]
 	err := se.SndToWindow(segment, offset, ch)
 	if err == nil {
-		se.Fft.Reset(se.Params.WinSamples)
-		se.Dft.Filter(int(ch), int(step), &se.Window, se.Params.WinSamples, se.FftCoefs, se.Fft, &se.Power, &se.LogPower, &se.PowerSegment, &se.LogPowerSegment)
+		se.Dft.Filter(int(ch), int(step), &se.Window, se.Params.WinSamples, &se.Power, &se.LogPower, &se.PowerSegment, &se.LogPowerSegment)
 		se.Mel.FilterDft(int(ch), int(step), &se.Power, &se.MelFBankSegment, &se.MelFBank, &se.MelFilters)
 		if se.Mel.MFCC {
 			se.Mel.CepstrumDct(ch, step, &se.MelFBank, &se.MfccDctSegment, &se.MfccDct)
@@ -328,4 +323,20 @@ func MSecToSamples(ms float32, rate int) int {
 // SamplesToMSec converts samples to milliseconds, in terms of sample_rate
 func SamplesToMSec(samples int, rate int) float32 {
 	return 1000.0 * float32(samples) / float32(rate)
+}
+
+func bToMb(b uint64) uint64 {
+	return b / 1024 / 1024
+}
+
+func PrintMemUsage() {
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+	// For info on each, see: https://golang.org/pkg/runtime/#MemStats
+	//fmt.Printf("Alloc = %v MiB", bToMb(m.Alloc))
+	//fmt.Printf("\tTotalAlloc = %v MiB", bToMb(m.TotalAlloc))
+	fmt.Printf("Alloc = %v B", m.Alloc)
+	fmt.Printf("\tTotalAlloc = %v B", m.TotalAlloc)
+	fmt.Printf("\tSys = %v MiB", bToMb(m.Sys))
+	fmt.Printf("\tNumGC = %v\n", m.NumGC)
 }

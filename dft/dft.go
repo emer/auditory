@@ -47,12 +47,14 @@ func PrintMemUsage() {
 }
 
 // Filter filters the current window_in input data according to current settings -- called by ProcessStep, but can be called separately
-func (dft *Params) Filter(ch int, step int, windowIn *etensor.Float32, winSamples int, fftCoefs []complex128, fft *fourier.CmplxFFT, power *etensor.Float32, logPower *etensor.Float32, powerForSegment *etensor.Float32, logPowerForSegment *etensor.Float32) {
+func (dft *Params) Filter(ch int, step int, windowIn *etensor.Float32, winSamples int, power *etensor.Float32, logPower *etensor.Float32, powerForSegment *etensor.Float32, logPowerForSegment *etensor.Float32) {
+	fftCoefs := make([]complex128, winSamples)
 	dft.FftReal(fftCoefs, windowIn)
-	fft = fourier.NewCmplxFFT(len(fftCoefs))
+	fft := fourier.NewCmplxFFT(len(fftCoefs))
 	fftCoefs = fft.Coefficients(nil, fftCoefs)
 	dft.Power(ch, step, winSamples, fftCoefs, power, logPower, powerForSegment, logPowerForSegment)
 	fft = nil
+	fftCoefs = nil
 }
 
 // FftReal

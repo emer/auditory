@@ -272,7 +272,7 @@ func (sp *SndProcess) ProcessSegment() {
 // bands that mimic the non-linear human perception of sound
 func (sp *SndProcess) ProcessStep(ch, step int) bool {
 	available := sp.SoundToWindow(sp.Segment, sp.Params.Steps[step], ch)
-	sp.Dft.Filter(int(ch), int(step), &sp.Samples, sp.Params.WinSamples, sp.FftCoefs, sp.Fft, &sp.Power, &sp.LogPower, &sp.PowerSegment, &sp.LogPowerSegment)
+	sp.Dft.Filter(int(ch), int(step), &sp.Samples, sp.Params.WinSamples, &sp.Power, &sp.LogPower, &sp.PowerSegment, &sp.LogPowerSegment)
 	sp.Mel.FilterDft(int(ch), int(step), &sp.Power, &sp.MelFBankSegment, &sp.MelFBank, &sp.MelFilters)
 	if sp.Mel.MFCC {
 		sp.Mel.CepstrumDct(ch, step, &sp.MelFBank, &sp.MfccDctSegment, &sp.MfccDct)
