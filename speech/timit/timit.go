@@ -33,81 +33,96 @@ var PhoneList = []string{"iy", "ih", "eh", "ae", "ix", "ah", "ax", "ax-h", "uw",
 //	"hh", "hv", "pcl", "tcl", "kcl", "bcl", "dcl", "gcl", "epi", "h#", "pau", "q"}
 
 // PhoneCats and PhoneMap must maintain same order!
-var PhoneCats = []string{"iy", "ih", "eh", "ae", "ix", "ah", "uw", "uh", "ao", "ey",
-	"ay", "oy", "aw", "ow", "l", "r", "y", "w", "er", "m", "n", "ng", "ch", "jh", "dh", "b", "d", "dx",
-	"g", "p", "t", "k", "z", "zh", "v", "f", "th", "s", "hh", "pcl", "q"}
+//var PhoneCats = []string{"iy", "ih", "eh", "ae", "ix", "ah", "uw", "uh", "ao", "ey",
+//	"ay", "oy", "aw", "ow", "l", "r", "y", "w", "er", "m", "n", "ng", "ch", "jh", "dh", "b", "d", "dx",
+//	"g", "p", "t", "k", "z", "zh", "v", "f", "th", "s", "hh", "pcl", "q"}
 
 // PhoneCats2 is a reduced set of phones. PhoneCats2 and Phones2 must maintain same order!
-//var PhoneCats2 = []string{"iy", "ih", "eh", "ae", "ix", "ah", "uw", "uh", "ao", "ey",
-//	"ay", "oy", "aw", "ow", "l", "r", "y", "w", "er", "m", "n", "ng",
-//	"ch", "jh", "dh", "b", "d", "dx", "g", "p", "t", "k", "z", "zh", "v", "f", "th", "s",
-//	"hh", "pcl", "q"}
+var PhoneCats2 = []string{"iy", "ih", "eh", "ae", "ix", "ah", "uw", "uh", "ao", "ey",
+	"ay", "oy", "aw", "ow", "l", "r", "y", "w", "er", "m", "n", "ng",
+	"ch", "jh", "dh", "b", "d", "dx", "g", "p", "t", "k", "z", "zh", "v", "f", "th", "s",
+	"hh", "pcl", "q"}
 
-//var Phones = map[string]int{
-//	"iy":   0,
-//	"ih":   1,
-//	"eh":   2,
-//	"ae":   3,
-//	"ix":   4,
-//	"ah":   5,
-//	"ax":   6,
-//	"ax-h": 7,
-//	"uw":   8,
-//	"ux":   9,
-//	"uh":   10,
-//	"ao":   11,
-//	"aa":   12,
-//	"ey":   13,
-//	"ay":   14,
-//	"oy":   15,
-//	"aw":   16,
-//	"ow":   17,
-//	"l":    18,
-//	"el":   19,
-//	"r":    20,
-//	"y":    21,
-//	"w":    22,
-//	"er":   23,
-//	"axr":  24,
-//	"m":    25,
-//	"em":   26,
-//	"n":    27,
-//	"nx":   28,
-//	"en":   29,
-//	"ng":   30,
-//	"eng":  31,
-//	"ch":   32,
-//	"jh":   33,
-//	"dh":   34,
-//	"b":    35,
-//	"d":    36,
-//	"dx":   37,
-//	"g":    38,
-//	"p":    39,
-//	"t":    40,
-//	"k":    41,
-//	"z":    42,
-//	"zh":   43,
-//	"v":    44,
-//	"f":    45,
-//	"th":   46,
-//	"s":    47,
-//	"sh":   48,
-//	"hh":   49,
-//	"hv":   50,
-//	"pcl":  51,
-//	"tcl":  52,
-//	"kcl":  53,
-//	"bcl":  54,
-//	"dcl":  55,
-//	"gcl":  56,
-//	"epi":  57,
-//	"h#":   58,
-//	"pau":  59,
-//	"q":    60,
-//}
+var PhoneCats = []string{"ah", "ao", "dh", "er", "ix", "iy", "l", "n", "r", "s"}
+
+var Phones10 = map[string]int{
+	"ah": 0,
+	"ao": 1,
+	"dh": 2,
+	"er": 3,
+	"ix": 4,
+	"iy": 5,
+	"l":  6,
+	"n":  7,
+	"r":  8,
+	"s":  9,
+}
 
 var Phones = map[string]int{
+	"iy":   0,
+	"ih":   1,
+	"eh":   2,
+	"ae":   3,
+	"ix":   4,
+	"ah":   5,
+	"ax":   6,
+	"ax-h": 7,
+	"uw":   8,
+	"ux":   9,
+	"uh":   10,
+	"ao":   11,
+	"aa":   12,
+	"ey":   13,
+	"ay":   14,
+	"oy":   15,
+	"aw":   16,
+	"ow":   17,
+	"l":    18,
+	"el":   19,
+	"r":    20,
+	"y":    21,
+	"w":    22,
+	"er":   23,
+	"axr":  24,
+	"m":    25,
+	"em":   26,
+	"n":    27,
+	"nx":   28,
+	"en":   29,
+	"ng":   30,
+	"eng":  31,
+	"ch":   32,
+	"jh":   33,
+	"dh":   34,
+	"b":    35,
+	"d":    36,
+	"dx":   37,
+	"g":    38,
+	"p":    39,
+	"t":    40,
+	"k":    41,
+	"z":    42,
+	"zh":   43,
+	"v":    44,
+	"f":    45,
+	"th":   46,
+	"s":    47,
+	"sh":   48,
+	"hh":   49,
+	"hv":   50,
+	"pcl":  51,
+	"tcl":  52,
+	"kcl":  53,
+	"bcl":  54,
+	"dcl":  55,
+	"gcl":  56,
+	"epi":  57,
+	"h#":   58,
+	"pau":  59,
+	"q":    60,
+}
+
+var PhonesX = map[string]int{
 	"iy":   0,
 	"ih":   1,
 	"eh":   2,
@@ -238,7 +253,11 @@ var Phones2 = map[string]int{
 // IdxFmSnd returns the slice index of the snd if found.
 // id is ignored if the corpus doesn't have subsets of sounds
 func IdxFmSnd(s string, id string) (v int, ok bool) {
-	v, ok = Phones[s]
+	if id == "10" {
+		v, ok = Phones10[s]
+	} else {
+		v, ok = Phones[s]
+	}
 	return
 }
 
@@ -254,11 +273,21 @@ func IdxFmSnd2(s string, id string) (v int, ok bool) {
 func SndFmIdx(idx int, id string) (phone string, ok bool) {
 	phone = ""
 	ok = false
-	for k, v := range Phones {
-		if v == idx {
-			phone = k
-			ok = true
-			return
+	if id == "10" {
+		for k, v := range Phones10 {
+			if v == idx {
+				phone = k
+				ok = true
+				return
+			}
+		}
+	} else {
+		for k, v := range Phones {
+			if v == idx {
+				phone = k
+				ok = true
+				return
+			}
 		}
 	}
 	return
