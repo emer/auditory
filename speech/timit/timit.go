@@ -13,6 +13,7 @@ package timit
 
 import (
 	"bufio"
+	"fmt"
 	"log"
 	"os"
 	"strconv"
@@ -21,29 +22,25 @@ import (
 	"github.com/emer/auditory/speech"
 )
 
-// PhoneList is the full list of phones. Some phones get folded together and the reduced set is the PhoneCats variable.
-var PhoneList = []string{"iy", "ih", "eh", "ae", "ix", "ah", "ax", "ax-h", "uw", "ux", "uh", "ao", "aa", "ey",
+// Each set of PhoneCats and Phone map must have the same order!!!!
+
+// This is the full set of timit transcribed phones. See Lee & Hon, 1989 - Speaker-Independent Phone Recognition Using Hidden Markov Models
+var PhoneCats61 = []string{"iy", "ih", "eh", "ae", "ix", "ah", "ax", "ax-h", "uw", "ux", "uh", "ao", "aa", "ey",
 	"ay", "oy", "aw", "ow", "l", "el", "r", "y", "w", "er", "axr", "m", "em", "n", "nx", "en", "ng",
 	"eng", "ch", "jh", "dh", "b", "d", "dx", "g", "p", "t", "k", "z", "zh", "v", "f", "th", "s", "sh",
 	"hh", "hv", "pcl", "tcl", "kcl", "bcl", "dcl", "gcl", "epi", "h#", "pau", "q"}
 
-//var PhoneCats = []string{"iy", "ih", "eh", "ae", "ix", "ah", "ax", "ax-h", "uw", "ux", "uh", "ao", "aa", "ey",
-//	"ay", "oy", "aw", "ow", "l", "el", "r", "y", "w", "er", "axr", "m", "em", "n", "nx", "en", "ng",
-//	"eng", "ch", "jh", "dh", "b", "d", "dx", "g", "p", "t", "k", "z", "zh", "v", "f", "th", "s", "sh",
-//	"hh", "hv", "pcl", "tcl", "kcl", "bcl", "dcl", "gcl", "epi", "h#", "pau", "q"}
+// PhoneCats41 is a reduced set of phones. Some phones are generally recognized as confusable and swaps are
+// not considered errors in the published phone recognition experiments. Some research does the mapping of
+// many to one (e.g. n, nx and en all to "n") when scoring the recognizer output and the PhoneCats61 set is used.
+// Using the PhoneCats41 set the mapping down is done during training and test.
+var PhoneCats41 = []string{"iy", "ih", "eh", "ae", "ix", "ah", "uw", "uh", "ao", "ey", "ay",
+	"oy", "aw", "ow", "l", "r", "y", "w", "er", "m", "n", "ng", "ch", "jh", "dh", "b", "d",
+	"dx", "g", "p", "t", "k", "z", "zh", "v", "f", "th", "s", "hh", "pcl", "q"}
 
-// PhoneCats and PhoneMap must maintain same order!
-//var PhoneCats = []string{"iy", "ih", "eh", "ae", "ix", "ah", "uw", "uh", "ao", "ey",
-//	"ay", "oy", "aw", "ow", "l", "r", "y", "w", "er", "m", "n", "ng", "ch", "jh", "dh", "b", "d", "dx",
-//	"g", "p", "t", "k", "z", "zh", "v", "f", "th", "s", "hh", "pcl", "q"}
-
-// PhoneCats2 is a reduced set of phones. PhoneCats2 and Phones2 must maintain same order!
-var PhoneCats2 = []string{"iy", "ih", "eh", "ae", "ix", "ah", "uw", "uh", "ao", "ey",
-	"ay", "oy", "aw", "ow", "l", "r", "y", "w", "er", "m", "n", "ng",
-	"ch", "jh", "dh", "b", "d", "dx", "g", "p", "t", "k", "z", "zh", "v", "f", "th", "s",
-	"hh", "pcl", "q"}
-
-var PhoneCats = []string{"ah", "ao", "dh", "er", "ix", "iy", "l", "n", "r", "s"}
+// the PhoneCats10 set is a subset of phones that early results showed were more easily recognized
+// and the set was used to "begin with success!"
+var PhoneCats10 = []string{"ah", "ao", "dh", "er", "ix", "iy", "l", "n", "r", "s"}
 
 var Phones10 = map[string]int{
 	"ah": 0,
@@ -58,71 +55,7 @@ var Phones10 = map[string]int{
 	"s":  9,
 }
 
-var Phones = map[string]int{
-	"iy":   0,
-	"ih":   1,
-	"eh":   2,
-	"ae":   3,
-	"ix":   4,
-	"ah":   5,
-	"ax":   6,
-	"ax-h": 7,
-	"uw":   8,
-	"ux":   9,
-	"uh":   10,
-	"ao":   11,
-	"aa":   12,
-	"ey":   13,
-	"ay":   14,
-	"oy":   15,
-	"aw":   16,
-	"ow":   17,
-	"l":    18,
-	"el":   19,
-	"r":    20,
-	"y":    21,
-	"w":    22,
-	"er":   23,
-	"axr":  24,
-	"m":    25,
-	"em":   26,
-	"n":    27,
-	"nx":   28,
-	"en":   29,
-	"ng":   30,
-	"eng":  31,
-	"ch":   32,
-	"jh":   33,
-	"dh":   34,
-	"b":    35,
-	"d":    36,
-	"dx":   37,
-	"g":    38,
-	"p":    39,
-	"t":    40,
-	"k":    41,
-	"z":    42,
-	"zh":   43,
-	"v":    44,
-	"f":    45,
-	"th":   46,
-	"s":    47,
-	"sh":   48,
-	"hh":   49,
-	"hv":   50,
-	"pcl":  51,
-	"tcl":  52,
-	"kcl":  53,
-	"bcl":  54,
-	"dcl":  55,
-	"gcl":  56,
-	"epi":  57,
-	"h#":   58,
-	"pau":  59,
-	"q":    60,
-}
-
-var PhonesX = map[string]int{
+var Phones41 = map[string]int{
 	"iy":   0,
 	"ih":   1,
 	"eh":   2,
@@ -186,85 +119,84 @@ var PhonesX = map[string]int{
 	"q":    40,
 }
 
-var Phones2 = map[string]int{
+var Phones61 = map[string]int{
 	"iy":   0,
 	"ih":   1,
 	"eh":   2,
 	"ae":   3,
 	"ix":   4,
 	"ah":   5,
-	"ax":   5,
-	"ax-h": 5,
-	"uw":   6,
-	"ux":   6,
-	//"uh":   7,
-	"ao": 7,
-	"aa": 7,
-	"ey": 8,
-	"ay": 9,
-	//"oy":   11,
-	//"aw":  12,
-	"ow":  10,
-	"l":   11,
-	"el":  11,
-	"r":   12,
-	"y":   13,
-	"w":   14,
-	"er":  15,
-	"axr": 15,
-	"m":   16,
-	"em":  16,
-	"n":   17,
-	"nx":  17,
-	"en":  17,
-	//"ng":  21,
-	//"eng": 21,
-	"ch": 18,
-	"jh": 19,
-	"dh": 20,
-	"b":  21,
-	"d":  22,
-	"dx": 23,
-	//"g":   28,
-	"p":   24,
-	"t":   25,
-	"k":   26,
-	"z":   27,
-	"zh":  28,
-	"sh":  28,
-	"v":   29,
-	"f":   30,
-	"th":  31,
-	"s":   32,
-	"hh":  33,
-	"hv":  33,
-	"pcl": 34,
-	"tcl": 34,
-	"kcl": 34,
-	"bcl": 34,
-	"dcl": 34,
-	"gcl": 34,
-	"h#":  34,
-	"pau": 34,
-	"epi": 34,
-	"q":   35,
+	"ax":   6,
+	"ax-h": 7,
+	"uw":   8,
+	"ux":   9,
+	"uh":   10,
+	"ao":   11,
+	"aa":   12,
+	"ey":   13,
+	"ay":   14,
+	"oy":   15,
+	"aw":   16,
+	"ow":   17,
+	"l":    18,
+	"el":   19,
+	"r":    20,
+	"y":    21,
+	"w":    22,
+	"er":   23,
+	"axr":  24,
+	"m":    25,
+	"em":   26,
+	"n":    27,
+	"nx":   28,
+	"en":   29,
+	"ng":   30,
+	"eng":  31,
+	"ch":   32,
+	"jh":   33,
+	"dh":   34,
+	"b":    35,
+	"d":    36,
+	"dx":   37,
+	"g":    38,
+	"p":    39,
+	"t":    40,
+	"k":    41,
+	"z":    42,
+	"zh":   43,
+	"v":    44,
+	"f":    45,
+	"th":   46,
+	"s":    47,
+	"sh":   48,
+	"hh":   49,
+	"hv":   50,
+	"pcl":  51,
+	"tcl":  52,
+	"kcl":  53,
+	"bcl":  54,
+	"dcl":  55,
+	"gcl":  56,
+	"epi":  57,
+	"h#":   58,
+	"pau":  59,
+	"q":    60,
 }
 
 // IdxFmSnd returns the slice index of the snd if found.
 // id is ignored if the corpus doesn't have subsets of sounds
 func IdxFmSnd(s string, id string) (v int, ok bool) {
+	v = -1
+	ok = false
 	if id == "10" {
 		v, ok = Phones10[s]
+	} else if id == "41" {
+		v, ok = Phones41[s]
+	} else if id == "61" {
+		v, ok = Phones61[s]
 	} else {
-		v, ok = Phones[s]
+		fmt.Println("IdxFmSnd: phone set id does not match any existing phone set")
 	}
-	return
-}
-
-// IdxFmSnd returns the slice index of the snd if found.
-// id is ignored if the corpus doesn't have subsets of sounds
-func IdxFmSnd2(s string, id string) (v int, ok bool) {
-	v, ok = Phones2[s]
 	return
 }
 
@@ -278,32 +210,24 @@ func SndFmIdx(idx int, id string) (phone string, ok bool) {
 			if v == idx {
 				phone = k
 				ok = true
-				return
 			}
 		}
-	} else {
-		for k, v := range Phones {
+	} else if id == "41" {
+		for k, v := range Phones41 {
 			if v == idx {
 				phone = k
 				ok = true
-				return
 			}
 		}
-	}
-	return
-}
-
-// SndFmIdx returns the sound if found in the map of sounds of the corpus.
-// id is ignored if the corpus doesn't have subsets of sounds
-func SndFmIdx2(idx int, id string) (phone string, ok bool) {
-	phone = ""
-	ok = false
-	for k, v := range Phones2 {
-		if v == idx {
-			phone = k
-			ok = true
-			return
+	} else if id == "61" {
+		for k, v := range Phones61 {
+			if v == idx {
+				phone = k
+				ok = true
+			}
 		}
+	} else {
+		fmt.Println("IdxFmSnd: phone set id does not match any existing phone set")
 	}
 	return
 }
