@@ -5,12 +5,9 @@
 package dft
 
 import (
-	"fmt"
-	"math"
-	"runtime"
-
 	"github.com/emer/etable/etensor"
 	"gonum.org/v1/gonum/dsp/fourier"
+	"math"
 )
 
 // Dft struct holds the variables for doing a fourier transform
@@ -28,22 +25,6 @@ func (dft *Params) Initialize(winSamples int) {
 	dft.CompLogPow = true
 	dft.LogOffSet = 0
 	dft.LogMin = -100
-}
-
-func bToMb(b uint64) uint64 {
-	return b / 1024 / 1024
-}
-
-func PrintMemUsage() {
-	var m runtime.MemStats
-	runtime.ReadMemStats(&m)
-	// For info on each, see: https://golang.org/pkg/runtime/#MemStats
-	//fmt.Printf("Alloc = %v MiB", bToMb(m.Alloc))
-	//fmt.Printf("\tTotalAlloc = %v MiB", bToMb(m.TotalAlloc))
-	fmt.Printf("Alloc = %v B", m.Alloc)
-	fmt.Printf("\tTotalAlloc = %v B", m.TotalAlloc)
-	fmt.Printf("\tSys = %v MiB", bToMb(m.Sys))
-	fmt.Printf("\tNumGC = %v\n", m.NumGC)
 }
 
 // Filter filters the current window_in input data according to current settings -- called by ProcessStep, but can be called separately
