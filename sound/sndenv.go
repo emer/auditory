@@ -115,14 +115,14 @@ func (se *SndEnv) Init(add, existing float64) (err error, offset int) {
 	se.Params.SegmentSteps = steps + 2*se.Params.BorderSteps
 	se.Params.StrideSamples = MSecToSamples(se.Params.StrideMs, sr)
 
-	offset = 0.0
+	offset = 0 // in milliseconds
 	if add >= 0 {
 		if add < existing {
 			offset = int(existing - add)
-			se.Signal.Values = se.Signal.Values[int(offset):len(se.Signal.Values)]
+			se.Signal.Values = se.Signal.Values[int(MSecToSamples(float32(offset), sr)):len(se.Signal.Values)]
 		} else if add > existing {
 			offset = int(add - existing)
-			n := int((float64(offset) * float64(se.Params.StrideSamples)) / 100.0)
+			n := int(MSecToSamples(float32(offset), sr))
 			silence := make([]float32, n)
 			se.Signal.Values = append(silence, se.Signal.Values...)
 		}
