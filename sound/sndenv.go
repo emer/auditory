@@ -98,15 +98,12 @@ func (se *SndEnv) Defaults() {
 }
 
 // Init sets various sound processing params based on default params and user overrides
-// add is the amount of random silence that should precede the start of the sequence
-// start is the amount of silence preexisting at start
-// All values milliseconds
-func (se *SndEnv) Init(add, existing float64) (err error, offset int) {
+func (se *SndEnv) Init() (err error) {
 	sr := se.Sound.SampleRate()
 	if sr <= 0 {
 		fmt.Println("sample rate <= 0")
 		err = errors.New("sample rate <= 0")
-		return err, 0
+		return err
 	}
 	se.Params.WinSamples = MSecToSamples(se.Params.WinMs, sr)
 	se.Params.StepSamples = MSecToSamples(se.Params.StepMs, sr)
@@ -114,19 +111,6 @@ func (se *SndEnv) Init(add, existing float64) (err error, offset int) {
 	steps := int(math.Round(float64(se.Params.SegmentMs / se.Params.StepMs)))
 	se.Params.SegmentSteps = steps + 2*se.Params.BorderSteps
 	se.Params.StrideSamples = MSecToSamples(se.Params.StrideMs, sr)
-
-	offset = 0 // in milliseconds
-	if add >= 0 {
-		if add < existing {
-			offset = int(existing - add)
-			se.Signal.Values = se.Signal.Values[int(MSecToSamples(float32(offset), sr)):len(se.Signal.Values)]
-		} else if add > existing {
-			offset = int(add - existing)
-			n := int(MSecToSamples(float32(offset), sr))
-			silence := make([]float32, n)
-			se.Signal.Values = append(silence, se.Signal.Values...)
-		}
-	}
 
 	specs := agabor.Active(se.GaborSpecs)
 	nfilters := len(specs)
@@ -142,7 +126,7 @@ func (se *SndEnv) Init(add, existing float64) (err error, offset int) {
 		se.ExtGi.SetShape([]int{se.GborOutPoolsY, se.GborOutPoolsX, 2, nfilters}, nil, nil) // passed in for each channel
 	} else {
 		log.Println("GborOutPoolsX & GborOutPoolsY must both be == 0 or > 0 (i.e. 2D or 4D)")
-		return err, 0
+		return err
 	}
 	se.GborOutput.SetMetaData("odd-row", "true")
 	se.GborOutput.SetMetaData("grid-fill", ".9")
@@ -183,7 +167,34 @@ func (se *SndEnv) Init(add, existing float64) (err error, offset int) {
 	siglen := len(se.Signal.Values) - se.Params.SegmentSamples*se.Sound.Channels()
 	siglen = siglen / se.Sound.Channels()
 	se.SegCnt = siglen/se.Params.StrideSamples + 1 // add back the first segment subtracted at from siglen calculation
-	return nil, offset
+	return nil
+}
+
+// AdjustForSilence trims or adds silence
+// add is the amount of random silence that should precede the start of the sequence.
+// existing is the amount of silence preexisting at start of sound.
+// offset is the amount of silence trimmed from or added to the existing silence.
+// add and existing values are in milliseconds
+func (se *SndEnv) AdjustForSilence(add, existing float64) (offset int) {
+	sr := se.Sound.SampleRate()
+	if sr <= 0 {
+		fmt.Println("sample rate <= 0")
+		return -1
+	}
+
+	offset = 0 // in milliseconds
+	if add >= 0 {
+		if add < existing {
+			offset = int(existing - add)
+			se.Signal.Values = se.Signal.Values[int(MSecToSamples(float32(offset), sr)):len(se.Signal.Values)]
+		} else if add > existing {
+			offset = int(add - existing)
+			n := int(MSecToSamples(float32(offset), sr))
+			silence := make([]float32, n)
+			se.Signal.Values = append(silence, se.Signal.Values...)
+		}
+	}
+	return offset
 }
 
 // ToTensor
@@ -211,7 +222,7 @@ func (se *SndEnv) ApplyKwta(ch int) {
 }
 
 // ProcessSegment processes the entire segment's input by processing a small overlapping set of samples on each pass
-func (se *SndEnv) ProcessSegment(segment int) {
+func (se *SndEnv) ProcessSegment(segment int, addl bool) {
 	se.Power.SetZeros()
 	se.LogPower.SetZeros()
 	se.PowerSegment.SetZeros()
@@ -221,7 +232,7 @@ func (se *SndEnv) ProcessSegment(segment int) {
 
 	for ch := int(0); ch < se.Sound.Channels(); ch++ {
 		for s := 0; s < int(se.Params.SegmentSteps); s++ {
-			err := se.ProcessStep(segment, ch, s)
+			err := se.ProcessStep(segment, ch, s, addl)
 			if err != nil {
 				break
 			}
@@ -232,9 +243,12 @@ func (se *SndEnv) ProcessSegment(segment int) {
 // ProcessStep processes a step worth of sound input from current input_pos, and increment input_pos by input.step_samples
 // Process the data by doing a fourier transform and computing the power spectrum, then apply mel filters to get the frequency
 // bands that mimic the non-linear human perception of sound
-func (se *SndEnv) ProcessStep(segment, ch, step int) error {
+func (se *SndEnv) ProcessStep(segment, ch, step int, addl bool) error {
 	//fmt.Println("step: ", step)
 	offset := se.Params.Steps[step]
+	if addl {
+		offset += MSecToSamples(20, se.Sound.SampleRate())
+	}
 	err := se.SndToWindow(segment, offset, ch)
 	if err == nil {
 		se.Dft.Filter(int(ch), int(step), &se.Window, se.Params.WinSamples, &se.Power, &se.LogPower, &se.PowerSegment, &se.LogPowerSegment)
