@@ -249,7 +249,8 @@ func (se *SndEnv) ProcessStep(segment, ch, step int, addl bool) error {
 	if addl {
 		offset += MSecToSamples(20, se.Sound.SampleRate())
 	}
-	err := se.SndToWindow(segment, offset, ch)
+	start := segment*int(se.Params.StrideSamples) + offset // segments start at zero
+	err := se.SndToWindow(start, ch)
 	if err == nil {
 		se.Dft.Filter(int(ch), int(step), &se.Window, se.Params.WinSamples, &se.Power, &se.LogPower, &se.PowerSegment, &se.LogPowerSegment)
 		se.Mel.FilterDft(int(ch), int(step), &se.Power, &se.MelFBankSegment, &se.MelFBank, &se.MelFilters)
@@ -261,9 +262,8 @@ func (se *SndEnv) ProcessStep(segment, ch, step int, addl bool) error {
 }
 
 // SndToWindow gets sound from the signal (i.e. the slice of input values) at given position and channel, into Window
-func (se *SndEnv) SndToWindow(segment, stepOffset, ch int) error {
+func (se *SndEnv) SndToWindow(start, ch int) error {
 	if se.Signal.NumDims() == 1 {
-		start := segment*int(se.Params.StrideSamples) + stepOffset // segments start at zero
 		end := start + se.Params.WinSamples
 		if end > len(se.Signal.Values) {
 			return errors.New("SndToWindow: end beyond signal length!!")
