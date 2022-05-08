@@ -250,7 +250,6 @@ func (se *SndEnv) ProcessStep(segment, ch, step, add int) error {
 	//fmt.Println("step: ", step)
 	offset := se.Params.Steps[step] + MSecToSamples(float32(add), se.Sound.SampleRate())
 	start := segment*int(se.Params.StrideSamples) + offset // segments start at zero
-	fmt.Println(segment, start)
 	err := se.SndToWindow(start, ch)
 	if err == nil {
 		se.Dft.Filter(int(ch), int(step), &se.Window, se.Params.WinSamples, &se.Power, &se.LogPower, &se.PowerSegment, &se.LogPowerSegment)
