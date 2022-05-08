@@ -222,7 +222,10 @@ func (se *SndEnv) ApplyKwta(ch int) {
 }
 
 // ProcessSegment processes the entire segment's input by processing a small overlapping set of samples on each pass
-func (se *SndEnv) ProcessSegment(segment int, addl bool) {
+// The add argument allows for compensation if there are multiple sounds of different duration to different input layers
+// of the network. For example, durations of 80 and 120 ms. Add half the difference (e.g. 20 ms) so the sounds are
+// centered on the same moment of sound
+func (se *SndEnv) ProcessSegment(segment, add int) {
 	se.Power.SetZeros()
 	se.LogPower.SetZeros()
 	se.PowerSegment.SetZeros()
@@ -232,7 +235,7 @@ func (se *SndEnv) ProcessSegment(segment int, addl bool) {
 
 	for ch := int(0); ch < se.Sound.Channels(); ch++ {
 		for s := 0; s < int(se.Params.SegmentSteps); s++ {
-			err := se.ProcessStep(segment, ch, s, addl)
+			err := se.ProcessStep(segment, ch, s, add)
 			if err != nil {
 				break
 			}
@@ -243,13 +246,11 @@ func (se *SndEnv) ProcessSegment(segment int, addl bool) {
 // ProcessStep processes a step worth of sound input from current input_pos, and increment input_pos by input.step_samples
 // Process the data by doing a fourier transform and computing the power spectrum, then apply mel filters to get the frequency
 // bands that mimic the non-linear human perception of sound
-func (se *SndEnv) ProcessStep(segment, ch, step int, addl bool) error {
+func (se *SndEnv) ProcessStep(segment, ch, step, add int) error {
 	//fmt.Println("step: ", step)
-	offset := se.Params.Steps[step]
-	if addl {
-		offset += MSecToSamples(20, se.Sound.SampleRate())
-	}
+	offset := se.Params.Steps[step] + MSecToSamples(float32(add), se.Sound.SampleRate())
 	start := segment*int(se.Params.StrideSamples) + offset // segments start at zero
+	fmt.Println(segment, start)
 	err := se.SndToWindow(start, ch)
 	if err == nil {
 		se.Dft.Filter(int(ch), int(step), &se.Window, se.Params.WinSamples, &se.Power, &se.LogPower, &se.PowerSegment, &se.LogPowerSegment)
