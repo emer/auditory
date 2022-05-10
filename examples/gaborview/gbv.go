@@ -3,11 +3,13 @@ package main
 import (
 	"errors"
 	"fmt"
+	"github.com/emer/vision/vfilter"
 	"log"
 	"os"
 	"os/exec"
 	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/emer/auditory/agabor"
@@ -37,7 +39,7 @@ func main() {
 	TheApp.New()
 	TheApp.Config()
 	if len(os.Args) > 1 {
-		TheApp.CmdArgs() // simple assumption is that any args = no gui -- could add explicit arg if you want
+		TheApp.CmdArgs() // simple assumption ix that any args = no gui -- could add explicit arg if you want
 	} else {
 		gimain.Main(func() { // this starts gui -- requires valid OpenGL display connection (e.g., X11)
 			guirun()
@@ -62,16 +64,24 @@ type Table struct {
 	Sels  []string          `desc:"selected row ids in ascending order in view"`
 }
 
+// CurSnd ix meta info for the sound processed
+type CurSnd struct {
+	Sound string
+	StEnd string
+	Path  string
+	Name  string
+}
+
 // WinParams defines the sound input parameters for auditory processing
 type WinParams struct {
 	WinMs        float32 `def:"25" desc:"input window -- number of milliseconds worth of sound to filter at a time"`
-	StepMs       float32 `def:"10" desc:"input step -- number of milliseconds worth of sound that the input is stepped along to obtain the next window sample"`
+	StepMs       float32 `def:"10" desc:"input step -- number of milliseconds worth of sound that the input ix stepped along to obtain the next window sample"`
 	SegmentStart float32 `desc:"start of sound segment in milliseconds"`
 	SegmentEnd   float32 `desc:"end of sound segment in milliseconds"`
-	BorderSteps  int     `view:"-" def:"0" desc:"overlap with previous segment"`
-	Channel      int     `view:"-" desc:"specific channel to process, if input has multiple channels, and we only process one of them (-1 = process all)"`
-	PadValue     float32 `view:"-"`
-	Resize       bool    `desc:"if resize is true segment durations will be lengthened (a bit before and a bit after) to be a multiple of the filter width"`
+	BorderSteps  int     `def:"0" desc:"overlap with previous and next segment"`
+	Channel      int     `desc:"specific channel to process, if input has multiple channels, and we only process one of them (-1 = process all)"`
+	Resize       bool    `desc:"if resize ix true segment durations will be lengthened (a bit before and a bit after) to be a multiple of the filter width"`
+	TimeMode     bool    `desc:"use the user entered start/end times, ignoring the current sound selection"`
 
 	// these are calculated
 	WinSamples  int   `view:"-" desc:"number of samples to process each step"`
@@ -87,7 +97,7 @@ type ProcessParams struct {
 	PowerSegment    etensor.Float32 `view:"no-inline" desc:" full segment's worth of power of the dft, up to the nyquist limit frequency (1/2 input.WinSamples)"`
 	LogPowerSegment etensor.Float32 `view:"no-inline" desc:" full segment's worth of log power of the dft, up to the nyquist limit frequency (1/2 input.WinSamples)"`
 	Mel             mel.Params      `view:"inline"`
-	MelFBank        etensor.Float32 `view:"no-inline" desc:" mel scale transformation of dft_power, using triangular filters, resulting in the mel filterbank output -- the natural log of this is typically applied"`
+	MelFBank        etensor.Float32 `view:"no-inline" desc:" mel scale transformation of dft_power, using triangular filters, resulting in the mel filterbank output -- the natural log of this ix typically applied"`
 	MelFBankSegment etensor.Float32 `view:"no-inline" desc:" full segment's worth of mel feature-bank output"`
 	MelFilters      etensor.Float32 `view:"no-inline" desc:" the actual filters"`
 	MfccDct         etensor.Float32 `view:"no-inline" desc:" discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
@@ -115,6 +125,8 @@ type App struct {
 	OpenPath  string            `desc:"start here when opening the load sounds dialog"`
 	SndFile   string            `inactive:"+" desc:"full path of open sound file"`
 	Text      string            `inactive:"+" desc:"the text of the current sound file if available"`
+	CurSnd1   CurSnd            `desc:"the currently selected sound for view 1"`
+	CurSnd2   CurSnd            `desc:"the currently selected sound for view 2"`
 	Sequence  []speech.Sequence `view:"no-inline" desc:"a slice of Sequence structs, one per open sound file"`
 	SndsTable Table             `desc:"table of sounds from the open sound files"`
 	Row       int               `view:"-" desc:"SndsTable selected row, as seen by user"`
@@ -130,15 +142,18 @@ type App struct {
 	Sound    sound.Wave      `view:"inline"`
 	Signal   etensor.Float32 `view:"-" desc:" the full sound input obtained from the sound input - plus any added padding"`
 	Window   etensor.Float32 `view:"-" desc:" [Input.WinSamples] the raw sound input, one channel at a time"`
-	ByTime   bool            `desc:"display the gabor filtering result by time and then by filter, default is to order by filter and then time"`
-	TimeMode bool            `desc:"use the user entered start/end times, ignoring the current sound selection"`
+	ByTime   bool            `desc:"display the gabor filtering result by time and then by filter, default ix to order by filter and then time"`
+	ImgDir   string          `desc:"directory for storing images of mel, gabors, filtered result, etc"`
+
+	StatLabel     *gi.Label          `view:"-" desc:"status label"`
+	MelFBankGridS *etview.TensorGrid `view:"-" desc:"melfbank grid view for the current segment"`
 }
 
 // this registers this Sim Type and gives it properties that e.g.,
 // prompt for filename for save methods.
 var KiT_App = kit.Types.AddType(&App{}, AppProps)
 
-// TheApp is the overall state for this simulation
+// TheApp ix the overall state for this simulation
 var TheApp App
 
 func (ss *App) New() {
@@ -156,6 +171,7 @@ func (ap *App) Init() {
 	ap.UpdateGabors(&ap.GParams2)
 	ap.ByTime = true
 	ap.GUI.Active = false
+	ap.ImgDir = "/Users/rohrlich/emer/auditory/examples/gaborview/phoneImages/"
 }
 
 // WinDefaults initializes the sound processing parameters
@@ -163,7 +179,6 @@ func (ap *App) WinDefaults(wparams *WinParams) {
 	wparams.WinMs = 25.0
 	wparams.StepMs = 10.0
 	wparams.Channel = 0
-	wparams.PadValue = 0.0
 	wparams.BorderSteps = 0
 	wparams.Resize = true
 }
@@ -185,8 +200,8 @@ func (ap *App) InitGabors(params *GaborParams) {
 	params.GaborSet.Filters.SetMetaData("min", "-.25")
 	params.GaborSet.Filters.SetMetaData("max", ".25")
 
-	params.GaborSet.SizeX = 9
-	params.GaborSet.SizeY = 9
+	params.GaborSet.SizeX = 8
+	params.GaborSet.SizeY = 8
 	params.GaborSet.Gain = 1.5
 	params.GaborSet.StrideX = 6
 	params.GaborSet.StrideY = 3
@@ -214,11 +229,56 @@ func (ap *App) InitGabors(params *GaborParams) {
 // UpdateGabors rerenders based on current spec and filterset values
 func (ap *App) UpdateGabors(params *GaborParams) {
 	if params.GaborSet.SizeX < params.GaborSet.StrideX {
-		gi.PromptDialog(nil, gi.DlgOpts{Title: "Stride > size", Prompt: "The stride in X is greater than the filter size in X"}, gi.AddOk, gi.AddCancel, nil, nil)
+		gi.PromptDialog(nil, gi.DlgOpts{Title: "Stride > size", Prompt: "The stride in X ix greater than the filter size in X"}, gi.AddOk, gi.AddCancel, nil, nil)
 	}
 	active := agabor.Active(params.GaborSpecs)
 	params.GaborSet.Filters.SetShape([]int{len(active), params.GaborSet.SizeY, params.GaborSet.SizeX}, nil, nil)
 	agabor.ToTensor(params.GaborSpecs, &params.GaborSet)
+}
+
+// ProcessSetup grabs params from the selected sounds table row and sets params for the actual processing step
+func (ap *App) ProcessSetup(wparams *WinParams, cur *CurSnd) error {
+	if ap.SndsTable.Table.Rows == 0 {
+		gi.PromptDialog(nil, gi.DlgOpts{Title: "Sounds table empty", Prompt: "Open a sound file before processing"}, gi.AddOk, gi.NoCancel, nil, nil)
+		return errors.New("Load a sound file and try again")
+	}
+
+	ap.Row = ap.SndsTable.View.SelectedIdx
+	idx := ap.SndsTable.View.Table.Idxs[ap.Row]
+	if wparams.TimeMode == false {
+		wparams.SegmentStart = float32(ap.SndsTable.Table.CellFloat("Start", idx))
+		wparams.SegmentEnd = float32(ap.SndsTable.Table.CellFloat("End", idx))
+	}
+
+	d := ap.SndsTable.Table.CellString("Dir", idx)
+	f := ap.SndsTable.Table.CellString("File", idx)
+	id := d + "/" + f
+	for _, s := range ap.Sequence {
+		if strings.Contains(s.File, id) {
+			ap.SndFile = s.File
+			ap.Text = s.Text
+		}
+	}
+	if ap.SndFile == ap.LastFile {
+		ap.Load = false
+	} else {
+		ap.LastFile = ap.SndFile
+		ap.Load = true
+	}
+
+	// for view purposes
+	cur.Sound = ap.SndsTable.Table.CellString("Sound", idx)
+	cur.Path = d
+	cur.Name = f
+	tmp := cur.Path
+	tmp = strings.Replace(tmp, "/", "_", -1)
+	tmp += "_" + cur.Name
+	cur.Path = tmp
+	s := strconv.FormatFloat(ap.SndsTable.Table.CellFloat("Start", idx), 'f', 0, 32)
+	e := strconv.FormatFloat(ap.SndsTable.Table.CellFloat("End", idx), 'f', 0, 32)
+	cur.StEnd = s + "_" + e
+
+	return nil
 }
 
 // Process generates the mel output and from that the result of the convolution with the gabor filters
@@ -235,7 +295,7 @@ func (ap *App) Process(wparams *WinParams, pparams *ProcessParams, gparams *Gabo
 	}
 
 	if ap.Sound.Buf == nil {
-		gi.PromptDialog(nil, gi.DlgOpts{Title: "Sound buffer is empty", Prompt: "Open a sound file before processing"}, gi.AddOk, gi.NoCancel, nil, nil)
+		gi.PromptDialog(nil, gi.DlgOpts{Title: "Sound buffer ix empty", Prompt: "Open a sound file before processing"}, gi.AddOk, gi.NoCancel, nil, nil)
 		return errors.New("Load a sound file and try again")
 	}
 
@@ -252,7 +312,7 @@ func (ap *App) Process(wparams *WinParams, pparams *ProcessParams, gparams *Gabo
 		add := float32(0)
 		if duration < sizeXMs {
 			add = sizeXMs - duration
-		} else { // duration is longer than one filter so find the next stride end
+		} else { // duration ix longer than one filter so find the next stride end
 			d := duration
 			d -= sizeXMs
 			rem := float32(int(d) % int(strideXMs))
@@ -299,9 +359,9 @@ func (ap *App) Process(wparams *WinParams, pparams *ProcessParams, gparams *Gabo
 
 	// 2 reasons for this code
 	// 1 - the amount of signal handed to the fft has a "border" (some extra signal) to avoid edge effects.
-	// On the first step there is no signal to act as the "border" so we pad the data handed on the front.
+	// On the first step there ix no signal to act as the "border" so we pad the data handed on the front.
 	// 2 - signals needs to be aligned when the number when multiple signals are input (e.g. 100 and 300 ms)
-	// so that the leading edge (right edge) is the same time point.
+	// so that the leading edge (right edge) ix the same time point.
 	// This code does this by generating negative offsets for the start of the processing.
 	// Also see SndToWindow for the use of the step values
 	stepsBack := wparams.BorderSteps
@@ -336,6 +396,7 @@ func (ap *App) Process(wparams *WinParams, pparams *ProcessParams, gparams *Gabo
 			}
 		}
 	}
+	//ap.StatLabel.Text = ""
 	return nil
 }
 
@@ -348,7 +409,7 @@ func (ap *App) ProcessStep(ch int, step int, wparams *WinParams, pparams *Proces
 	err := ap.SndToWindow(start, ch, wparams)
 	if err == nil {
 		gparams.Fft.Reset(wparams.WinSamples)
-		pparams.Dft.Filter(int(ch), int(step), &ap.Window, wparams.WinSamples, gparams.FftCoefs, gparams.Fft, &pparams.Power, &pparams.LogPower, &pparams.PowerSegment, &pparams.LogPowerSegment)
+		pparams.Dft.Filter(int(ch), int(step), &ap.Window, wparams.WinSamples, &pparams.Power, &pparams.LogPower, &pparams.PowerSegment, &pparams.LogPowerSegment)
 		pparams.Mel.FilterDft(int(ch), int(step), &pparams.Power, &pparams.MelFBankSegment, &pparams.MelFBank, &pparams.MelFilters)
 		if pparams.Mel.MFCC {
 			pparams.Mel.CepstrumDct(ch, step, &pparams.MelFBank, &pparams.MfccDctSegment, &pparams.MfccDct)
@@ -357,7 +418,7 @@ func (ap *App) ProcessStep(ch int, step int, wparams *WinParams, pparams *Proces
 	return err
 }
 
-// LoadTranscription loads the transcription file. The sound file is loaded at start of processing by calling ToTensor()
+// LoadTranscription loads the transcription file. The sound file ix loaded at start of processing by calling ToTensor()
 func (ap *App) LoadTranscription(fpth string) {
 	seq := new(speech.Sequence)
 	seq.File = fpth
@@ -368,7 +429,7 @@ func (ap *App) LoadTranscription(fpth string) {
 	if ap.Corpus == "TIMIT" {
 		fn := strings.Replace(fn, "ExpWavs", "", 1) // different directory for timing data
 		fn = strings.Replace(fn, ".WAV", "", 1)
-		fnm := fn + ".PHN.MS" // PHN is "Phone" and MS is milliseconds
+		fnm := fn + ".PHN.MS" // PHN ix "Phone" and MS ix milliseconds
 		names := []string{}
 		var err error
 		seq.Units, err = timit.LoadTimes(fnm, names) // names can be empty for timit, LoadTimes loads names
@@ -384,19 +445,19 @@ func (ap *App) LoadTranscription(fpth string) {
 
 	ap.Sequence = append(ap.Sequence, *seq)
 	if seq.Units == nil {
-		fmt.Println("AdjSeqTimes: SpeechSeq.Units is nil. Some problem with loading file transcription and timing data")
+		fmt.Println("AdjSeqTimes: SpeechSeq.Units ix nil. Some problem with loading file transcription and timing data")
 		return
 	}
 	ap.AdjSeqTimes(seq)
 
 	// todo: this works for timit - but need a more general solution
-	seq.TimeCur = seq.Units[0].AStart
+	//seq.TimeCur = seq.Units[0].AStart
 	n := len(seq.Units) // find last unit
-	if seq.Units[n-1].Name == "h#" {
-		seq.TimeStop = seq.Units[n-1].AStart
-	} else {
-		fmt.Println("last unit of speech sequence not silence")
-	}
+	//if seq.Units[n-1].Name == "h#" {
+	//	seq.Stop = seq.Units[n-1].AStart
+	//} else {
+	//	fmt.Println("last unit of speech sequence not silence")
+	//}
 
 	curRows := ap.SndsTable.Table.Rows
 	ap.SndsTable.Table.AddRows(len(seq.Units))
@@ -420,6 +481,7 @@ func (ap *App) LoadTranscription(fpth string) {
 		ap.SndsTable.Table.SetCellString("Sound", r, s.Name)
 		ap.SndsTable.Table.SetCellFloat("Start", r, s.AStart)
 		ap.SndsTable.Table.SetCellFloat("End", r, s.AEnd)
+		ap.SndsTable.Table.SetCellFloat("Duration", r, s.AEnd-s.AStart)
 		ap.SndsTable.Table.SetCellString("File", r, nm)
 		ap.SndsTable.Table.SetCellString("Dir", r, fpth)
 	}
@@ -430,7 +492,7 @@ func (ap *App) LoadTranscription(fpth string) {
 	return
 }
 
-// ToTensor loads the sound file, e.g. .wav file, the transcription is loaded in LoadTranscription()
+// ToTensor loads the sound file, e.g. .wav file, the transcription ix loaded in LoadTranscription()
 func (ap *App) ToTensor(wparams *WinParams) bool {
 	if ap.Sound.Channels() > 1 {
 		ap.Sound.SoundToTensor(&ap.Signal, -1)
@@ -565,7 +627,7 @@ func (ap *App) ApplyKwta(ch int, gparams *GaborParams) {
 	if gparams.Kwta.On {
 		rawSS := gparams.GborOutput.SubSpace([]int{ch}).(*etensor.Float32)
 		kwtaSS := gparams.GborKwta.SubSpace([]int{ch}).(*etensor.Float32)
-		// This app is 2D only - no pools
+		// This app ix 2D only - no pools
 		//if ap.KwtaPool == true {
 		//	ap.Kwta.KWTAPool(rawSS, kwtaSS, &ap.Inhibs, &ap.ExtGi)
 		//} else {
@@ -574,39 +636,7 @@ func (ap *App) ApplyKwta(ch int, gparams *GaborParams) {
 	}
 }
 
-// ProcessSetup grabs params from the selected sounds table row and sets params for the actual processing step
-func (ap *App) ProcessSetup(wparams *WinParams) error {
-	if ap.SndsTable.Table.Rows == 0 {
-		gi.PromptDialog(nil, gi.DlgOpts{Title: "Sounds table empty", Prompt: "Open a sound file before processing"}, gi.AddOk, gi.NoCancel, nil, nil)
-		return errors.New("Load a sound file and try again")
-	}
-
-	ap.Row = ap.SndsTable.View.SelectedIdx
-	idx := ap.SndsTable.View.Table.Idxs[ap.Row]
-	if ap.TimeMode == false {
-		wparams.SegmentStart = float32(ap.SndsTable.Table.CellFloat("Start", idx))
-		wparams.SegmentEnd = float32(ap.SndsTable.Table.CellFloat("End", idx))
-	}
-
-	d := ap.SndsTable.Table.CellString("Dir", idx)
-	f := ap.SndsTable.Table.CellString("File", idx)
-	id := d + "/" + f
-	for _, s := range ap.Sequence {
-		if strings.Contains(s.File, id) {
-			ap.SndFile = s.File
-			ap.Text = s.Text
-		}
-	}
-	if ap.SndFile == ap.LastFile {
-		ap.Load = false
-	} else {
-		ap.LastFile = ap.SndFile
-		ap.Load = true
-	}
-	return nil
-}
-
-// ConfigSoundsTable
+/// ConfigSoundsTable
 func (ap *App) ConfigSoundsTable() {
 	ap.SndsTable.Table = &etable.Table{}
 	ap.SndsTable.Table.SetMetaData("name", "The Loaded Sounds")
@@ -617,6 +647,7 @@ func (ap *App) ConfigSoundsTable() {
 		{"Sound", etensor.STRING, nil, nil},
 		{"Start", etensor.FLOAT32, nil, nil},
 		{"End", etensor.FLOAT32, nil, nil},
+		{"Duration", etensor.FLOAT32, nil, nil},
 		{"File", etensor.STRING, nil, nil},
 		{"Dir", etensor.STRING, nil, nil},
 	}
@@ -631,12 +662,13 @@ func (ap *App) ConfigTableView(tv *etview.TableView) {
 		// ToDo: add option modifier for Process params 2
 		if sig == int64(giv.SliceViewDoubleClicked) {
 			ap.GUI.ToolBar.UpdateActions()
-			err := ap.ProcessSetup(&ap.WParams1)
+			err := ap.ProcessSetup(&ap.WParams1, &ap.CurSnd1)
 			if err == nil {
 				err = ap.Process(&ap.WParams1, &ap.PParams1, &ap.GParams1)
 				if err == nil {
 					ap.ApplyGabor(&ap.PParams1, &ap.GParams1)
 					ap.GUI.UpdateWindow()
+					ap.SnapShot1()
 				}
 			}
 
@@ -656,6 +688,56 @@ func (ap *App) View() {
 	if err != nil {
 		log.Fatal(err)
 	}
+}
+
+// SnapShot1
+func (ap *App) SnapShot1() {
+
+	//img := vfilter.GreyTensorToImage(nil, &foo, 0, true)
+	//foo := ap.PParams1.MelFBankSegment.Clone().(*etensor.Float32)
+	//bar := foo.T()
+
+	if ap.PParams1.MelFBankSegment.Shape.NumDims() >= 2 {
+		dir := ap.ImgDir + ap.CurSnd1.Sound
+		f, err := os.Stat(dir)
+		if err != nil {
+			err = os.Mkdir(dir, os.ModePerm)
+		} else {
+			if f.IsDir() != true {
+				fmt.Println("file exists with name of what should be a directory!")
+				return
+			}
+		}
+
+		img := vfilter.GreyTensorToImage(nil, &ap.PParams1.MelFBankSegment, 0, true)
+		fn := ap.ImgDir
+		fn += ap.CurSnd1.Sound + "/" + ap.CurSnd1.Sound + "_mel_" + ap.CurSnd1.Path + "_" + ap.CurSnd1.StEnd + ".png"
+		err = gi.SaveImage(fn, img)
+		if err != nil {
+			fmt.Println(err)
+		}
+	}
+
+	//if ap.GParams1.GborOutput.NumDims() >= 2 {
+	//	img := vfilter.GreyTensorToImage(nil, &ap.GParams1.GborOutput, 0, true)
+	//	fn := "/Users/rohrlich/emer/auditory/examples/gaborview/phoneImages/"
+	//	fn += ap.CurSnd1.Sound + "/" + ap.CurSnd1.Sound + "_result_" + ap.CurSnd1.Path + "_" + ap.CurSnd1.StEnd + ".png"
+	//	err := gi.SaveImage(fn, img)
+	//	if err != nil {
+	//		fmt.Println(err)
+	//	}
+	//}
+}
+
+// TimitSxFilter
+func TimitSxFilter(fv *giv.FileView, fi *giv.FileInfo) bool {
+	if fi.IsDir() == true {
+		return true
+	}
+	if strings.HasPrefix(fi.Name, "SX") {
+		return true
+	}
+	return false
 }
 
 // ConfigGui configures the GoGi gui interface for this simulation,
@@ -700,7 +782,7 @@ func (ap *App) ConfigGui() *gi.Window {
 						if info.IsDir() {
 							// Could do fully recursive by passing path var to LoadTranscription but I
 							// tried it and it didn't return from TIMIT/TRAIN/DR1 even after 10 minutes
-							// This way it does one level directory only and is fast
+							// This way it does one level directory only and ix fast
 							filepath.Walk(fn, func(path string, info os.FileInfo, err error) error {
 								if err != nil {
 									log.Fatalf(err.Error())
@@ -740,12 +822,13 @@ func (ap *App) ConfigGui() *gi.Window {
 		Tooltip: "Process the segment of audio from SegmentStart to SegmentEnd applying the gabor filters to the Mel tensor",
 		Active:  egui.ActiveRunning,
 		Func: func() {
-			err := ap.ProcessSetup(&ap.WParams1)
+			err := ap.ProcessSetup(&ap.WParams1, &ap.CurSnd1)
 			if err == nil {
 				err = ap.Process(&ap.WParams1, &ap.PParams1, &ap.GParams1)
 				if err == nil {
 					ap.ApplyGabor(&ap.PParams1, &ap.GParams1)
 					ap.GUI.UpdateWindow()
+					ap.SnapShot1()
 				}
 			}
 		},
@@ -755,12 +838,13 @@ func (ap *App) ConfigGui() *gi.Window {
 		Tooltip: "Process the segment of audio from SegmentStart to SegmentEnd applying the gabor filters to the Mel tensor",
 		Active:  egui.ActiveRunning,
 		Func: func() {
-			err := ap.ProcessSetup(&ap.WParams2)
+			err := ap.ProcessSetup(&ap.WParams2, &ap.CurSnd2)
 			if err == nil {
 				err = ap.Process(&ap.WParams2, &ap.PParams2, &ap.GParams2)
 				if err == nil {
 					ap.ApplyGabor(&ap.PParams2, &ap.GParams2)
 					ap.GUI.UpdateWindow()
+					//ap.SnapShot2()
 				}
 			}
 		},
@@ -771,7 +855,7 @@ func (ap *App) ConfigGui() *gi.Window {
 		Active:  egui.ActiveRunning,
 		Func: func() {
 			// setup the next segment of sound
-			if ap.TimeMode == false { // default
+			if ap.WParams1.TimeMode == false { // default
 				ap.SndsTable.View.ResetSelectedIdxs()
 				if ap.Row == ap.SndsTable.View.DispRows-1 {
 					ap.Row = 0
@@ -785,12 +869,13 @@ func (ap *App) ConfigGui() *gi.Window {
 				ap.WParams1.SegmentStart += d
 				ap.WParams1.SegmentEnd += d
 			}
-			err := ap.ProcessSetup(&ap.WParams1)
+			err := ap.ProcessSetup(&ap.WParams1, &ap.CurSnd1)
 			if err == nil {
 				err = ap.Process(&ap.WParams1, &ap.PParams1, &ap.GParams1)
 				if err == nil {
 					ap.ApplyGabor(&ap.PParams1, &ap.GParams1)
 					ap.GUI.UpdateWindow()
+					ap.SnapShot1()
 				}
 			}
 		},
@@ -801,7 +886,7 @@ func (ap *App) ConfigGui() *gi.Window {
 		Active:  egui.ActiveRunning,
 		Func: func() {
 			// setup the next segment of sound
-			if ap.TimeMode == false { // default
+			if ap.WParams2.TimeMode == false { // default
 				ap.SndsTable.View.ResetSelectedIdxs()
 				if ap.Row == ap.SndsTable.View.DispRows-1 {
 					ap.Row = 0
@@ -815,12 +900,13 @@ func (ap *App) ConfigGui() *gi.Window {
 				ap.WParams2.SegmentStart += d
 				ap.WParams2.SegmentEnd += d
 			}
-			err := ap.ProcessSetup(&ap.WParams2)
+			err := ap.ProcessSetup(&ap.WParams2, &ap.CurSnd2)
 			if err == nil {
 				err = ap.Process(&ap.WParams2, &ap.PParams2, &ap.GParams2)
 				if err == nil {
 					ap.ApplyGabor(&ap.PParams2, &ap.GParams2)
 					ap.GUI.UpdateWindow()
+					//ap.SnapShot2()
 				}
 			}
 		},
@@ -835,6 +921,32 @@ func (ap *App) ConfigGui() *gi.Window {
 			ap.GUI.UpdateWindow()
 		},
 	})
+
+	ap.GUI.AddToolbarItem(egui.ToolbarItem{Label: "Save 1", Icon: "fast-fwd",
+		Tooltip: "Save the mel and result grids",
+		Active:  egui.ActiveRunning,
+		Func: func() {
+			ap.SnapShot1()
+		},
+	})
+
+	//ap.GUI.AddToolbarItem(egui.ToolbarItem{Label: "Copy 1 -> 2", Icon: "copy",
+	//	Tooltip: "Copy all set 1 params (window, process, gabor) to set 2",
+	//	Active:  egui.ActiveAlways,
+	//	Func: func() {
+	//		ap.CopyOne()
+	//		ap.GUI.UpdateWindow()
+	//	},
+	//})
+	//
+	//ap.GUI.AddToolbarItem(egui.ToolbarItem{Label: "Copy 2 -> 1", Icon: "copy",
+	//	Tooltip: "Copy all set 2 params (window, process, gabor) to set 1",
+	//	Active:  egui.ActiveAlways,
+	//	Func: func() {
+	//		ap.CopyTwo()
+	//		ap.GUI.UpdateWindow()
+	//	},
+	//})
 
 	ap.GUI.ToolBar.AddSeparator("filt")
 
@@ -905,6 +1017,7 @@ func (ap *App) ConfigGui() *gi.Window {
 	tg = tv.AddNewTab(etview.KiT_TensorGrid, "Mel").(*etview.TensorGrid)
 	tg.SetStretchMax()
 	tg.SetTensor(&ap.PParams1.MelFBankSegment)
+	ap.MelFBankGridS = tg
 
 	tg = tv.AddNewTab(etview.KiT_TensorGrid, "Result").(*etview.TensorGrid)
 	tg.SetStretchMax()
@@ -932,6 +1045,10 @@ func (ap *App) ConfigGui() *gi.Window {
 	tg = tv2.AddNewTab(etview.KiT_TensorGrid, "Result").(*etview.TensorGrid)
 	tg.SetStretchMax()
 	tg.SetTensor(&ap.GParams2.GborOutput)
+
+	ap.StatLabel = gi.AddNewLabel(mfr, "status", "Status...")
+	ap.StatLabel.SetStretchMaxWidth()
+	ap.StatLabel.Redrawable = true
 
 	ap.GUI.FinalizeGUI(false)
 	return ap.GUI.Win
