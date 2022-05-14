@@ -86,7 +86,6 @@ type SndEnv struct {
 	Kwta          kwta.KWTA        `desc:"kwta parameters, using FFFB form"`
 	KwtaPool      bool             `desc:"if Kwta.On == true, call KwtaPool (true) or KwtaLayer (false)"`
 	ByTime        bool             `desc:"display the gabor filtering result by time and then by filter, default is to order by filter and then time"`
-	onOff         bool             `desc:"If onOff is true the positive and negative values will be set to alternate rows of the rawOut tensor"`
 }
 
 // Defaults
@@ -97,7 +96,6 @@ func (se *SndEnv) Defaults() {
 	se.Kwta.Defaults()
 	se.KwtaPool = true
 	se.ByTime = false
-	se.onOff = false
 }
 
 // Init sets various sound processing params based on default params and user overrides
@@ -123,7 +121,7 @@ func (se *SndEnv) Init() (err error) {
 	se.GaborFilters.ToTable(se.GaborFilters, &se.GaborTab) // note: view only, testing
 	if se.GborOutPoolsX == 0 && se.GborOutPoolsY == 0 {    // 2D
 		se.GborOutput.SetShape([]int{se.Sound.Channels(), se.GborOutUnitsY, se.GborOutUnitsX}, nil, []string{"chan", "freq", "time"})
-		se.ExtGi.SetShape([]int{se.GborOutUnitsY, nfilters}, nil, nil) // passed in for each channel
+		se.ExtGi.SetShape([]int{se.GborOutUnitsY, se.GborOutUnitsX}, nil, nil) // passed in for each channel
 	} else if se.GborOutPoolsX > 0 && se.GborOutPoolsY > 0 { // 4D
 		se.GborOutput.SetShape([]int{se.Sound.Channels(), se.GborOutPoolsY, se.GborOutPoolsX, se.GborOutUnitsY, se.GborOutUnitsX}, nil, []string{"chan", "freq", "time"})
 		se.ExtGi.SetShape([]int{se.GborOutPoolsY, se.GborOutPoolsX, 2, nfilters}, nil, nil) // passed in for each channel
@@ -293,7 +291,7 @@ func (se *SndEnv) SndToWindow(start, ch int) error {
 // ApplyGabor convolves the gabor filters with the mel output
 func (se *SndEnv) ApplyGabor() (tsr *etensor.Float32) {
 	for ch := int(0); ch < se.Sound.Channels(); ch++ {
-		agabor.Convolve(ch, &se.MelFBankSegment, se.GaborFilters, &se.GborOutput, se.ByTime, se.onOff)
+		agabor.Convolve(ch, &se.MelFBankSegment, se.GaborFilters, &se.GborOutput, se.ByTime)
 		//if se.NeighInhib.On {
 		//	se.NeighInhib.Inhib4(&se.GborOutput, &se.ExtGi)
 		//} else {
