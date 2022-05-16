@@ -120,10 +120,10 @@ func (se *SndEnv) Init() (err error) {
 	agabor.ToTensor(specs, &se.GaborFilters)
 	se.GaborFilters.ToTable(se.GaborFilters, &se.GaborTab) // note: view only, testing
 	if se.GborOutPoolsX == 0 && se.GborOutPoolsY == 0 {    // 2D
-		se.GborOutput.SetShape([]int{se.Sound.Channels(), se.GborOutUnitsY, se.GborOutUnitsX}, nil, []string{"chan", "freq", "time"})
+		se.GborOutput.SetShape([]int{se.Sound.Channels(), se.GborOutUnitsY, se.GborOutUnitsX}, nil, nil)
 		se.ExtGi.SetShape([]int{se.GborOutUnitsY, se.GborOutUnitsX}, nil, nil) // passed in for each channel
 	} else if se.GborOutPoolsX > 0 && se.GborOutPoolsY > 0 { // 4D
-		se.GborOutput.SetShape([]int{se.Sound.Channels(), se.GborOutPoolsY, se.GborOutPoolsX, se.GborOutUnitsY, se.GborOutUnitsX}, nil, []string{"chan", "freq", "time"})
+		se.GborOutput.SetShape([]int{se.Sound.Channels(), se.GborOutPoolsY, se.GborOutPoolsX, se.GborOutUnitsY, se.GborOutUnitsX}, nil, nil)
 		se.ExtGi.SetShape([]int{se.GborOutPoolsY, se.GborOutPoolsX, 2, nfilters}, nil, nil) // passed in for each channel
 	} else {
 		log.Println("GborOutPoolsX & GborOutPoolsY must both be == 0 or > 0 (i.e. 2D or 4D)")
@@ -206,6 +206,17 @@ func (se *SndEnv) ToTensor() bool {
 		se.Sound.SoundToTensor(&se.Signal, se.Params.Channel)
 	}
 	return true
+}
+
+// ApplyNeighInhib - each unit gets inhibition from same feature in nearest orthogonal neighbors
+func (se *SndEnv) ApplyNeighInhib(ch int) {
+	if se.NeighInhib.On {
+		rawSS := se.GborOutput.SubSpace([]int{ch}).(*etensor.Float32)
+		extSS := se.ExtGi.SubSpace([]int{ch}).(*etensor.Float32)
+		se.NeighInhib.Inhib4(rawSS, extSS)
+	} else {
+		se.ExtGi.SetZeros()
+	}
 }
 
 // ApplyKwta runs the kwta algorithm on the raw activations
@@ -292,11 +303,11 @@ func (se *SndEnv) SndToWindow(start, ch int) error {
 func (se *SndEnv) ApplyGabor() (tsr *etensor.Float32) {
 	for ch := int(0); ch < se.Sound.Channels(); ch++ {
 		agabor.Convolve(ch, &se.MelFBankSegment, se.GaborFilters, &se.GborOutput, se.ByTime)
-		//if se.NeighInhib.On {
-		//	se.NeighInhib.Inhib4(&se.GborOutput, &se.ExtGi)
-		//} else {
-		//	se.ExtGi.SetZeros()
-		//}
+		if se.NeighInhib.On {
+			se.ApplyNeighInhib(ch)
+		} else {
+			se.ExtGi.SetZeros()
+		}
 
 		if se.Kwta.On {
 			se.ApplyKwta(ch)
