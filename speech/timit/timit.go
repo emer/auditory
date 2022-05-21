@@ -38,6 +38,10 @@ var PhoneCats41 = []string{"iy", "ih", "eh", "ae", "ix", "ah", "uw", "uh", "ao",
 	"oy", "aw", "ow", "l", "r", "y", "w", "er", "m", "n", "ng", "ch", "jh", "dh", "b", "d",
 	"dx", "g", "p", "t", "k", "z", "zh", "v", "f", "th", "s", "hh", "pcl", "q"}
 
+var PhoneCats39 = []string{"iy", "ih", "eh", "ae", "ix", "ah", "uw", "uh", "ao", "ey", "ay",
+	"oy", "aw", "ow", "l", "r", "y", "w", "er", "m", "n", "ng", "ch", "jh", "dh", "b", "d",
+	"dx", "g", "p", "t", "k", "z", "zh", "v", "f", "th", "s", "hh"}
+
 // the PhoneCats10 set is a subset of phones that early results showed were more easily recognized
 // and the set was used to "begin with success!"
 var PhoneCats10 = []string{"ah", "ao", "dh", "er", "ix", "iy", "l", "n", "r", "s"}
@@ -53,6 +57,60 @@ var Phones10 = map[string]int{
 	"n":  7,
 	"r":  8,
 	"s":  9,
+}
+
+var Phones39 = map[string]int{
+	"iy":   0,
+	"ih":   1,
+	"eh":   2,
+	"ae":   3,
+	"ix":   4,
+	"ah":   5,
+	"ax":   5,
+	"ax-h": 5,
+	"uw":   6,
+	"ux":   6,
+	"uh":   7,
+	"ao":   8,
+	"aa":   8,
+	"ey":   9,
+	"ay":   10,
+	"oy":   11,
+	"aw":   12,
+	"ow":   13,
+	"l":    14,
+	"el":   14,
+	"r":    15,
+	"y":    16,
+	"w":    17,
+	"er":   18,
+	"axr":  18,
+	"m":    19,
+	"em":   19,
+	"n":    20,
+	"nx":   20,
+	"en":   20,
+	"ng":   21,
+	"eng":  21,
+	"ch":   22,
+	"jh":   23,
+	"dh":   24,
+	"b":    25,
+	"d":    26,
+	"dx":   27,
+	"g":    28,
+	"p":    29,
+	"t":    30,
+	"k":    31,
+	"z":    32,
+	"zh":   33,
+	"sh":   33,
+	"v":    34,
+	"f":    35,
+	"th":   36,
+	"s":    37,
+	"hh":   38,
+	"hv":   38,
 }
 
 var Phones41 = map[string]int{
@@ -190,6 +248,8 @@ func IdxFmSnd(s string, id string) (v int, ok bool) {
 	ok = false
 	if id == "10" {
 		v, ok = Phones10[s]
+	} else if id == "39" {
+		v, ok = Phones39[s]
 	} else if id == "41" {
 		v, ok = Phones41[s]
 	} else if id == "61" {
