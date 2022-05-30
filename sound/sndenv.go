@@ -68,6 +68,7 @@ type SndEnv struct {
 	MelFBank        etensor.Float32 `view:"no-inline" desc:" mel scale transformation of dft_power, resulting in the mel filterbank output -- the natural log of this is typically applied"`
 	MelFBankSegment etensor.Float32 `view:"no-inline" desc:" full segment's worth of mel feature-bank output"`
 	MelFilters      etensor.Float32 `view:"no-inline" desc:" the actual filters"`
+	MelEnergy       []float64       `view:"no-inline" desc:"sum of mel values by step"`
 	MfccDctSegment  etensor.Float32 `view:"no-inline" desc:" full segment's worth of discrete cosine transform of log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
 	MfccDct         etensor.Float32 `view:"no-inline" desc:" discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
 
@@ -244,6 +245,7 @@ func (se *SndEnv) ProcessSegment(segment, add int) {
 	se.LogPowerSegment.SetZeros()
 	se.MelFBankSegment.SetZeros()
 	se.MfccDctSegment.SetZeros()
+	se.MelEnergy = nil
 
 	for ch := int(0); ch < se.Sound.Channels(); ch++ {
 		for s := 0; s < int(se.Params.SegmentSteps); s++ {
@@ -270,6 +272,14 @@ func (se *SndEnv) ProcessStep(segment, ch, step, add int) error {
 			se.Mel.CepstrumDct(ch, step, &se.MelFBank, &se.MfccDctSegment, &se.MfccDct)
 		}
 	}
+	e := 0.0
+	for i := 0; i < se.MelFBank.Len(); i++ {
+		e += float64(se.MelFBank.Value1D(i))
+	}
+
+	e = e / float64(se.MelFBank.Len()) // normalize
+	se.MelEnergy = append(se.MelEnergy, e)
+
 	return err
 }
 
