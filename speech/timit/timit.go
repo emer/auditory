@@ -238,8 +238,18 @@ func LoadTranscription(fn string) ([]string, error) {
 	return names, nil
 }
 
-// LoadTimes loads both the timing and transcription data for timit files so the names slice is unused
-func LoadTimes(fn string, names []string) ([]speech.Unit, error) {
+// IsStop
+func IsStop(s string) bool {
+	if s == "b" || s == "d" || s == "g" || s == "k" || s == "p" || s == "t" {
+		return true
+	}
+	return false
+}
+
+// LoadTimes loads both the timing and transcription data for timit files so the names slice is unused.
+// If fuse is true stop consonants and the paired closure are combined into a single sound entry. The
+// duration is the combination of the closure and the consonant (b d g k p t)
+func LoadTimes(fn string, names []string, fuse bool) ([]speech.Unit, error) {
 	//fmt.Println("LoadTimitSeqsAndTimes")
 	var units []speech.Unit
 
@@ -256,29 +266,55 @@ func LoadTimes(fn string, names []string) ([]speech.Unit, error) {
 	scanner.Split(bufio.ScanLines)
 
 	i := 0
+	prvClosure := false // was the preceding snd a closure?
+	closure := ""
 	for scanner.Scan() {
 		t := scanner.Text()
 		if t == "" {
 			break
 		}
-		cvt := new(speech.Unit)
-		units = append(units, *cvt)
 		cvs := strings.Fields(t)
-		f, err := strconv.ParseFloat(cvs[0], 64)
-		if err == nil {
-			units[i].Start = f
-		}
-		if cvs[1] == "h#" {
-			units[i].Silence = true
-		}
-		if len(units) > 1 {
-			if cvs[1] == "h#" { // tail silence - set unknown end as start plus one
-				units[i].End = units[i].Start + 1
+		time := cvs[0]
+		snd := cvs[1]
+
+		if prvClosure == false || prvClosure == true && snd != string(closure[0]) {
+			prvClosure = false
+			closure = ""
+			//if prvClosure == false && IsStop(snd) == false {
+			cvt := new(speech.Unit)
+			units = append(units, *cvt)
+			f, err := strconv.ParseFloat(time, 64)
+			if err == nil {
+				units[i].Start = f
 			}
-			units[i-1].End = units[i].Start // all units up till final silence
+
+			if fuse == true && strings.HasSuffix(snd, "cl") {
+				prvClosure = true
+				//fmt.Println("the closure is: ", snd)
+				closure = snd
+				c := strings.TrimSuffix(snd, "cl")
+				units[i].Name = c               // name it with non-closure consonant (i.e. bcl -> b, gcl -> g)
+				units[i-1].End = units[i].Start // all units up till final silence
+				i++
+				continue // skip the rest
+			}
+			if snd == "h#" {
+				units[i].Silence = true
+			}
+
+			if len(units) > 1 {
+				if snd == "h#" { // tail silence - set unknown end as start plus one
+					units[i].End = units[i].Start + 1
+				}
+				units[i-1].End = units[i].Start // all units up till final silence
+			}
+			units[i].Name = snd //
+			i++
+		} else {
+			prvClosure = false // reset
+			//fmt.Println("prv is closure, current is:", snd)
+
 		}
-		units[i].Name = cvs[1] //
-		i++
 	}
 	return units, nil
 }
