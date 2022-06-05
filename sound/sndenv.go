@@ -117,7 +117,6 @@ func (se *SndEnv) Init() (err error) {
 	specs := agabor.Active(se.GaborSpecs)
 	nfilters := len(specs)
 	se.GaborFilters.Filters.SetShape([]int{nfilters, se.GaborFilters.SizeY, se.GaborFilters.SizeX}, nil, nil)
-	se.NeighInhib.Defaults()
 	agabor.ToTensor(specs, &se.GaborFilters)
 	se.GaborFilters.ToTable(se.GaborFilters, &se.GaborTab) // note: view only, testing
 	if se.GborOutPoolsX == 0 && se.GborOutPoolsY == 0 {    // 2D
