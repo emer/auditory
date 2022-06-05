@@ -117,7 +117,7 @@ func (se *SndEnv) Init() (err error) {
 	specs := agabor.Active(se.GaborSpecs)
 	nfilters := len(specs)
 	se.GaborFilters.Filters.SetShape([]int{nfilters, se.GaborFilters.SizeY, se.GaborFilters.SizeX}, nil, nil)
-	se.NeighInhib.Defaults() // NeighInhib code not working yet - need to pass 4d tensor not 5d
+	se.NeighInhib.Defaults()
 	agabor.ToTensor(specs, &se.GaborFilters)
 	se.GaborFilters.ToTable(se.GaborFilters, &se.GaborTab) // note: view only, testing
 	if se.GborOutPoolsX == 0 && se.GborOutPoolsY == 0 {    // 2D
@@ -276,7 +276,6 @@ func (se *SndEnv) ProcessStep(segment, ch, step, add int) error {
 	for i := 0; i < se.MelFBank.Len(); i++ {
 		e += float64(se.MelFBank.Value1D(i))
 	}
-
 	e = e / float64(se.MelFBank.Len()) // normalize
 	se.MelEnergy = append(se.MelEnergy, e)
 
