@@ -43,12 +43,12 @@ func (mel *Params) Defaults() {
 
 // InitFilters computes the filter bin values
 func (mel *Params) InitFilters(dftSize int, sampleRate int, filters *etensor.Float32) {
-	mel.BinPts = make([]int32, mel.FBank.NFilters+2)
+	nFiltersEff := mel.FBank.NFilters + 2 // plus 2 because we need end points to create the right number of bins
+	mel.BinPts = make([]int32, nFiltersEff)
 	mel.FBank.RenormScale = 1.0 / (mel.FBank.RenormMax - mel.FBank.RenormMin)
 
 	hiMel := FreqToMel(mel.FBank.HiHz)
 	loMel := FreqToMel(mel.FBank.LoHz)
-	nFiltersEff := mel.FBank.NFilters + 2 // plus 2 because we need end points to create the right number of bins
 	incr := (hiMel - loMel) / float32(mel.FBank.NFilters+1)
 
 	for i := 0; i < nFiltersEff; i++ {
