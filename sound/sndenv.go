@@ -310,7 +310,11 @@ func (se *SndEnv) SndToWindow(start, ch int) error {
 // ApplyGabor convolves the gabor filters with the mel output
 func (se *SndEnv) ApplyGabor() (tsr *etensor.Float32) {
 	for ch := int(0); ch < se.Sound.Channels(); ch++ {
-		agabor.Convolve(ch, &se.MelFBankSegment, se.GaborFilters, &se.GborOutput, se.ByTime)
+		if se.Mel.MFCC == true {
+			agabor.Convolve(ch, &se.MfccDctSegment, se.GaborFilters, &se.GborOutput, se.ByTime)
+		} else {
+			agabor.Convolve(ch, &se.MelFBankSegment, se.GaborFilters, &se.GborOutput, se.ByTime)
+		}
 		if se.NeighInhib.On {
 			se.ApplyNeighInhib(ch)
 		} else {
