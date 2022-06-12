@@ -39,7 +39,7 @@ func main() {
 	TheApp.New()
 	TheApp.Config()
 	if len(os.Args) > 1 {
-		TheApp.CmdArgs() // simple assumption ix that any args = no gui -- could add explicit arg if you want
+		TheApp.CmdArgs() // simple assumption is that any args = no gui -- could add explicit arg if you want
 	} else {
 		gimain.Main(func() { // this starts gui -- requires valid OpenGL display connection (e.g., X11)
 			guirun()
@@ -64,7 +64,7 @@ type Table struct {
 	Sels  []string          `desc:"selected row ids in ascending order in view"`
 }
 
-// CurSnd ix meta info for the sound processed
+// CurSnd meta info for the sound processed
 type CurSnd struct {
 	Sound string
 	StEnd string
@@ -75,13 +75,13 @@ type CurSnd struct {
 // WinParams defines the sound input parameters for auditory processing
 type WinParams struct {
 	WinMs        float32 `def:"25" desc:"input window -- number of milliseconds worth of sound to filter at a time"`
-	StepMs       float32 `def:"10" desc:"input step -- number of milliseconds worth of sound that the input ix stepped along to obtain the next window sample"`
+	StepMs       float32 `def:"10" desc:"input step -- number of milliseconds worth of sound that the input is stepped along to obtain the next window sample"`
 	SegmentStart float32 `desc:"start of sound segment in milliseconds"`
 	SegmentEnd   float32 `desc:"end of sound segment in milliseconds"`
 	BorderSteps  int     `def:"0" desc:"overlap with previous and next segment"`
 	Channel      int     `desc:"specific channel to process, if input has multiple channels, and we only process one of them (-1 = process all)"`
-	Resize       bool    `desc:"if resize ix true segment durations will be lengthened (a bit before and a bit after) to be a multiple of the filter width"`
-	TimeMode     bool    `desc:"use the user entered start/end times, ignoring the current sound selection"`
+	Resize       bool    `desc:"if resize is true segment durations will be lengthened (a bit before and a bit after) to be align with gabor filter size and striding"`
+	TimeMode     bool    `desc:"use the user entered start/end times, ignoring the current sound selection times, the current file will be used"`
 
 	// these are calculated
 	WinSamples  int   `view:"-" desc:"number of samples to process each step"`
@@ -97,7 +97,7 @@ type ProcessParams struct {
 	PowerSegment    etensor.Float32 `view:"no-inline" desc:" full segment's worth of power of the dft, up to the nyquist limit frequency (1/2 input.WinSamples)"`
 	LogPowerSegment etensor.Float32 `view:"no-inline" desc:" full segment's worth of log power of the dft, up to the nyquist limit frequency (1/2 input.WinSamples)"`
 	Mel             mel.Params      `view:"inline"`
-	MelFBank        etensor.Float32 `view:"no-inline" desc:" mel scale transformation of dft_power, using triangular filters, resulting in the mel filterbank output -- the natural log of this ix typically applied"`
+	MelFBank        etensor.Float32 `view:"no-inline" desc:" mel scale transformation of dft_power, using triangular filters, resulting in the mel filterbank output -- the natural log of this is typically applied"`
 	MelFBankSegment etensor.Float32 `view:"no-inline" desc:" full segment's worth of mel feature-bank output"`
 	MelFilters      etensor.Float32 `view:"no-inline" desc:" the actual filters"`
 	MfccDct         etensor.Float32 `view:"no-inline" desc:" discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
@@ -142,7 +142,7 @@ type App struct {
 	Sound    sound.Wave      `view:"inline"`
 	Signal   etensor.Float32 `view:"-" desc:" the full sound input obtained from the sound input - plus any added padding"`
 	Window   etensor.Float32 `view:"-" desc:" [Input.WinSamples] the raw sound input, one channel at a time"`
-	ByTime   bool            `desc:"display the gabor filtering result by time and then by filter, default ix to order by filter and then time"`
+	ByTime   bool            `desc:"display the gabor filtering result by time and then by filter, default is to order by filter and then time"`
 	ImgDir   string          `desc:"directory for storing images of mel, gabors, filtered result, etc"`
 
 	StatLabel     *gi.Label          `view:"-" desc:"status label"`
@@ -153,7 +153,7 @@ type App struct {
 // prompt for filename for save methods.
 var KiT_App = kit.Types.AddType(&App{}, AppProps)
 
-// TheApp ix the overall state for this simulation
+// TheApp is the overall state for this simulation
 var TheApp App
 
 func (ss *App) New() {
@@ -229,7 +229,7 @@ func (ap *App) InitGabors(params *GaborParams) {
 // UpdateGabors rerenders based on current spec and filterset values
 func (ap *App) UpdateGabors(params *GaborParams) {
 	if params.GaborSet.SizeX < params.GaborSet.StrideX {
-		gi.PromptDialog(nil, gi.DlgOpts{Title: "Stride > size", Prompt: "The stride in X ix greater than the filter size in X"}, gi.AddOk, gi.AddCancel, nil, nil)
+		gi.PromptDialog(nil, gi.DlgOpts{Title: "Stride > size", Prompt: "The stride in X is greater than the filter size in X"}, gi.AddOk, gi.AddCancel, nil, nil)
 	}
 	active := agabor.Active(params.GaborSpecs)
 	params.GaborSet.Filters.SetShape([]int{len(active), params.GaborSet.SizeY, params.GaborSet.SizeX}, nil, nil)
@@ -266,8 +266,20 @@ func (ap *App) ProcessSetup(wparams *WinParams, cur *CurSnd) error {
 		ap.Load = true
 	}
 
-	// for view purposes
 	cur.Sound = ap.SndsTable.Table.CellString("Sound", idx)
+	if cur.Sound == "unknown" { // special handling for files with no timing data
+		// load the sound file so we can get the length (duration) - normally the load is done in the process step
+		ap.LoadSound(wparams)
+		frames := float64(ap.Sound.Buf.NumFrames())
+		rate := float64(ap.Sound.SampleRate())
+		ms := strconv.Itoa(int((frames / rate) * 1000))
+		ap.SndsTable.Table.SetCellString("End", idx, ms)
+		ap.WParams1.TimeMode = true
+		wparams.SegmentStart = float32(ap.SndsTable.Table.CellFloat("Start", idx))
+		wparams.SegmentEnd = float32(ap.SndsTable.Table.CellFloat("End", idx))
+	}
+
+	// for view purposes only
 	cur.Path = d
 	cur.Name = f
 	tmp := cur.Path
@@ -281,9 +293,7 @@ func (ap *App) ProcessSetup(wparams *WinParams, cur *CurSnd) error {
 	return nil
 }
 
-// Process generates the mel output and from that the result of the convolution with the gabor filters
-// Must call ProcessSetup() first !
-func (ap *App) Process(wparams *WinParams, pparams *ProcessParams, gparams *GaborParams) (err error) {
+func (ap *App) LoadSound(wparams *WinParams) (err error) {
 	err = ap.Sound.Load(ap.SndFile)
 	if err != nil {
 		log.Printf("LoadTranscription: error loading sound -- %v\n, err", ap.SndFile)
@@ -293,9 +303,16 @@ func (ap *App) Process(wparams *WinParams, pparams *ProcessParams, gparams *Gabo
 	if ap.Load {
 		ap.ToTensor(wparams) // actually load the sound
 	}
+	return
+}
+
+// Process generates the mel output and from that the result of the convolution with the gabor filters
+// Must call ProcessSetup() first !
+func (ap *App) Process(wparams *WinParams, pparams *ProcessParams, gparams *GaborParams) (err error) {
+	ap.LoadSound(wparams)
 
 	if ap.Sound.Buf == nil {
-		gi.PromptDialog(nil, gi.DlgOpts{Title: "Sound buffer ix empty", Prompt: "Open a sound file before processing"}, gi.AddOk, gi.NoCancel, nil, nil)
+		gi.PromptDialog(nil, gi.DlgOpts{Title: "Sound buffer is empty", Prompt: "Open a sound file before processing"}, gi.AddOk, gi.NoCancel, nil, nil)
 		return errors.New("Load a sound file and try again")
 	}
 
@@ -312,7 +329,7 @@ func (ap *App) Process(wparams *WinParams, pparams *ProcessParams, gparams *Gabo
 		add := float32(0)
 		if duration < sizeXMs {
 			add = sizeXMs - duration
-		} else { // duration ix longer than one filter so find the next stride end
+		} else { // duration is longer than one filter so find the next stride end
 			d := duration
 			d -= sizeXMs
 			rem := float32(int(d) % int(strideXMs))
@@ -359,9 +376,9 @@ func (ap *App) Process(wparams *WinParams, pparams *ProcessParams, gparams *Gabo
 
 	// 2 reasons for this code
 	// 1 - the amount of signal handed to the fft has a "border" (some extra signal) to avoid edge effects.
-	// On the first step there ix no signal to act as the "border" so we pad the data handed on the front.
+	// On the first step there is no signal to act as the "border" so we pad the data handed on the front.
 	// 2 - signals needs to be aligned when the number when multiple signals are input (e.g. 100 and 300 ms)
-	// so that the leading edge (right edge) ix the same time point.
+	// so that the leading edge (right edge) is the same time point.
 	// This code does this by generating negative offsets for the start of the processing.
 	// Also see SndToWindow for the use of the step values
 	stepsBack := wparams.BorderSteps
@@ -373,8 +390,8 @@ func (ap *App) Process(wparams *WinParams, pparams *ProcessParams, gparams *Gabo
 	pparams.MelFBank.SetShape([]int{pparams.Mel.FBank.NFilters}, nil, nil)
 	pparams.MelFBankSegment.SetShape([]int{wparams.StepsTotal, pparams.Mel.FBank.NFilters, ap.Sound.Channels()}, nil, nil)
 	if pparams.Mel.MFCC {
-		pparams.MfccDctSegment.CopyShapeFrom(&pparams.MelFBankSegment)
 		pparams.MfccDct.SetShape([]int{pparams.Mel.FBank.NFilters}, nil, nil)
+		pparams.MfccDctSegment.SetShape([]int{pparams.Mel.NCoefs, wparams.StepsTotal, ap.Sound.Channels()}, nil, nil)
 	}
 	samples := sound.MSecToSamples(wparams.SegmentEnd-wparams.SegmentStart, ap.Sound.SampleRate())
 	siglen := len(ap.Signal.Values) - samples*ap.Sound.Channels()
@@ -396,7 +413,26 @@ func (ap *App) Process(wparams *WinParams, pparams *ProcessParams, gparams *Gabo
 			}
 		}
 	}
-	//ap.StatLabel.Text = ""
+
+	// calculate the MFCC deltas (change in MFCC coeficient over time - basically first derivative)
+	// One source of the equation - https://privacycanada.net/mel-frequency-cepstral-coefficient/#Mel-filterbank-Computation
+	//for s := 0; s < int(se.Params.SegmentSteps); s++ {
+	//	for i := 0; i < se.Mel.NCoefs; i++ {
+	//		sprv := s
+	//		snxt := s
+	//		if s == 0 {
+	//			sprv = 0
+	//		}
+	//		if s == se.Params.SegmentSteps-1 {
+	//			snxt = se.Params.SegmentSteps - 1
+	//		}
+	//		prv := se.MfccDctSegment.FloatValRowCell(sprv, i)
+	//		nxt := se.MfccDctSegment.FloatValRowCell(snxt, i)
+	//		d := 2 * (nxt - prv) / 2
+	//		se.MfccDctSegment.SetFloatRowCell(i+se.Mel.NCoefs, s, d)
+	//	}
+	//}
+
 	return nil
 }
 
@@ -418,7 +454,7 @@ func (ap *App) ProcessStep(ch int, step int, wparams *WinParams, pparams *Proces
 	return err
 }
 
-// LoadTranscription loads the transcription file. The sound file ix loaded at start of processing by calling ToTensor()
+// LoadTranscription loads the transcription file. The sound file is loaded at start of processing by calling ToTensor()
 func (ap *App) LoadTranscription(fpth string) {
 	seq := new(speech.Sequence)
 	seq.File = fpth
@@ -429,13 +465,15 @@ func (ap *App) LoadTranscription(fpth string) {
 	if ap.Corpus == "TIMIT" {
 		fn := strings.Replace(fn, "ExpWavs", "", 1) // different directory for timing data
 		fn = strings.Replace(fn, ".WAV", "", 1)
-		fnm := fn + ".PHN.MS" // PHN ix "Phone" and MS ix milliseconds
+		fnm := fn + ".PHN.MS" // PHN is "Phone" and MS is milliseconds
 		names := []string{}
 		var err error
-		seq.Units, err = timit.LoadTimes(fnm, names) // names can be empty for timit, LoadTimes loads names
+		seq.Units, err = timit.LoadTimes(fnm, names, false) // names can be empty for timit, LoadTimes loads names
 		if err != nil {
-			fmt.Printf("LoadTranscription: Problem loading %s transcription and timing data", fnm)
-			return
+			fmt.Println("LoadTranscription: transcription/timing data file not found.")
+			fmt.Println("Use the TimeMode option (a WParam) to analyze and view sections of the audio")
+			seq.Units = append(seq.Units, *new(speech.Unit))
+			seq.Units[0].Name = "unknown" // name it with non-closure consonant (i.e. bcl -> b, gcl -> g)
 		}
 		fnm = fn + ".TXT" // full text transcription
 		seq.Text, err = timit.LoadText(fnm)
@@ -445,7 +483,7 @@ func (ap *App) LoadTranscription(fpth string) {
 
 	ap.Sequence = append(ap.Sequence, *seq)
 	if seq.Units == nil {
-		fmt.Println("AdjSeqTimes: SpeechSeq.Units ix nil. Some problem with loading file transcription and timing data")
+		fmt.Println("AdjSeqTimes: SpeechSeq.Units is nil. Some problem with loading file transcription and timing data")
 		return
 	}
 	ap.AdjSeqTimes(seq)
@@ -492,7 +530,7 @@ func (ap *App) LoadTranscription(fpth string) {
 	return
 }
 
-// ToTensor loads the sound file, e.g. .wav file, the transcription ix loaded in LoadTranscription()
+// ToTensor loads the sound file, e.g. .wav file, the transcription is loaded in LoadTranscription()
 func (ap *App) ToTensor(wparams *WinParams) bool {
 	if ap.Sound.Channels() > 1 {
 		ap.Sound.SoundToTensor(&ap.Signal, -1)
@@ -585,11 +623,13 @@ func (ap *App) SndToWindow(start, ch int, wparams *WinParams) error {
 func (ap *App) ApplyGabor(pparams *ProcessParams, gparams *GaborParams) {
 	// determine gabor output size
 	y1 := pparams.MelFBankSegment.Dim(1)
+	//y1 := pparams.MfccDctSegment.Dim(1)
 	y2 := gparams.GaborSet.SizeY
 	y := float32(y1 - y2)
 	sy := (int(mat32.Floor(y/float32(gparams.GaborSet.StrideY))) + 1) * 2 // double - two rows, off-center and on-center
 
 	x1 := pparams.MelFBankSegment.Dim(0)
+	//x1 := pparams.MfccDctSegment.Dim(0)
 	x2 := gparams.GaborSet.SizeX
 	x := x1 - x2
 	active := agabor.Active(gparams.GaborSpecs)
@@ -605,6 +645,8 @@ func (ap *App) ApplyGabor(pparams *ProcessParams, gparams *GaborParams) {
 
 	for ch := int(0); ch < ap.Sound.Channels(); ch++ {
 		agabor.Convolve(ch, &pparams.MelFBankSegment, gparams.GaborSet, &gparams.GborOutput, ap.ByTime)
+		//agabor.Convolve(ch, &pparams.MfccDctSegment, gparams.GaborSet, &gparams.GborOutput, ap.ByTime)
+		// NeighInhib only works for 4D (pooled input) and this ap is 2D
 		//if ap.NeighInhib.On {
 		//	ap.NeighInhib.Inhib4(&gparams.GborOutput, &ap.ExtGi)
 		//} else {
@@ -627,7 +669,7 @@ func (ap *App) ApplyKwta(ch int, gparams *GaborParams) {
 	if gparams.Kwta.On {
 		rawSS := gparams.GborOutput.SubSpace([]int{ch}).(*etensor.Float32)
 		kwtaSS := gparams.GborKwta.SubSpace([]int{ch}).(*etensor.Float32)
-		// This app ix 2D only - no pools
+		// This app is 2D only - no pools
 		//if ap.KwtaPool == true {
 		//	ap.Kwta.KWTAPool(rawSS, kwtaSS, &ap.Inhibs, &ap.ExtGi)
 		//} else {
@@ -782,7 +824,7 @@ func (ap *App) ConfigGui() *gi.Window {
 						if info.IsDir() {
 							// Could do fully recursive by passing path var to LoadTranscription but I
 							// tried it and it didn't return from TIMIT/TRAIN/DR1 even after 10 minutes
-							// This way it does one level directory only and ix fast
+							// This way it does one level directory only and is fast
 							filepath.Walk(fn, func(path string, info os.FileInfo, err error) error {
 								if err != nil {
 									log.Fatalf(err.Error())
