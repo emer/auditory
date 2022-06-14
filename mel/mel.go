@@ -31,6 +31,7 @@ type Params struct {
 	FBank  FilterBank `view:"inline"`
 	BinPts []int32    `view:"-" desc:" mel scale points in fft bins"`
 	MFCC   bool       `view:"+" def:"false" desc:" compute cepstrum discrete cosine transform (dct) of the mel-frequency filter bank features"`
+	Deltas bool       `view:"+" def:"false" desc:" compute the MFCC deltas and delta-deltas"`
 	NCoefs int        `viewif:"MFCC" def:"13" desc:" number of mfcc coefficients to output -- typically 1/2 of the number of filterbank features"` // Todo: should be 12 total - 2 - 13, higher ones not useful
 }
 
@@ -135,7 +136,7 @@ func FreqToBin(freq, nFft, sampleRate float32) int {
 func (mfb *FilterBank) Defaults() {
 	mfb.LoHz = 300
 	mfb.HiHz = 8000.0
-	mfb.NFilters = 40
+	mfb.NFilters = 32
 	mfb.LogOff = 0.0
 	mfb.LogMin = -10.0
 	mfb.Renorm = true
@@ -160,13 +161,17 @@ func (mel *Params) CepstrumDct(ch, step int, fBankData *etensor.Float32, mfccSeg
 	}
 
 	dct := fourier.NewDCT(len(mfccDct.Values))
-	var mfccDctOut []float64
+	var mfccOut []float64
 	src := []float64{}
 	mfccDct.Floats(&src)
-	mfccDctOut = dct.Transform(mfccDctOut, src)
-	el0 := mfccDctOut[0]
-	mfccDctOut[0] = math.Log(1.0 + el0*el0) // replace with log energy instead..
-	for i := 0; i < mel.FBank.NFilters; i++ {
-		mfccSegmentData.SetFloat([]int{step, i, ch}, mfccDctOut[i])
+	mfccOut = dct.Transform(mfccOut, src)
+	el0 := mfccOut[0]
+	mfccOut[0] = math.Log(1.0 + el0*el0) // replace with log energy instead..
+
+	// copy only NCoefs
+	for i := 0; i < mel.NCoefs; i++ {
+		mfccSegmentData.SetFloat([]int{i, step, ch}, mfccOut[i])
 	}
+
+	// calculate deltas
 }

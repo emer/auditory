@@ -69,8 +69,10 @@ type SndEnv struct {
 	MelFBankSegment etensor.Float32 `view:"no-inline" desc:" full segment's worth of mel feature-bank output"`
 	MelFilters      etensor.Float32 `view:"no-inline" desc:" the actual filters"`
 	MelEnergy       []float64       `view:"no-inline" desc:"sum of mel values by step"`
-	MfccDctSegment  etensor.Float32 `view:"no-inline" desc:" full segment's worth of discrete cosine transform of log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
 	MfccDct         etensor.Float32 `view:"no-inline" desc:" discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
+	MfccSegment     etensor.Float32 `view:"no-inline" desc:" full segment's worth of discrete cosine transform of log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
+	//MfccDeltas      etensor.Float32
+	//MfccDeltaDeltas etensor.Float32
 
 	GaborSpecs    []agabor.Filter  `view:"no-inline" desc:" a set of gabor filter specifications, one spec per filter'"`
 	GaborFilters  agabor.FilterSet `desc:"the actual gabor filters, the first spec determines the size of all filters in the set"`
@@ -161,8 +163,9 @@ func (se *SndEnv) Init() (err error) {
 	se.MelFBank.SetShape([]int{se.Mel.FBank.NFilters}, nil, nil)
 	se.MelFBankSegment.SetShape([]int{se.Params.SegmentSteps, se.Mel.FBank.NFilters, se.Sound.Channels()}, nil, nil)
 	if se.Mel.MFCC {
-		se.MfccDctSegment.CopyShapeFrom(&se.MelFBankSegment)
+		//se.MfccDctSegment.CopyShapeFrom(&se.MelFBankSegment)
 		se.MfccDct.SetShape([]int{se.Mel.FBank.NFilters}, nil, nil)
+		se.MfccSegment.SetShape([]int{se.Mel.NCoefs, se.Params.SegmentSteps, se.Sound.Channels()}, nil, nil)
 	}
 
 	siglen := len(se.Signal.Values) - se.Params.SegmentSamples*se.Sound.Channels()
@@ -243,7 +246,7 @@ func (se *SndEnv) ProcessSegment(segment, add int) {
 	se.PowerSegment.SetZeros()
 	se.LogPowerSegment.SetZeros()
 	se.MelFBankSegment.SetZeros()
-	se.MfccDctSegment.SetZeros()
+	se.MfccSegment.SetZeros()
 	se.MelEnergy = nil
 
 	for ch := int(0); ch < se.Sound.Channels(); ch++ {
@@ -251,6 +254,26 @@ func (se *SndEnv) ProcessSegment(segment, add int) {
 			err := se.ProcessStep(segment, ch, s, add)
 			if err != nil {
 				break
+			}
+		}
+		//calculate the MFCC deltas (change in MFCC coeficient over time - basically first derivative)
+		//One source of the equation - https://privacycanada.net/mel-frequency-cepstral-coefficient/#Mel-filterbank-Computation
+		if se.Mel.MFCC && se.Mel.Deltas {
+			for s := 0; s < int(se.Params.SegmentSteps); s++ {
+				for i := 0; i < se.Mel.NCoefs; i++ {
+					sprv := s - 1
+					snxt := s + 1
+					if s == 0 {
+						sprv = 0
+					}
+					if s == se.Params.SegmentSteps-1 {
+						snxt = se.Params.SegmentSteps - 1
+					}
+					prv := se.MfccSegment.FloatValRowCell(sprv, i)
+					nxt := se.MfccSegment.FloatValRowCell(snxt, i)
+					d := 2 * (nxt - prv) / 2
+					se.MfccSegment.SetFloatRowCell(i+se.Mel.NCoefs, s, d)
+				}
 			}
 		}
 	}
@@ -265,10 +288,11 @@ func (se *SndEnv) ProcessStep(segment, ch, step, add int) error {
 	start := segment*int(se.Params.StrideSamples) + offset // segments start at zero
 	err := se.SndToWindow(start, ch)
 	if err == nil {
+		//gparams.Fft.Reset(wparams.WinSamples)
 		se.Dft.Filter(int(ch), int(step), &se.Window, se.Params.WinSamples, &se.Power, &se.LogPower, &se.PowerSegment, &se.LogPowerSegment)
 		se.Mel.FilterDft(int(ch), int(step), &se.Power, &se.MelFBankSegment, &se.MelFBank, &se.MelFilters)
 		if se.Mel.MFCC {
-			se.Mel.CepstrumDct(ch, step, &se.MelFBank, &se.MfccDctSegment, &se.MfccDct)
+			se.Mel.CepstrumDct(ch, step, &se.MelFBank, &se.MfccSegment, &se.MfccDct)
 		}
 	}
 	e := 0.0
@@ -310,11 +334,8 @@ func (se *SndEnv) SndToWindow(start, ch int) error {
 // ApplyGabor convolves the gabor filters with the mel output
 func (se *SndEnv) ApplyGabor() (tsr *etensor.Float32) {
 	for ch := int(0); ch < se.Sound.Channels(); ch++ {
-		if se.Mel.MFCC == true {
-			agabor.Convolve(ch, &se.MfccDctSegment, se.GaborFilters, &se.GborOutput, se.ByTime)
-		} else {
-			agabor.Convolve(ch, &se.MelFBankSegment, se.GaborFilters, &se.GborOutput, se.ByTime)
-		}
+		agabor.Convolve(ch, &se.MelFBankSegment, se.GaborFilters, &se.GborOutput, se.ByTime)
+
 		if se.NeighInhib.On {
 			se.ApplyNeighInhib(ch)
 		} else {
