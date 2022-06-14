@@ -170,7 +170,7 @@ func (mel *Params) CepstrumDct(ch, step int, fBankData *etensor.Float32, mfccSeg
 
 	// copy only NCoefs
 	for i := 0; i < mel.NCoefs; i++ {
-		mfccSegmentData.SetFloat([]int{i, step, ch}, mfccOut[i])
+		mfccSegmentData.SetFloat([]int{step, i, ch}, mfccOut[i])
 	}
 
 	// calculate deltas
