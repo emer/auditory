@@ -100,8 +100,9 @@ type ProcessParams struct {
 	MelFBank        etensor.Float32 `view:"no-inline" desc:" mel scale transformation of dft_power, using triangular filters, resulting in the mel filterbank output -- the natural log of this is typically applied"`
 	MelFBankSegment etensor.Float32 `view:"no-inline" desc:" full segment's worth of mel feature-bank output"`
 	MelFilters      etensor.Float32 `view:"no-inline" desc:" the actual filters"`
-	MfccDct         etensor.Float32 `view:"no-inline" desc:" discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
-	MfccDctSegment  etensor.Float32 `view:"no-inline" desc:" full segment's worth of discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
+	MFCCDct         etensor.Float32 `view:"no-inline" desc:" discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
+	MFCCSegment     etensor.Float32 `view:"no-inline" desc:" full segment's worth of discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
+	MFCCDeltas      etensor.Float32 `view:"no-inline" desc:" "`
 }
 
 type GaborParams struct {
@@ -145,8 +146,7 @@ type App struct {
 	ByTime   bool            `desc:"display the gabor filtering result by time and then by filter, default is to order by filter and then time"`
 	ImgDir   string          `desc:"directory for storing images of mel, gabors, filtered result, etc"`
 
-	StatLabel     *gi.Label          `view:"-" desc:"status label"`
-	MelFBankGridS *etview.TensorGrid `view:"-" desc:"melfbank grid view for the current segment"`
+	StatLabel *gi.Label `view:"-" desc:"status label"`
 }
 
 // this registers this Sim Type and gives it properties that e.g.,
@@ -172,6 +172,7 @@ func (ap *App) Init() {
 	ap.ByTime = true
 	ap.GUI.Active = false
 	ap.ImgDir = "/Users/rohrlich/emer/auditory/examples/gaborview/phoneImages/"
+	// LogPrec is precision for saving float values in logs
 }
 
 // WinDefaults initializes the sound processing parameters
@@ -275,6 +276,7 @@ func (ap *App) ProcessSetup(wparams *WinParams, cur *CurSnd) error {
 		ms := strconv.Itoa(int((frames / rate) * 1000))
 		ap.SndsTable.Table.SetCellString("End", idx, ms)
 		ap.WParams1.TimeMode = true
+		ap.WParams1.Resize = false
 		wparams.SegmentStart = float32(ap.SndsTable.Table.CellFloat("Start", idx))
 		wparams.SegmentEnd = float32(ap.SndsTable.Table.CellFloat("End", idx))
 	}
@@ -390,8 +392,9 @@ func (ap *App) Process(wparams *WinParams, pparams *ProcessParams, gparams *Gabo
 	pparams.MelFBank.SetShape([]int{pparams.Mel.FBank.NFilters}, nil, nil)
 	pparams.MelFBankSegment.SetShape([]int{wparams.StepsTotal, pparams.Mel.FBank.NFilters, ap.Sound.Channels()}, nil, nil)
 	if pparams.Mel.MFCC {
-		pparams.MfccDct.SetShape([]int{pparams.Mel.FBank.NFilters}, nil, nil)
-		pparams.MfccDctSegment.SetShape([]int{pparams.Mel.NCoefs, wparams.StepsTotal, ap.Sound.Channels()}, nil, nil)
+		pparams.MFCCDct.SetShape([]int{pparams.Mel.FBank.NFilters}, nil, nil)
+		pparams.MFCCSegment.SetShape([]int{wparams.StepsTotal, pparams.Mel.NCoefs, ap.Sound.Channels()}, nil, nil)
+		pparams.MFCCDeltas.SetShape([]int{wparams.StepsTotal, pparams.Mel.NCoefs, ap.Sound.Channels()}, nil, nil)
 	}
 	samples := sound.MSecToSamples(wparams.SegmentEnd-wparams.SegmentStart, ap.Sound.SampleRate())
 	siglen := len(ap.Signal.Values) - samples*ap.Sound.Channels()
@@ -402,7 +405,7 @@ func (ap *App) Process(wparams *WinParams, pparams *ProcessParams, gparams *Gabo
 	pparams.PowerSegment.SetZeros()
 	pparams.LogPowerSegment.SetZeros()
 	pparams.MelFBankSegment.SetZeros()
-	pparams.MfccDctSegment.SetZeros()
+	pparams.MFCCSegment.SetZeros()
 
 	for ch := int(0); ch < ap.Sound.Channels(); ch++ {
 		for s := 0; s < int(wparams.StepsTotal); s++ {
@@ -416,23 +419,33 @@ func (ap *App) Process(wparams *WinParams, pparams *ProcessParams, gparams *Gabo
 
 	// calculate the MFCC deltas (change in MFCC coeficient over time - basically first derivative)
 	// One source of the equation - https://privacycanada.net/mel-frequency-cepstral-coefficient/#Mel-filterbank-Computation
-	//for s := 0; s < int(se.Params.SegmentSteps); s++ {
-	//	for i := 0; i < se.Mel.NCoefs; i++ {
-	//		sprv := s
-	//		snxt := s
-	//		if s == 0 {
-	//			sprv = 0
-	//		}
-	//		if s == se.Params.SegmentSteps-1 {
-	//			snxt = se.Params.SegmentSteps - 1
-	//		}
-	//		prv := se.MfccDctSegment.FloatValRowCell(sprv, i)
-	//		nxt := se.MfccDctSegment.FloatValRowCell(snxt, i)
-	//		d := 2 * (nxt - prv) / 2
-	//		se.MfccDctSegment.SetFloatRowCell(i+se.Mel.NCoefs, s, d)
-	//	}
-	//}
-
+	if pparams.Mel.MFCC && pparams.Mel.Deltas {
+		prv := 0.0
+		nxt := 0.0
+		for s := 0; s < int(wparams.StepsTotal); s++ {
+			for i := 0; i < pparams.Mel.NCoefs; i++ {
+				d := 0.0
+				nume := 0.0
+				denom := 0.0
+				for j := 1; j <= 4; j++ {
+					sprv := s - j
+					snxt := s + j
+					if sprv < 0 {
+						sprv = 0
+					}
+					if snxt > wparams.StepsTotal-1 {
+						snxt = wparams.StepsTotal - 1
+					}
+					prv += pparams.MFCCSegment.FloatValRowCell(sprv, i)
+					nxt += pparams.MFCCSegment.FloatValRowCell(snxt, i)
+					nume += float64(j) * (nxt - prv)
+					denom += float64(j * j)
+				}
+				d = nume / 2 * denom
+				pparams.MFCCDeltas.SetFloatRowCell(s, i, d)
+			}
+		}
+	}
 	return nil
 }
 
@@ -448,7 +461,7 @@ func (ap *App) ProcessStep(ch int, step int, wparams *WinParams, pparams *Proces
 		pparams.Dft.Filter(int(ch), int(step), &ap.Window, wparams.WinSamples, &pparams.Power, &pparams.LogPower, &pparams.PowerSegment, &pparams.LogPowerSegment)
 		pparams.Mel.FilterDft(int(ch), int(step), &pparams.Power, &pparams.MelFBankSegment, &pparams.MelFBank, &pparams.MelFilters)
 		if pparams.Mel.MFCC {
-			pparams.Mel.CepstrumDct(ch, step, &pparams.MelFBank, &pparams.MfccDctSegment, &pparams.MfccDct)
+			pparams.Mel.CepstrumDct(ch, step, &pparams.MelFBank, &pparams.MFCCSegment, &pparams.MFCCDct)
 		}
 	}
 	return err
@@ -474,9 +487,10 @@ func (ap *App) LoadTranscription(fpth string) {
 			fmt.Println("Use the TimeMode option (a WParam) to analyze and view sections of the audio")
 			seq.Units = append(seq.Units, *new(speech.Unit))
 			seq.Units[0].Name = "unknown" // name it with non-closure consonant (i.e. bcl -> b, gcl -> g)
+		} else {
+			fnm = fn + ".TXT" // full text transcription
+			seq.Text, err = timit.LoadText(fnm)
 		}
-		fnm = fn + ".TXT" // full text transcription
-		seq.Text, err = timit.LoadText(fnm)
 	} else {
 		fmt.Println("NextSound: ap.Corpus no match")
 	}
@@ -623,13 +637,11 @@ func (ap *App) SndToWindow(start, ch int, wparams *WinParams) error {
 func (ap *App) ApplyGabor(pparams *ProcessParams, gparams *GaborParams) {
 	// determine gabor output size
 	y1 := pparams.MelFBankSegment.Dim(1)
-	//y1 := pparams.MfccDctSegment.Dim(1)
 	y2 := gparams.GaborSet.SizeY
 	y := float32(y1 - y2)
 	sy := (int(mat32.Floor(y/float32(gparams.GaborSet.StrideY))) + 1) * 2 // double - two rows, off-center and on-center
 
 	x1 := pparams.MelFBankSegment.Dim(0)
-	//x1 := pparams.MfccDctSegment.Dim(0)
 	x2 := gparams.GaborSet.SizeX
 	x := x1 - x2
 	active := agabor.Active(gparams.GaborSpecs)
@@ -645,7 +657,7 @@ func (ap *App) ApplyGabor(pparams *ProcessParams, gparams *GaborParams) {
 
 	for ch := int(0); ch < ap.Sound.Channels(); ch++ {
 		agabor.Convolve(ch, &pparams.MelFBankSegment, gparams.GaborSet, &gparams.GborOutput, ap.ByTime)
-		//agabor.Convolve(ch, &pparams.MfccDctSegment, gparams.GaborSet, &gparams.GborOutput, ap.ByTime)
+		//agabor.Convolve(ch, &pparams.MFCCSegment, gparams.GaborSet, &gparams.GborOutput, ap.ByTime)
 		// NeighInhib only works for 4D (pooled input) and this ap is 2D
 		//if ap.NeighInhib.On {
 		//	ap.NeighInhib.Inhib4(&gparams.GborOutput, &ap.ExtGi)
@@ -734,11 +746,6 @@ func (ap *App) View() {
 
 // SnapShot1
 func (ap *App) SnapShot1() {
-
-	//img := vfilter.GreyTensorToImage(nil, &foo, 0, true)
-	//foo := ap.PParams1.MelFBankSegment.Clone().(*etensor.Float32)
-	//bar := foo.T()
-
 	if ap.PParams1.MelFBankSegment.Shape.NumDims() >= 2 {
 		dir := ap.ImgDir + ap.CurSnd1.Sound
 		f, err := os.Stat(dir)
@@ -1059,14 +1066,18 @@ func (ap *App) ConfigGui() *gi.Window {
 	tg = tv.AddNewTab(etview.KiT_TensorGrid, "Mel").(*etview.TensorGrid)
 	tg.SetStretchMax()
 	tg.SetTensor(&ap.PParams1.MelFBankSegment)
-	ap.MelFBankGridS = tg
 
 	tg = tv.AddNewTab(etview.KiT_TensorGrid, "Result").(*etview.TensorGrid)
 	tg.SetStretchMax()
 	tg.SetTensor(&ap.GParams1.GborOutput)
 
-	//ap.DetailTab = tv.AddNewTab(etview.KiT_TensorGrid, "Detail").(*etview.TensorGrid)
-	//ap.DetailTab.SetName("Detail")
+	tg = tv.AddNewTab(etview.KiT_TensorGrid, "MFCC").(*etview.TensorGrid)
+	tg.SetStretchMax()
+	tg.SetTensor(&ap.PParams1.MFCCSegment)
+
+	tg = tv.AddNewTab(etview.KiT_TensorGrid, "Deltas").(*etview.TensorGrid)
+	tg.SetStretchMax()
+	tg.SetTensor(&ap.PParams1.MFCCDeltas)
 
 	tv2 := gi.AddNewTabView(split, "tv2")
 	split.SetSplits(.3, .15, .15, .2, .2)
@@ -1087,6 +1098,14 @@ func (ap *App) ConfigGui() *gi.Window {
 	tg = tv2.AddNewTab(etview.KiT_TensorGrid, "Result").(*etview.TensorGrid)
 	tg.SetStretchMax()
 	tg.SetTensor(&ap.GParams2.GborOutput)
+
+	tg = tv2.AddNewTab(etview.KiT_TensorGrid, "MFCC").(*etview.TensorGrid)
+	tg.SetStretchMax()
+	tg.SetTensor(&ap.PParams2.MFCCSegment)
+
+	tg = tv2.AddNewTab(etview.KiT_TensorGrid, "Deltas").(*etview.TensorGrid)
+	tg.SetStretchMax()
+	tg.SetTensor(&ap.PParams2.MFCCDeltas)
 
 	ap.StatLabel = gi.AddNewLabel(mfr, "status", "Status...")
 	ap.StatLabel.SetStretchMaxWidth()
