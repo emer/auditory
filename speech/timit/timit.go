@@ -257,7 +257,7 @@ func LoadTimes(fn string, names []string, fuse bool) ([]speech.Unit, error) {
 	fp, err := os.Open(fn)
 	if err != nil {
 		log.Println(err)
-		log.Println("Make sure you have the sound files rsyncd to ccn_images directory and a link (ln -s) to ccn_images in your sim working directory")
+		fmt.Println("If this file has no transcription or timing you can ignore the error")
 		return units, err
 	}
 	defer fp.Close() // we will be done with the file within this function
