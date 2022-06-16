@@ -13,13 +13,13 @@ import (
 // Dft struct holds the variables for doing a fourier transform
 type Params struct {
 	CompLogPow bool    `def:"true" desc:"compute the log of the power and save that to a separate table -- generaly more useful for visualization of power than raw power values"`
-	LogMin     float32 `viewif:"CompLogPow" def:"-100" desc:"minimum value a log can produce -- puts a lower limit on log output"`
-	LogOffSet  float32 `viewif:"CompLogPow" def:"0" desc:"add this amount when taking the log of the dft power -- e.g., 1.0 makes everything positive -- affects the relative contrast of the outputs"`
-	PrevSmooth float32 `def:"0" desc:"how much of the previous step's power value to include in this one -- smooths out the power spectrum which can be artificially bumpy due to discrete window samples"`
-	CurSmooth  float32 `inactive:"+" desc:" how much of current power to include"`
+	LogMin     float64 `viewif:"CompLogPow" def:"-100" desc:"minimum value a log can produce -- puts a lower limit on log output"`
+	LogOffSet  float64 `viewif:"CompLogPow" def:"0" desc:"add this amount when taking the log of the dft power -- e.g., 1.0 makes everything positive -- affects the relative contrast of the outputs"`
+	PrevSmooth float64 `def:"0" desc:"how much of the previous step's power value to include in this one -- smooths out the power spectrum which can be artificially bumpy due to discrete window samples"`
+	CurSmooth  float64 `inactive:"+" desc:" how much of current power to include"`
 }
 
-func (dft *Params) Initialize(winSamples int) {
+func (dft *Params) Defaults() {
 	dft.PrevSmooth = 0
 	dft.CurSmooth = 1.0 - dft.PrevSmooth
 	dft.CompLogPow = true
@@ -28,7 +28,7 @@ func (dft *Params) Initialize(winSamples int) {
 }
 
 // Filter filters the current window_in input data according to current settings -- called by ProcessStep, but can be called separately
-func (dft *Params) Filter(ch int, step int, windowIn *etensor.Float32, winSamples int, power *etensor.Float32, logPower *etensor.Float32, powerForSegment *etensor.Float32, logPowerForSegment *etensor.Float32) {
+func (dft *Params) Filter(ch int, step int, windowIn *etensor.Float64, winSamples int, power *etensor.Float64, logPower *etensor.Float64, powerForSegment *etensor.Float64, logPowerForSegment *etensor.Float64) {
 	fftCoefs := make([]complex128, winSamples)
 	dft.FftReal(fftCoefs, windowIn)
 	fft := fourier.NewCmplxFFT(len(fftCoefs))
@@ -39,7 +39,7 @@ func (dft *Params) Filter(ch int, step int, windowIn *etensor.Float32, winSample
 }
 
 // FftReal
-func (dft *Params) FftReal(fftCoefs []complex128, in *etensor.Float32) {
+func (dft *Params) FftReal(fftCoefs []complex128, in *etensor.Float64) {
 	var c complex128
 	for i := 0; i < len(fftCoefs); i++ {
 		c = complex(in.FloatVal1D(i), 0)
@@ -48,22 +48,22 @@ func (dft *Params) FftReal(fftCoefs []complex128, in *etensor.Float32) {
 }
 
 // Power
-func (dft *Params) Power(ch, step int, winSamples int, fftCoefs []complex128, power *etensor.Float32, logPower *etensor.Float32, powerForSegment *etensor.Float32, logPowerForSegment *etensor.Float32) {
+func (dft *Params) Power(ch, step int, winSamples int, fftCoefs []complex128, power *etensor.Float64, logPower *etensor.Float64, powerForSegment *etensor.Float64, logPowerForSegment *etensor.Float64) {
 	for k := 0; k < winSamples/2+1; k++ {
 		rl := real(fftCoefs[k])
 		im := imag(fftCoefs[k])
 		powr := float64(rl*rl + im*im)
 		if step > 0 {
-			powr = float64(dft.PrevSmooth)*power.FloatVal1D(k) + float64(dft.CurSmooth)*powr
+			powr = dft.PrevSmooth*power.FloatVal1D(k) + dft.CurSmooth*powr
 		}
 		power.SetFloat1D(k, powr)
 		powerForSegment.SetFloat([]int{step, k, ch}, powr)
 
 		var logp float64
 		if dft.CompLogPow {
-			powr += float64(dft.LogOffSet)
+			powr += dft.LogOffSet
 			if powr == 0 {
-				logp = float64(dft.LogMin)
+				logp = dft.LogMin
 			} else {
 				logp = math.Log(powr)
 			}
