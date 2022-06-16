@@ -22,10 +22,10 @@ import (
 
 // Params defines the sound input parameters for auditory processing
 type Params struct {
-	WinMs       float32 `def:"25" desc:"input window -- number of milliseconds worth of sound to filter at a time"`
-	StepMs      float32 `def:"5,10,12.5" desc:"input step -- number of milliseconds worth of sound that the input is stepped along to obtain the next window sample"`
-	SegmentMs   float32 `def:"100" desc:"length of full segment's worth of input -- total number of milliseconds to accumulate into a complete segment -- must be a multiple of StepMs -- input will be SegmentMs / StepMs = SegmentSteps wide in the X axis, and number of filters in the Y axis"`
-	StrideMs    float32 `def:"100" desc:"how far to move on each trial"`
+	WinMs       float64 `def:"25" desc:"input window -- number of milliseconds worth of sound to filter at a time"`
+	StepMs      float64 `def:"5,10,12.5" desc:"input step -- number of milliseconds worth of sound that the input is stepped along to obtain the next window sample"`
+	SegmentMs   float64 `def:"100" desc:"length of full segment's worth of input -- total number of milliseconds to accumulate into a complete segment -- must be a multiple of StepMs -- input will be SegmentMs / StepMs = SegmentSteps wide in the X axis, and number of filters in the Y axis"`
+	StrideMs    float64 `def:"100" desc:"how far to move on each trial"`
 	BorderSteps int     `def:"6" view:"+" desc:"overlap with previous and next segment"`
 	Channel     int     `viewif:"Channels=1" desc:"specific channel to process, if input has multiple channels, and we only process one of them (-1 = process all)"`
 
@@ -55,24 +55,24 @@ type SndEnv struct {
 	On     bool   `desc:"false turns off processing of this sound"`
 	Sound  Wave   `desc:"specifications of the raw sensory input"`
 	Params Params
-	Signal etensor.Float32 `view:"no-inline" desc:" the full sound input"`
+	Signal etensor.Float64 `view:"no-inline" desc:" the full sound input"`
 	SegCnt int             `desc:"the number of segments in this sound file (based on current segment size)"`
-	Window etensor.Float32 `inactive:"+" desc:" [Input.WinSamples] the raw sound input, one channel at a time"`
+	Window etensor.Float64 `inactive:"+" desc:" [Input.WinSamples] the raw sound input, one channel at a time"`
 
 	Dft             dft.Params
-	Power           etensor.Float32 `view:"-" desc:" power of the dft, up to the nyquist limit frequency (1/2 input.WinSamples)"`
-	LogPower        etensor.Float32 `view:"-" desc:" log power of the dft, up to the nyquist liit frequency (1/2 input.WinSamples)"`
-	PowerSegment    etensor.Float32 `view:"no-inline" desc:" full segment's worth of power of the dft, up to the nyquist limit frequency (1/2 input.win_samples)"`
-	LogPowerSegment etensor.Float32 `view:"no-inline" desc:" full segment's worth of log power of the dft, up to the nyquist limit frequency (1/2 input.win_samples)"`
+	Power           etensor.Float64 `view:"-" desc:" power of the dft, up to the nyquist limit frequency (1/2 input.WinSamples)"`
+	LogPower        etensor.Float64 `view:"-" desc:" log power of the dft, up to the nyquist liit frequency (1/2 input.WinSamples)"`
+	PowerSegment    etensor.Float64 `view:"no-inline" desc:" full segment's worth of power of the dft, up to the nyquist limit frequency (1/2 input.win_samples)"`
+	LogPowerSegment etensor.Float64 `view:"no-inline" desc:" full segment's worth of log power of the dft, up to the nyquist limit frequency (1/2 input.win_samples)"`
 	Mel             mel.Params      `view:"no-inline"`
-	MelFBank        etensor.Float32 `view:"no-inline" desc:" mel scale transformation of dft_power, resulting in the mel filterbank output -- the natural log of this is typically applied"`
-	MelFBankSegment etensor.Float32 `view:"no-inline" desc:" full segment's worth of mel feature-bank output"`
-	MelFilters      etensor.Float32 `view:"no-inline" desc:" the actual filters"`
+	MelFBank        etensor.Float64 `view:"no-inline" desc:" mel scale transformation of dft_power, resulting in the mel filterbank output -- the natural log of this is typically applied"`
+	MelFBankSegment etensor.Float64 `view:"no-inline" desc:" full segment's worth of mel feature-bank output"`
+	MelFilters      etensor.Float64 `view:"no-inline" desc:" the actual filters"`
 	MelEnergy       []float64       `view:"no-inline" desc:"sum of mel values by step"`
-	MfccDct         etensor.Float32 `view:"no-inline" desc:" discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
-	MfccSegment     etensor.Float32 `view:"no-inline" desc:" full segment's worth of discrete cosine transform of log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
-	//MfccDeltas      etensor.Float32
-	//MfccDeltaDeltas etensor.Float32
+	MfccDct         etensor.Float64 `view:"no-inline" desc:" discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
+	MfccSegment     etensor.Float64 `view:"no-inline" desc:" full segment's worth of discrete cosine transform of log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
+	//MfccDeltas      etensor.Float64
+	//MfccDeltaDeltas etensor.Float64
 
 	GaborSpecs    []agabor.Filter  `view:"no-inline" desc:" a set of gabor filter specifications, one spec per filter'"`
 	GaborFilters  agabor.FilterSet `desc:"the actual gabor filters, the first spec determines the size of all filters in the set"`
@@ -81,8 +81,8 @@ type SndEnv struct {
 	GborOutPoolsY int              `view:"+" desc:" the number of neuron pools along the frequency dimension in the input layer"`
 	GborOutUnitsX int              `view:"+" desc:" the number of neurons in a pool (typically the number of gabor filters) along the time dimension in the input layer"`
 	GborOutUnitsY int              `view:"+" desc:" the number of neurons in a pool along the frequency dimension in the input layer"`
-	GborOutput    etensor.Float32  `view:"no-inline" desc:" raw output of Gabor -- full segment's worth of gabor steps"`
-	GborKwta      etensor.Float32  `view:"no-inline" desc:" post-kwta output of full segment's worth of gabor steps"`
+	GborOutput    etensor.Float64  `view:"no-inline" desc:" raw output of Gabor -- full segment's worth of gabor steps"`
+	GborKwta      etensor.Float64  `view:"no-inline" desc:" post-kwta output of full segment's worth of gabor steps"`
 	Inhibs        fffb.Inhibs      `view:"no-inline" desc:"inhibition values for A1 KWTA"`
 	ExtGi         etensor.Float32  `view:"no-inline" desc:"A1 simple extra Gi from neighbor inhibition tensor"`
 	NeighInhib    kwta.NeighInhib  `desc:"neighborhood inhibition for V1s -- each unit gets inhibition from same feature in nearest orthogonal neighbors -- reduces redundancy of feature code"`
@@ -112,7 +112,7 @@ func (se *SndEnv) Init() (err error) {
 	se.Params.WinSamples = MSecToSamples(se.Params.WinMs, sr)
 	se.Params.StepSamples = MSecToSamples(se.Params.StepMs, sr)
 	se.Params.SegmentSamples = MSecToSamples(se.Params.SegmentMs, sr)
-	steps := int(math.Round(float64(se.Params.SegmentMs / se.Params.StepMs)))
+	steps := int(math.Round(se.Params.SegmentMs / se.Params.StepMs))
 	se.Params.SegmentSteps = steps + 2*se.Params.BorderSteps
 	se.Params.StrideSamples = MSecToSamples(se.Params.StrideMs, sr)
 
@@ -137,7 +137,7 @@ func (se *SndEnv) Init() (err error) {
 	se.GborKwta.CopyMetaData(&se.GborOutput)
 
 	winSamplesHalf := se.Params.WinSamples/2 + 1
-	se.Dft.Initialize(se.Params.WinSamples)
+	se.Dft.Defaults()
 	se.Mel.InitFilters(se.Params.WinSamples, se.Sound.SampleRate(), &se.MelFilters) // call after non-default values are set!
 	se.Window.SetShape([]int{se.Params.WinSamples}, nil, nil)
 	se.Power.SetShape([]int{winSamplesHalf}, nil, nil)
@@ -165,7 +165,11 @@ func (se *SndEnv) Init() (err error) {
 	if se.Mel.MFCC {
 		//se.MfccDctSegment.CopyShapeFrom(&se.MelFBankSegment)
 		se.MfccDct.SetShape([]int{se.Mel.FBank.NFilters}, nil, nil)
-		se.MfccSegment.SetShape([]int{se.Mel.NCoefs, se.Params.SegmentSteps, se.Sound.Channels()}, nil, nil)
+		if se.Mel.Deltas == true {
+			se.MfccSegment.SetShape([]int{se.Params.SegmentSteps, 2 * se.Mel.NCoefs, se.Sound.Channels()}, nil, nil)
+		} else {
+			se.MfccSegment.SetShape([]int{se.Params.SegmentSteps, se.Mel.NCoefs, se.Sound.Channels()}, nil, nil)
+		}
 	}
 
 	siglen := len(se.Signal.Values) - se.Params.SegmentSamples*se.Sound.Channels()
@@ -186,15 +190,15 @@ func (se *SndEnv) AdjustForSilence(add, existing float64) (offset int) {
 		return -1
 	}
 
-	offset = 0 // in milliseconds
+	offset = 0.0 // in milliseconds
 	if add >= 0 {
 		if add < existing {
 			offset = int(existing - add)
-			se.Signal.Values = se.Signal.Values[int(MSecToSamples(float32(offset), sr)):len(se.Signal.Values)]
+			se.Signal.Values = se.Signal.Values[int(MSecToSamples(float64(offset), sr)):len(se.Signal.Values)]
 		} else if add > existing {
 			offset = int(add - existing)
-			n := int(MSecToSamples(float32(offset), sr))
-			silence := make([]float32, n)
+			n := int(MSecToSamples(float64(offset), sr))
+			silence := make([]float64, n)
 			se.Signal.Values = append(silence, se.Signal.Values...)
 		}
 	}
@@ -272,7 +276,7 @@ func (se *SndEnv) ProcessSegment(segment, add int) {
 					prv := se.MfccSegment.FloatValRowCell(sprv, i)
 					nxt := se.MfccSegment.FloatValRowCell(snxt, i)
 					d := 2 * (nxt - prv) / 2
-					se.MfccSegment.SetFloatRowCell(i+se.Mel.NCoefs, s, d)
+					se.MfccSegment.SetFloatRowCell(s, i+se.Mel.NCoefs, d)
 				}
 			}
 		}
@@ -284,7 +288,7 @@ func (se *SndEnv) ProcessSegment(segment, add int) {
 // bands that mimic the non-linear human perception of sound
 func (se *SndEnv) ProcessStep(segment, ch, step, add int) error {
 	//fmt.Println("step: ", step)
-	offset := se.Params.Steps[step] + MSecToSamples(float32(add), se.Sound.SampleRate())
+	offset := se.Params.Steps[step] + MSecToSamples(float64(add), se.Sound.SampleRate())
 	start := segment*int(se.Params.StrideSamples) + offset // segments start at zero
 	err := se.SndToWindow(start, ch)
 	if err == nil {
@@ -297,7 +301,7 @@ func (se *SndEnv) ProcessStep(segment, ch, step, add int) error {
 	}
 	e := 0.0
 	for i := 0; i < se.MelFBank.Len(); i++ {
-		e += float64(se.MelFBank.Value1D(i))
+		e += se.MelFBank.Value1D(i)
 	}
 	e = e / float64(se.MelFBank.Len()) // normalize
 	se.MelEnergy = append(se.MelEnergy, e)
@@ -312,12 +316,12 @@ func (se *SndEnv) SndToWindow(start, ch int) error {
 		if end > len(se.Signal.Values) {
 			return errors.New("SndToWindow: end beyond signal length!!")
 		}
-		var pad []float32
+		var pad []float64
 		if start < 0 && end <= 0 {
-			pad = make([]float32, end-start)
+			pad = make([]float64, end-start)
 			se.Window.Values = pad[0:]
 		} else if start < 0 && end > 0 {
-			pad = make([]float32, 0-start)
+			pad = make([]float64, 0-start)
 			se.Window.Values = pad[0:]
 			se.Window.Values = append(se.Window.Values, se.Signal.Values[0:end]...)
 		} else {
@@ -332,7 +336,7 @@ func (se *SndEnv) SndToWindow(start, ch int) error {
 }
 
 // ApplyGabor convolves the gabor filters with the mel output
-func (se *SndEnv) ApplyGabor() (tsr *etensor.Float32) {
+func (se *SndEnv) ApplyGabor() (tsr *etensor.Float64) {
 	for ch := int(0); ch < se.Sound.Channels(); ch++ {
 		agabor.Convolve(ch, &se.MelFBankSegment, se.GaborFilters, &se.GborOutput, se.ByTime)
 
@@ -356,17 +360,17 @@ func (se *SndEnv) Name() string { return se.Nm }
 func (se *SndEnv) Desc() string { return se.Dsc }
 
 // Tail returns the number of samples that remain beyond the last full stride
-func (se *SndEnv) Tail(signal []float32) int {
+func (se *SndEnv) Tail(signal []float64) int {
 	temp := len(signal) - se.Params.SegmentSamples
 	tail := temp % se.Params.StrideSamples
 	return tail
 }
 
 // Pad pads the signal so that the length of signal divided by stride has no remainder
-func (se *SndEnv) Pad(signal []float32, value float32) (padded []float32) {
+func (se *SndEnv) Pad(signal []float64, value float64) (padded []float64) {
 	tail := se.Tail(signal)
 	padLen := se.Params.SegmentSamples - se.Params.StepSamples - tail%se.Params.StepSamples
-	pad := make([]float32, padLen)
+	pad := make([]float64, padLen)
 	for i := range pad {
 		pad[i] = value
 	}
@@ -375,13 +379,13 @@ func (se *SndEnv) Pad(signal []float32, value float32) (padded []float32) {
 }
 
 // MSecToSamples converts milliseconds to samples, in terms of sample_rate
-func MSecToSamples(ms float32, rate int) int {
-	return int(math.Round(float64(ms) * 0.001 * float64(rate)))
+func MSecToSamples(ms float64, rate int) int {
+	return int(math.Round(ms * 0.001 * float64(rate)))
 }
 
 // SamplesToMSec converts samples to milliseconds, in terms of sample_rate
-func SamplesToMSec(samples int, rate int) float32 {
-	return 1000.0 * float32(samples) / float32(rate)
+func SamplesToMSec(samples int, rate int) float64 {
+	return 1000.0 * float64(samples) / float64(rate)
 }
 
 func bToMb(b uint64) uint64 {
