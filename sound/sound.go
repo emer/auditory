@@ -113,7 +113,7 @@ func (snd *Wave) SampleType() SoundSampleType {
 // can optionally select a specific channel (formats sound_data as a single-dimensional matrix of frames size),
 // and -1 gets all available channels (formats sound_data as two-dimensional matrix with outer dimension as
 // channels and inner dimension frames
-func (snd *Wave) SoundToTensor(samples *etensor.Float32, channel int) bool {
+func (snd *Wave) SoundToTensor(samples *etensor.Float64, channel int) bool {
 	nFrames := snd.Buf.NumFrames()
 
 	if channel < 0 && snd.Channels() > 1 { // multiple channels and we process all of them
@@ -124,7 +124,7 @@ func (snd *Wave) SoundToTensor(samples *etensor.Float32, channel int) bool {
 		idx := 0
 		for i := 0; i < nFrames; i++ {
 			for c := 0; c < snd.Channels(); c, idx = c+1, idx+1 {
-				samples.SetFloat([]int{c, i}, float64(snd.GetFloatAtIdx(snd.Buf, idx)))
+				samples.SetFloat([]int{c, i}, snd.GetFloatAtIdx(snd.Buf, idx))
 			}
 		}
 	} else { // only process one channel
@@ -148,15 +148,15 @@ func (snd *Wave) SoundToTensor(samples *etensor.Float32, channel int) bool {
 }
 
 // GetFloatAtIdx
-func (snd *Wave) GetFloatAtIdx(buf *audio.IntBuffer, idx int) float32 {
+func (snd *Wave) GetFloatAtIdx(buf *audio.IntBuffer, idx int) float64 {
 	if buf.SourceBitDepth == 32 {
-		return float32(buf.Data[idx]) / float32(0x7FFFFFFF)
+		return float64(buf.Data[idx]) / float64(0x7FFFFFFF)
 	} else if buf.SourceBitDepth == 24 {
-		return float32(buf.Data[idx]) / float32(0x7FFFFF)
+		return float64(buf.Data[idx]) / float64(0x7FFFFF)
 	} else if buf.SourceBitDepth == 16 {
-		return float32(buf.Data[idx]) / float32(0x7FFF)
+		return float64(buf.Data[idx]) / float64(0x7FFF)
 	} else if buf.SourceBitDepth == 8 {
-		return float32(buf.Data[idx]) / float32(0x7F)
+		return float64(buf.Data[idx]) / float64(0x7F)
 	}
 	return 0
 }
