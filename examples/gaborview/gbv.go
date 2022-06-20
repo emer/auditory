@@ -95,6 +95,7 @@ type ProcessParams struct {
 	LogPower        etensor.Float64 `view:"+" desc:" log power of the dft, up to the nyquist liit frequency (1/2 input.WinSamples)"`
 	PowerSegment    etensor.Float64 `view:"no-inline" desc:" full segment's worth of power of the dft, up to the nyquist limit frequency (1/2 input.WinSamples)"`
 	LogPowerSegment etensor.Float64 `view:"no-inline" desc:" full segment's worth of log power of the dft, up to the nyquist limit frequency (1/2 input.WinSamples)"`
+	Energy          etensor.Float64 `view:"no-inline" desc:" sum of log power per segment step"`
 	Mel             mel.Params      `view:"inline"`
 	MelFBank        etensor.Float64 `view:"no-inline" desc:" mel scale transformation of dft_power, using triangular filters, resulting in the mel filterbank output -- the natural log of this is typically applied"`
 	MelFBankSegment etensor.Float64 `view:"no-inline" desc:" full segment's worth of mel feature-bank output"`
@@ -164,6 +165,8 @@ func (ap *App) Init() {
 	ap.WinDefaults(&ap.WParams2)
 	ap.PParams1.Mel.Defaults()
 	ap.PParams2.Mel.Defaults()
+	ap.PParams1.Mel.MFCC = true
+	ap.PParams2.Mel.MFCC = true
 	ap.PParams1.Dft.Defaults()
 	ap.PParams2.Dft.Defaults()
 	ap.InitGabors(&ap.GParams1)
@@ -173,7 +176,6 @@ func (ap *App) Init() {
 	ap.ByTime = true
 	ap.GUI.Active = false
 	ap.ImgDir = "/Users/rohrlich/emer/auditory/examples/gaborview/phoneImages/"
-	// LogPrec is precision for saving float values in logs
 }
 
 // WinDefaults initializes the sound processing parameters
@@ -365,7 +367,7 @@ func (ap *App) Process(wparams *WinParams, pparams *ProcessParams, gparams *Gabo
 	wparams.StepsTotal = steps + 2*wparams.BorderSteps
 
 	winSamplesHalf := wparams.WinSamples/2 + 1
-	//pparams.Dft.Initialize(wparams.WinSamples)
+	pparams.Mel.FBank.NFilters = 32
 	pparams.Mel.InitFilters(wparams.WinSamples, ap.Sound.SampleRate(), &pparams.MelFilters) // call after non-default values are set!
 	ap.Window.SetShape([]int{wparams.WinSamples}, nil, nil)
 	pparams.Power.SetShape([]int{winSamplesHalf}, nil, nil)
@@ -394,6 +396,7 @@ func (ap *App) Process(wparams *WinParams, pparams *ProcessParams, gparams *Gabo
 
 	pparams.MelFBank.SetShape([]int{pparams.Mel.FBank.NFilters}, nil, nil)
 	pparams.MelFBankSegment.SetShape([]int{wparams.StepsTotal, pparams.Mel.FBank.NFilters, ap.Sound.Channels()}, nil, nil)
+	pparams.Energy.SetShape([]int{wparams.StepsTotal}, nil, nil)
 	if pparams.Mel.MFCC {
 		pparams.MFCCDct.SetShape([]int{pparams.Mel.FBank.NFilters}, nil, nil)
 		pparams.MFCCSegment.SetShape([]int{wparams.StepsTotal, pparams.Mel.NCoefs, ap.Sound.Channels()}, nil, nil)
@@ -409,6 +412,7 @@ func (ap *App) Process(wparams *WinParams, pparams *ProcessParams, gparams *Gabo
 	pparams.LogPowerSegment.SetZeros()
 	pparams.MelFBankSegment.SetZeros()
 	pparams.MFCCSegment.SetZeros()
+	pparams.Energy.SetZeros()
 
 	for ch := int(0); ch < ap.Sound.Channels(); ch++ {
 		for s := 0; s < int(wparams.StepsTotal); s++ {
@@ -420,19 +424,47 @@ func (ap *App) Process(wparams *WinParams, pparams *ProcessParams, gparams *Gabo
 		}
 	}
 
+	for ch := int(0); ch < ap.Sound.Channels(); ch++ {
+		for s := 0; s < wparams.StepsTotal; s++ {
+			e := 0.0
+			for f := 0; f < pparams.LogPowerSegment.Shape.Dim(1); f++ {
+				e += pparams.LogPowerSegment.FloatValRowCell(s, f)
+			}
+			pparams.Energy.SetFloat1D(s, e)
+		}
+	}
+
+	//for ch := int(0); ch < ap.Sound.Channels(); ch++ {
+	//	for s := 0; s < wparams.StepsTotal; s++ {
+	//		pparams.Mel.FilterDft(int(ch), int(s), &pparams.Power, &pparams.MelFBankSegment, &pparams.MelFBank, &pparams.MelFilters)
+	//		if pparams.Mel.MFCC {
+	//			pparams.Mel.CepstrumDct(ch, s, &pparams.MelFBank, &pparams.MFCCSegment, &pparams.MFCCDct)
+	//			pparams.MFCCSegment.SetFloatRowCell(s, 0, pparams.Energy.FloatVal1D(s))
+	//		}
+	//	}
+	//}
+
+	for ch := int(0); ch < ap.Sound.Channels(); ch++ {
+		for s := 0; s < wparams.StepsTotal; s++ {
+			pparams.MFCCSegment.SetFloatRowCell(s, 0, pparams.Energy.FloatVal1D(s))
+		}
+	}
+
 	// calculate the MFCC deltas (change in MFCC coeficient over time - basically first derivative)
-	// One source of the equation - https://privacycanada.net/mel-frequency-cepstral-coefficient/#Mel-filterbank-Computation
+	// One source of the equation - https://priv	acycanada.net/mel-frequency-cepstral-coefficient/#Mel-filterbank-Computation
+
+	//denominator = 2 * sum([i**2 for i in range(1, N+1)])
+	// N: For each frame, calculate delta features based on preceding and following N frames
+	N := 2
 	if pparams.Mel.MFCC && pparams.Mel.Deltas {
-		prv := 0.0
-		nxt := 0.0
 		for s := 0; s < int(wparams.StepsTotal); s++ {
+			prv := 0.0
+			nxt := 0.0
 			for i := 0; i < pparams.Mel.NCoefs; i++ {
-				d := 0.0
 				nume := 0.0
-				denom := 0.0
-				for j := 1; j <= 4; j++ {
-					sprv := s - j
-					snxt := s + j
+				for n := 1; n <= N; n++ {
+					sprv := s - n
+					snxt := s + n
 					if sprv < 0 {
 						sprv = 0
 					}
@@ -441,11 +473,12 @@ func (ap *App) Process(wparams *WinParams, pparams *ProcessParams, gparams *Gabo
 					}
 					prv += pparams.MFCCSegment.FloatValRowCell(sprv, i)
 					nxt += pparams.MFCCSegment.FloatValRowCell(snxt, i)
-					nume += float64(j) * (nxt - prv)
-					denom += float64(j * j)
+					nume += float64(n) * (nxt - prv)
+
+					denom := n * n
+					d := nume / 2.0 * float64(denom)
+					pparams.MFCCDeltas.SetFloatRowCell(s, i, d)
 				}
-				d = nume / 2 * denom
-				pparams.MFCCDeltas.SetFloatRowCell(s, i, d)
 			}
 		}
 	}
@@ -462,9 +495,19 @@ func (ap *App) ProcessStep(ch int, step int, wparams *WinParams, pparams *Proces
 	if err == nil {
 		gparams.Fft.Reset(wparams.WinSamples)
 		pparams.Dft.Filter(int(ch), int(step), &ap.Window, wparams.WinSamples, &pparams.Power, &pparams.LogPower, &pparams.PowerSegment, &pparams.LogPowerSegment)
+
+		//for s := 0; s < wparams.StepsTotal; s++ {
+		//	e := 0.0
+		//	for f := 0; f < pparams.LogPowerSegment.Shape.Dim(1); f++ {
+		//		e += pparams.LogPowerSegment.FloatValRowCell(s, f)
+		//	}
+		//	pparams.Energy.SetFloat1D(s, e)
+		//}
+
 		pparams.Mel.FilterDft(int(ch), int(step), &pparams.Power, &pparams.MelFBankSegment, &pparams.MelFBank, &pparams.MelFilters)
 		if pparams.Mel.MFCC {
 			pparams.Mel.CepstrumDct(ch, step, &pparams.MelFBank, &pparams.MFCCSegment, &pparams.MFCCDct)
+			pparams.MFCCSegment.SetFloatRowCell(step, 0, pparams.Energy.FloatVal1D(step))
 		}
 	}
 	return err
