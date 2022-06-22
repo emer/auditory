@@ -430,18 +430,8 @@ func (ap *App) Process(wparams *WinParams, pparams *ProcessParams, gparams *Gabo
 		pparams.Energy.SetFloat1D(s, e)
 	}
 
-	//	for s := 0; s < wparams.StepsTotal; s++ {
-	//		pparams.Mel.FilterDft(int(ch), int(s), &pparams.Power, &pparams.MelFBankSegment, &pparams.MelFBank, &pparams.MelFilters)
-	//		if pparams.Mel.MFCC {
-	//			pparams.Mel.CepstrumDct(ch, s, &pparams.MelFBank, &pparams.MFCCSegment, &pparams.MFCCDct)
-	//			pparams.MFCCSegment.SetFloatRowCell(s, 0, pparams.Energy.FloatVal1D(s))
-	//		}
-	//	}
-
 	for s := 0; s < wparams.StepsTotal; s++ {
 		pparams.MFCCSegment.SetFloatRowCell(0, s, pparams.Energy.FloatVal1D(s))
-		pparams.MFCCSegment.SetFloatRowCell(2, s, pparams.Energy.FloatVal1D(s))
-		pparams.MFCCSegment.SetFloatRowCell(12, s, pparams.Energy.FloatVal1D(s))
 	}
 
 	// calculate the MFCC deltas (change in MFCC coeficient over time - basically first derivative)
