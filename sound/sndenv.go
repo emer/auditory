@@ -80,8 +80,8 @@ type SndEnv struct {
 	GborOutPoolsY int              `view:"+" desc:" the number of neuron pools along the frequency dimension in the input layer"`
 	GborOutUnitsX int              `view:"+" desc:" the number of neurons in a pool (typically the number of gabor filters) along the time dimension in the input layer"`
 	GborOutUnitsY int              `view:"+" desc:" the number of neurons in a pool along the frequency dimension in the input layer"`
-	GborOutput    etensor.Float64  `view:"no-inline" desc:" raw output of Gabor -- full segment's worth of gabor steps"`
-	GborKwta      etensor.Float64  `view:"no-inline" desc:" post-kwta output of full segment's worth of gabor steps"`
+	GborOutput    etensor.Float32  `view:"no-inline" desc:" raw output of Gabor -- full segment's worth of gabor steps"`
+	GborKwta      etensor.Float32  `view:"no-inline" desc:" post-kwta output of full segment's worth of gabor steps"`
 	Inhibs        fffb.Inhibs      `view:"no-inline" desc:"inhibition values for A1 KWTA"`
 	ExtGi         etensor.Float32  `view:"no-inline" desc:"A1 simple extra Gi from neighbor inhibition tensor"`
 	NeighInhib    kwta.NeighInhib  `desc:"neighborhood inhibition for V1s -- each unit gets inhibition from same feature in nearest orthogonal neighbors -- reduces redundancy of feature code"`
@@ -121,10 +121,10 @@ func (se *SndEnv) Init() (err error) {
 	agabor.ToTensor(specs, &se.GaborFilters)
 	se.GaborFilters.ToTable(se.GaborFilters, &se.GaborTab) // note: view only, testing
 	if se.GborOutPoolsX == 0 && se.GborOutPoolsY == 0 {    // 2D
-		se.GborOutput.SetShape([]int{se.Sound.Channels(), se.GborOutUnitsY, se.GborOutUnitsX}, nil, nil)
+		se.GborOutput.SetShape([]int{se.GborOutUnitsY, se.GborOutUnitsX}, nil, nil)
 		se.ExtGi.SetShape([]int{se.GborOutUnitsY, se.GborOutUnitsX}, nil, nil) // passed in for each channel
 	} else if se.GborOutPoolsX > 0 && se.GborOutPoolsY > 0 { // 4D
-		se.GborOutput.SetShape([]int{se.Sound.Channels(), se.GborOutPoolsY, se.GborOutPoolsX, se.GborOutUnitsY, se.GborOutUnitsX}, nil, nil)
+		se.GborOutput.SetShape([]int{se.GborOutPoolsY, se.GborOutPoolsX, se.GborOutUnitsY, se.GborOutUnitsX}, nil, nil)
 		se.ExtGi.SetShape([]int{se.GborOutPoolsY, se.GborOutPoolsX, 2, nfilters}, nil, nil) // passed in for each channel
 	} else {
 		log.Println("GborOutPoolsX & GborOutPoolsY must both be == 0 or > 0 (i.e. 2D or 4D)")
@@ -141,7 +141,7 @@ func (se *SndEnv) Init() (err error) {
 	se.Window.SetShape([]int{se.Params.WinSamples}, nil, nil)
 	se.Power.SetShape([]int{winSamplesHalf}, nil, nil)
 	se.LogPower.CopyShapeFrom(&se.Power)
-	se.PowerSegment.SetShape([]int{se.Params.SegmentSteps, winSamplesHalf, se.Sound.Channels()}, nil, nil)
+	se.PowerSegment.SetShape([]int{se.Params.SegmentSteps, winSamplesHalf}, nil, nil)
 	if se.Dft.CompLogPow {
 		se.LogPowerSegment.CopyShapeFrom(&se.PowerSegment)
 	}
@@ -160,14 +160,14 @@ func (se *SndEnv) Init() (err error) {
 	}
 
 	se.MelFBank.SetShape([]int{se.Mel.FBank.NFilters}, nil, nil)
-	se.MelFBankSegment.SetShape([]int{se.Params.SegmentSteps, se.Mel.FBank.NFilters, se.Sound.Channels()}, nil, nil)
-	se.Energy.SetShape([]int{se.Params.SegmentSteps, se.Sound.Channels()}, nil, nil)
+	se.MelFBankSegment.SetShape([]int{se.Params.SegmentSteps, se.Mel.FBank.NFilters}, nil, nil)
+	se.Energy.SetShape([]int{se.Params.SegmentSteps}, nil, nil)
 	if se.Mel.MFCC {
 		se.MfccDct.SetShape([]int{se.Mel.FBank.NFilters}, nil, nil)
 		if se.Mel.Deltas == true {
-			se.MfccSegment.SetShape([]int{se.Params.SegmentSteps, 2 * se.Mel.NCoefs, se.Sound.Channels()}, nil, nil)
+			se.MfccSegment.SetShape([]int{se.Params.SegmentSteps, 2 * se.Mel.NCoefs}, nil, nil)
 		} else {
-			se.MfccSegment.SetShape([]int{se.Params.SegmentSteps, se.Mel.NCoefs, se.Sound.Channels()}, nil, nil)
+			se.MfccSegment.SetShape([]int{se.Params.SegmentSteps, se.Mel.NCoefs}, nil, nil)
 		}
 	}
 
@@ -206,38 +206,45 @@ func (se *SndEnv) AdjustForSilence(add, existing float64) (offset int) {
 
 // ToTensor
 func (se *SndEnv) ToTensor() bool {
-	if se.Sound.Channels() > 1 {
-		se.Sound.SoundToTensor(&se.Signal, -1)
-	} else {
-		se.Sound.SoundToTensor(&se.Signal, se.Params.Channel)
-	}
+	se.Sound.SoundToTensor(&se.Signal)
 	return true
 }
 
 // ApplyNeighInhib - each unit gets inhibition from same feature in nearest orthogonal neighbors
-func (se *SndEnv) ApplyNeighInhib(ch int) {
+func (se *SndEnv) ApplyNeighInhib() {
 	if se.NeighInhib.On {
-		rawSS := se.GborOutput.SubSpace([]int{ch}).(*etensor.Float32)
-		extSS := se.ExtGi.SubSpace([]int{ch}).(*etensor.Float32)
-		se.NeighInhib.Inhib4(rawSS, extSS)
+		//rawSS := se.GborOutput.SubSpace([]int{ch}).(*etensor.Float32)
+		//extSS := se.ExtGi.SubSpace([]int{ch}).(*etensor.Float32)
+		se.NeighInhib.Inhib4(&se.GborOutput, &se.ExtGi)
 	} else {
 		se.ExtGi.SetZeros()
 	}
 }
 
 // ApplyKwta runs the kwta algorithm on the raw activations
-func (se *SndEnv) ApplyKwta(ch int) {
+func (se *SndEnv) ApplyKwta() {
 	se.GborKwta.CopyFrom(&se.GborOutput)
 	if se.Kwta.On {
-		rawSS := se.GborOutput.SubSpace([]int{ch}).(*etensor.Float32)
-		kwtaSS := se.GborKwta.SubSpace([]int{ch}).(*etensor.Float32)
 		if se.KwtaPool == true {
-			se.Kwta.KWTAPool(rawSS, kwtaSS, &se.Inhibs, &se.ExtGi)
+			se.Kwta.KWTAPool(&se.GborOutput, &se.GborKwta, &se.Inhibs, &se.ExtGi)
 		} else {
-			se.Kwta.KWTALayer(rawSS, kwtaSS, &se.ExtGi)
+			se.Kwta.KWTALayer(&se.GborOutput, &se.GborKwta, &se.ExtGi)
 		}
 	}
 }
+
+//func (se *SndEnv) ApplyKwta(ch int) {
+//	se.GborKwta.CopyFrom(&se.GborOutput)
+//	if se.Kwta.On {
+//		rawSS := se.GborOutput.SubSpace([]int{ch}).(*etensor.Float32)
+//		kwtaSS := se.GborKwta.SubSpace([]int{ch}).(*etensor.Float32)
+//		if se.KwtaPool == true {
+//			se.Kwta.KWTAPool(rawSS, kwtaSS, &se.Inhibs, &se.ExtGi)
+//		} else {
+//			se.Kwta.KWTALayer(rawSS, kwtaSS, &se.ExtGi)
+//		}
+//	}
+//}
 
 // ProcessSegment processes the entire segment's input by processing a small overlapping set of samples on each pass
 // The add argument allows for compensation if there are multiple sounds of different duration to different input layers
@@ -252,30 +259,24 @@ func (se *SndEnv) ProcessSegment(segment, add int) {
 	se.MfccSegment.SetZeros()
 	se.Energy.SetZeros()
 
-	for ch := int(0); ch < se.Sound.Channels(); ch++ {
-		for s := 0; s < int(se.Params.SegmentSteps); s++ {
-			err := se.ProcessStep(segment, ch, s, add)
-			if err != nil {
-				fmt.Println(err)
-				break
-			}
+	for s := 0; s < int(se.Params.SegmentSteps); s++ {
+		err := se.ProcessStep(segment, s, add)
+		if err != nil {
+			fmt.Println(err)
+			break
 		}
 
-		for ch := int(0); ch < se.Sound.Channels(); ch++ {
-			for s := 0; s < se.Params.SegmentSteps; s++ {
-				e := 0.0
-				for f := 0; f < se.LogPowerSegment.Shape.Dim(1); f++ {
-					e += se.LogPowerSegment.FloatValRowCell(s, f)
-				}
-				se.Energy.SetFloat1D(s, e)
+		for s := 0; s < se.Params.SegmentSteps; s++ {
+			e := 0.0
+			for f := 0; f < se.LogPowerSegment.Shape.Dim(1); f++ {
+				e += se.LogPowerSegment.FloatValRowCell(s, f)
 			}
+			se.Energy.SetFloat1D(s, e)
 		}
 
-		for ch := int(0); ch < se.Sound.Channels(); ch++ {
-			for s := 0; s < se.Params.SegmentSteps; s++ {
-				se.MfccSegment.SetFloatRowCell(0, s, se.Energy.FloatVal1D(s))
-				fmt.Println(se.Energy.FloatVal1D(s))
-			}
+		for s := 0; s < se.Params.SegmentSteps; s++ {
+			se.MfccSegment.SetFloatRowCell(0, s, se.Energy.FloatVal1D(s))
+			fmt.Println(se.Energy.FloatVal1D(s))
 		}
 
 		//calculate the MFCC deltas (change in MFCC coeficient over time - basically first derivative)
@@ -317,25 +318,25 @@ func (se *SndEnv) ProcessSegment(segment, add int) {
 // ProcessStep processes a step worth of sound input from current input_pos, and increment input_pos by input.step_samples
 // Process the data by doing a fourier transform and computing the power spectrum, then apply mel filters to get the frequency
 // bands that mimic the non-linear human perception of sound
-func (se *SndEnv) ProcessStep(segment, ch, step, add int) error {
+func (se *SndEnv) ProcessStep(segment, step, add int) error {
 	//fmt.Println("step: ", step)
 	offset := se.Params.Steps[step] + MSecToSamples(float64(add), se.Sound.SampleRate())
 	start := segment*int(se.Params.StrideSamples) + offset // segments start at zero
-	err := se.SndToWindow(start, ch)
+	err := se.SndToWindow(start)
 	if err == nil {
 		//gparams.Fft.Reset(wparams.WinSamples)
-		se.Dft.Filter(int(ch), int(step), &se.Window, se.Params.WinSamples, &se.Power, &se.LogPower, &se.PowerSegment, &se.LogPowerSegment)
-		se.Mel.FilterDft(int(ch), int(step), &se.Power, &se.MelFBankSegment, &se.MelFBank, &se.MelFilters)
+		se.Dft.Filter(step, &se.Window, se.Params.WinSamples, &se.Power, &se.LogPower, &se.PowerSegment, &se.LogPowerSegment)
+		se.Mel.FilterDft(step, &se.Power, &se.MelFBankSegment, &se.MelFBank, &se.MelFilters)
 		if se.Mel.MFCC {
-			se.Mel.CepstrumDct(ch, step, &se.MelFBank, &se.MfccSegment, &se.MfccDct)
+			se.Mel.CepstrumDct(step, &se.MelFBank, &se.MfccSegment, &se.MfccDct)
 			//se.MfccSegment.SetFloatRowCell(step, 0, se.Energy.FloatVal1D(step))
 		}
 	}
 	return err
 }
 
-// SndToWindow gets sound from the signal (i.e. the slice of input values) at given position and channel, into Window
-func (se *SndEnv) SndToWindow(start, ch int) error {
+// SndToWindow gets sound from the signal (i.e. the slice of input values) at given position
+func (se *SndEnv) SndToWindow(start int) error {
 	if se.Signal.NumDims() == 1 {
 		end := start + se.Params.WinSamples
 		if end > len(se.Signal.Values) {
@@ -361,22 +362,20 @@ func (se *SndEnv) SndToWindow(start, ch int) error {
 }
 
 // ApplyGabor convolves the gabor filters with the mel output
-func (se *SndEnv) ApplyGabor() (tsr *etensor.Float64) {
-	for ch := int(0); ch < se.Sound.Channels(); ch++ {
-		agabor.Convolve(ch, &se.MelFBankSegment, se.GaborFilters, &se.GborOutput, se.ByTime)
+func (se *SndEnv) ApplyGabor() (tsr *etensor.Float32) {
+	agabor.Convolve(&se.MelFBankSegment, se.GaborFilters, &se.GborOutput, se.ByTime)
 
-		if se.NeighInhib.On {
-			se.ApplyNeighInhib(ch)
-		} else {
-			se.ExtGi.SetZeros()
-		}
+	if se.NeighInhib.On {
+		se.ApplyNeighInhib()
+	} else {
+		se.ExtGi.SetZeros()
+	}
 
-		if se.Kwta.On {
-			se.ApplyKwta(ch)
-			tsr = &se.GborKwta
-		} else {
-			tsr = &se.GborOutput
-		}
+	if se.Kwta.On {
+		se.ApplyKwta()
+		tsr = &se.GborKwta
+	} else {
+		tsr = &se.GborOutput
 	}
 	return tsr
 }

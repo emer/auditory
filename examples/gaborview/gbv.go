@@ -108,8 +108,8 @@ type ProcessParams struct {
 type GaborParams struct {
 	GaborSpecs []agabor.Filter   `view:"no-inline" desc:"array of params describing each gabor filter"`
 	GaborSet   agabor.FilterSet  `view:"inline" desc:"a set of gabor filters with same x and y dimensions"`
-	GborOutput etensor.Float64   `view:"no-inline" desc:" raw output of Gabor -- full segment's worth of gabor steps"`
-	GborKwta   etensor.Float64   `view:"no-inline" desc:" post-kwta output of full segment's worth of gabor steps"`
+	GborOutput etensor.Float32   `view:"no-inline" desc:" raw output of Gabor -- full segment's worth of gabor steps"`
+	GborKwta   etensor.Float32   `view:"no-inline" desc:" post-kwta output of full segment's worth of gabor steps"`
 	Inhibs     fffb.Inhibs       `view:"no-inline" desc:"inhibition values for A1 KWTA"`
 	ExtGi      etensor.Float32   `view:"no-inline" desc:"A1 simple extra Gi from neighbor inhibition tensor"`
 	NeighInhib kwta.NeighInhib   `view:"no-inline" desc:"neighborhood inhibition for V1s -- each unit gets inhibition from same feature in nearest orthogonal neighbors -- reduces redundancy of feature code"`
@@ -142,7 +142,7 @@ type App struct {
 	GParams2 GaborParams     `desc:"gabor filter specifications and parameters for applying gabors to the mel output for sound 2"`
 	Sound    sound.Wave      `view:"inline"`
 	Signal   etensor.Float64 `view:"-" desc:" the full sound input obtained from the sound input - plus any added padding"`
-	Window   etensor.Float64 `view:"-" desc:" [Input.WinSamples] the raw sound input, one channel at a time"`
+	Window   etensor.Float64 `view:"-" desc:" [Input.WinSamples] the raw sound input"`
 	ByTime   bool            `desc:"display the gabor filtering result by time and then by filter, default is to order by filter and then time"`
 	ImgDir   string          `desc:"directory for storing images of mel, gabors, filtered result, etc"`
 
@@ -372,7 +372,7 @@ func (ap *App) Process(wparams *WinParams, pparams *ProcessParams, gparams *Gabo
 	ap.Window.SetShape([]int{wparams.WinSamples}, nil, nil)
 	pparams.Power.SetShape([]int{winSamplesHalf}, nil, nil)
 	pparams.LogPower.CopyShapeFrom(&pparams.Power)
-	pparams.PowerSegment.SetShape([]int{wparams.StepsTotal, winSamplesHalf, ap.Sound.Channels()}, nil, nil)
+	pparams.PowerSegment.SetShape([]int{winSamplesHalf, wparams.StepsTotal}, nil, nil)
 	if pparams.Dft.CompLogPow {
 		pparams.LogPowerSegment.CopyShapeFrom(&pparams.PowerSegment)
 	}
@@ -395,12 +395,12 @@ func (ap *App) Process(wparams *WinParams, pparams *ProcessParams, gparams *Gabo
 	}
 
 	pparams.MelFBank.SetShape([]int{pparams.Mel.FBank.NFilters}, nil, nil)
-	pparams.MelFBankSegment.SetShape([]int{wparams.StepsTotal, pparams.Mel.FBank.NFilters, ap.Sound.Channels()}, nil, nil)
+	pparams.MelFBankSegment.SetShape([]int{pparams.Mel.FBank.NFilters, wparams.StepsTotal}, nil, nil)
 	pparams.Energy.SetShape([]int{wparams.StepsTotal}, nil, nil)
 	if pparams.Mel.MFCC {
 		pparams.MFCCDct.SetShape([]int{pparams.Mel.FBank.NFilters}, nil, nil)
-		pparams.MFCCSegment.SetShape([]int{wparams.StepsTotal, pparams.Mel.NCoefs, ap.Sound.Channels()}, nil, nil)
-		pparams.MFCCDeltas.SetShape([]int{wparams.StepsTotal, pparams.Mel.NCoefs, ap.Sound.Channels()}, nil, nil)
+		pparams.MFCCSegment.SetShape([]int{pparams.Mel.NCoefs, wparams.StepsTotal}, nil, nil)
+		pparams.MFCCDeltas.SetShape([]int{pparams.Mel.NCoefs, wparams.StepsTotal}, nil, nil)
 	}
 	samples := sound.MSecToSamples(wparams.SegmentEnd-wparams.SegmentStart, ap.Sound.SampleRate())
 	siglen := len(ap.Signal.Values) - samples*ap.Sound.Channels()
@@ -414,27 +414,22 @@ func (ap *App) Process(wparams *WinParams, pparams *ProcessParams, gparams *Gabo
 	pparams.MFCCSegment.SetZeros()
 	pparams.Energy.SetZeros()
 
-	for ch := int(0); ch < ap.Sound.Channels(); ch++ {
-		for s := 0; s < int(wparams.StepsTotal); s++ {
-			err := ap.ProcessStep(ch, s, wparams, pparams, gparams)
-			if err != nil {
-				fmt.Println(err)
-				break
-			}
+	for s := 0; s < int(wparams.StepsTotal); s++ {
+		err := ap.ProcessStep(s, wparams, pparams, gparams)
+		if err != nil {
+			fmt.Println(err)
+			break
 		}
 	}
 
-	for ch := int(0); ch < ap.Sound.Channels(); ch++ {
-		for s := 0; s < wparams.StepsTotal; s++ {
-			e := 0.0
-			for f := 0; f < pparams.LogPowerSegment.Shape.Dim(1); f++ {
-				e += pparams.LogPowerSegment.FloatValRowCell(s, f)
-			}
-			pparams.Energy.SetFloat1D(s, e)
+	for s := 0; s < wparams.StepsTotal; s++ {
+		e := 0.0
+		for f := 0; f < pparams.LogPowerSegment.Shape.Dim(1); f++ {
+			e += pparams.LogPowerSegment.FloatValRowCell(s, f)
 		}
+		pparams.Energy.SetFloat1D(s, e)
 	}
 
-	//for ch := int(0); ch < ap.Sound.Channels(); ch++ {
 	//	for s := 0; s < wparams.StepsTotal; s++ {
 	//		pparams.Mel.FilterDft(int(ch), int(s), &pparams.Power, &pparams.MelFBankSegment, &pparams.MelFBank, &pparams.MelFilters)
 	//		if pparams.Mel.MFCC {
@@ -442,12 +437,11 @@ func (ap *App) Process(wparams *WinParams, pparams *ProcessParams, gparams *Gabo
 	//			pparams.MFCCSegment.SetFloatRowCell(s, 0, pparams.Energy.FloatVal1D(s))
 	//		}
 	//	}
-	//}
 
-	for ch := int(0); ch < ap.Sound.Channels(); ch++ {
-		for s := 0; s < wparams.StepsTotal; s++ {
-			pparams.MFCCSegment.SetFloatRowCell(s, 0, pparams.Energy.FloatVal1D(s))
-		}
+	for s := 0; s < wparams.StepsTotal; s++ {
+		pparams.MFCCSegment.SetFloatRowCell(0, s, pparams.Energy.FloatVal1D(s))
+		pparams.MFCCSegment.SetFloatRowCell(2, s, pparams.Energy.FloatVal1D(s))
+		pparams.MFCCSegment.SetFloatRowCell(12, s, pparams.Energy.FloatVal1D(s))
 	}
 
 	// calculate the MFCC deltas (change in MFCC coeficient over time - basically first derivative)
@@ -471,13 +465,13 @@ func (ap *App) Process(wparams *WinParams, pparams *ProcessParams, gparams *Gabo
 					if snxt > wparams.StepsTotal-1 {
 						snxt = wparams.StepsTotal - 1
 					}
-					prv += pparams.MFCCSegment.FloatValRowCell(sprv, i)
-					nxt += pparams.MFCCSegment.FloatValRowCell(snxt, i)
+					prv += pparams.MFCCSegment.FloatValRowCell(i, sprv)
+					nxt += pparams.MFCCSegment.FloatValRowCell(i, snxt)
 					nume += float64(n) * (nxt - prv)
 
 					denom := n * n
 					d := nume / 2.0 * float64(denom)
-					pparams.MFCCDeltas.SetFloatRowCell(s, i, d)
+					pparams.MFCCDeltas.SetFloatRowCell(i, s, d)
 				}
 			}
 		}
@@ -488,26 +482,17 @@ func (ap *App) Process(wparams *WinParams, pparams *ProcessParams, gparams *Gabo
 // ProcessStep processes a step worth of sound input from current input_pos, and increment input_pos by input.step_samples
 // Process the data by doing a fourier transform and computing the power spectrum, then apply mel filters to get the frequency
 // bands that mimic the non-linear human perception of sound
-func (ap *App) ProcessStep(ch int, step int, wparams *WinParams, pparams *ProcessParams, gparams *GaborParams) error {
+func (ap *App) ProcessStep(step int, wparams *WinParams, pparams *ProcessParams, gparams *GaborParams) error {
 	offset := wparams.Steps[step]
 	start := sound.MSecToSamples(wparams.SegmentStart, ap.Sound.SampleRate()) + offset
-	err := ap.SndToWindow(start, ch, wparams)
+	err := ap.SndToWindow(start, wparams)
 	if err == nil {
 		gparams.Fft.Reset(wparams.WinSamples)
-		pparams.Dft.Filter(int(ch), int(step), &ap.Window, wparams.WinSamples, &pparams.Power, &pparams.LogPower, &pparams.PowerSegment, &pparams.LogPowerSegment)
-
-		//for s := 0; s < wparams.StepsTotal; s++ {
-		//	e := 0.0
-		//	for f := 0; f < pparams.LogPowerSegment.Shape.Dim(1); f++ {
-		//		e += pparams.LogPowerSegment.FloatValRowCell(s, f)
-		//	}
-		//	pparams.Energy.SetFloat1D(s, e)
-		//}
-
-		pparams.Mel.FilterDft(int(ch), int(step), &pparams.Power, &pparams.MelFBankSegment, &pparams.MelFBank, &pparams.MelFilters)
+		pparams.Dft.Filter(step, &ap.Window, wparams.WinSamples, &pparams.Power, &pparams.LogPower, &pparams.PowerSegment, &pparams.LogPowerSegment)
+		pparams.Mel.FilterDft(step, &pparams.Power, &pparams.MelFBankSegment, &pparams.MelFBank, &pparams.MelFilters)
 		if pparams.Mel.MFCC {
-			pparams.Mel.CepstrumDct(ch, step, &pparams.MelFBank, &pparams.MFCCSegment, &pparams.MFCCDct)
-			pparams.MFCCSegment.SetFloatRowCell(step, 0, pparams.Energy.FloatVal1D(step))
+			pparams.Mel.CepstrumDct(step, &pparams.MelFBank, &pparams.MFCCSegment, &pparams.MFCCDct)
+			pparams.MFCCSegment.SetFloatRowCell(0, step, pparams.Energy.FloatVal1D(step))
 		}
 	}
 	return err
@@ -592,11 +577,7 @@ func (ap *App) LoadTranscription(fpth string) {
 
 // ToTensor loads the sound file, e.g. .wav file, the transcription is loaded in LoadTranscription()
 func (ap *App) ToTensor(wparams *WinParams) bool {
-	if ap.Sound.Channels() > 1 {
-		ap.Sound.SoundToTensor(&ap.Signal, -1)
-	} else {
-		ap.Sound.SoundToTensor(&ap.Signal, wparams.Channel)
-	}
+	ap.Sound.SoundToTensor(&ap.Signal)
 	return true
 }
 
@@ -652,29 +633,22 @@ func (ap *App) SndFmIdx(seq speech.Sequence, idx int) (snd string, ok bool) {
 	return
 }
 
-// SndToWindow gets sound from the signal (i.e. the slice of input values) at given position and channel, into Window
-func (ap *App) SndToWindow(start, ch int, wparams *WinParams) error {
-	if ap.Signal.NumDims() == 1 {
-		//start := ap.Segment*int(ap.WinParams.StrideSamples) + stepOffset // segments start at zero
-		end := start + wparams.WinSamples
-		if end > len(ap.Signal.Values) {
-			return errors.New("SndToWindow: end beyond signal length!!")
-		}
-		var pad []float64
-		if start < 0 && end <= 0 {
-			pad = make([]float64, end-start)
-			ap.Window.Values = pad[0:]
-		} else if start < 0 && end > 0 {
-			pad = make([]float64, 0-start)
-			ap.Window.Values = pad[0:]
-			ap.Window.Values = append(ap.Window.Values, ap.Signal.Values[0:end]...)
-		} else {
-			ap.Window.Values = ap.Signal.Values[start:end]
-		}
-		//fmt.Println("start / end in samples:", start, end)
+// SndToWindow gets sound from the signal (i.e. the slice of input values) at given position
+func (ap *App) SndToWindow(start int, wparams *WinParams) error {
+	end := start + wparams.WinSamples
+	if end > len(ap.Signal.Values) {
+		return errors.New("SndToWindow: end beyond signal length!!")
+	}
+	var pad []float64
+	if start < 0 && end <= 0 {
+		pad = make([]float64, end-start)
+		ap.Window.Values = pad[0:]
+	} else if start < 0 && end > 0 {
+		pad = make([]float64, 0-start)
+		ap.Window.Values = pad[0:]
+		ap.Window.Values = append(ap.Window.Values, ap.Signal.Values[0:end]...)
 	} else {
-		// ToDo: implement
-		fmt.Printf("SndToWindow: else case not implemented - please report this issue")
+		ap.Window.Values = ap.Signal.Values[start:end]
 	}
 	return nil
 }
@@ -694,44 +668,40 @@ func (ap *App) ApplyGabor(pparams *ProcessParams, gparams *GaborParams) {
 	sx := (int(math.Floor(float64(x)/float64(gparams.GaborSet.StrideX))) + 1) * len(active)
 
 	ap.UpdateGabors(gparams)
-	gparams.GborOutput.SetShape([]int{ap.Sound.Channels(), sy, sx}, nil, []string{"chan", "freq", "time"})
+	gparams.GborOutput.SetShape([]int{sy, sx}, nil, []string{"chan", "freq", "time"})
 	gparams.ExtGi.SetShape([]int{sy, gparams.GaborSet.Filters.Dim(0)}, nil, nil) // passed in for each channel
 	gparams.GborOutput.SetMetaData("odd-row", "true")
 	gparams.GborOutput.SetMetaData("grid-fill", ".9")
 	gparams.GborKwta.CopyShapeFrom(&gparams.GborOutput)
 	gparams.GborKwta.CopyMetaData(&gparams.GborOutput)
 
-	for ch := int(0); ch < ap.Sound.Channels(); ch++ {
-		agabor.Convolve(ch, &pparams.MelFBankSegment, gparams.GaborSet, &gparams.GborOutput, ap.ByTime)
-		//agabor.Convolve(ch, &pparams.MFCCSegment, gparams.GaborSet, &gparams.GborOutput, ap.ByTime)
-		// NeighInhib only works for 4D (pooled input) and this ap is 2D
-		//if ap.NeighInhib.On {
-		//	ap.NeighInhib.Inhib4(&gparams.GborOutput, &ap.ExtGi)
-		//} else {
-		//	ap.ExtGi.SetZeros()
-		//}
+	agabor.Convolve(&pparams.MelFBankSegment, gparams.GaborSet, &gparams.GborOutput, ap.ByTime)
+	//agabor.Convolve(ch, &pparams.MFCCSegment, gparams.GaborSet, &gparams.GborOutput, ap.ByTime)
+	// NeighInhib only works for 4D (pooled input) and this ap is 2D
+	//if ap.NeighInhib.On {
+	//	ap.NeighInhib.Inhib4(&gparams.GborOutput, &ap.ExtGi)
+	//} else {
+	//	ap.ExtGi.SetZeros()
+	//}
 
-		if gparams.Kwta.On {
-			ap.ApplyKwta(ch, gparams)
-			//tsr = &gparams.GborKwta
-			//} else {
-			//	tsr = &gparams.GborOutput
-		}
+	if gparams.Kwta.On {
+		ap.ApplyKwta(gparams)
+		//tsr = &gparams.GborKwta
+		//} else {
+		//	tsr = &gparams.GborOutput
 	}
 	//return tsr
 }
 
 // ApplyKwta runs the kwta algorithm on the raw activations
-func (ap *App) ApplyKwta(ch int, gparams *GaborParams) {
+func (ap *App) ApplyKwta(gparams *GaborParams) {
 	gparams.GborKwta.CopyFrom(&gparams.GborOutput)
 	if gparams.Kwta.On {
-		rawSS := gparams.GborOutput.SubSpace([]int{ch}).(*etensor.Float32)
-		kwtaSS := gparams.GborKwta.SubSpace([]int{ch}).(*etensor.Float32)
 		// This app is 2D only - no pools
 		//if ap.KwtaPool == true {
-		//	ap.Kwta.KWTAPool(rawSS, kwtaSS, &ap.Inhibs, &ap.ExtGi)
+		//	ap.Kwta.KWTAPool(&gparams.GborOutput, &gparams.GborKwta, &ap.Inhibs, &ap.ExtGi)
 		//} else {
-		gparams.Kwta.KWTALayer(rawSS, kwtaSS, &gparams.ExtGi)
+		gparams.Kwta.KWTALayer(&gparams.GborOutput, &gparams.GborKwta, &gparams.ExtGi)
 		//}
 	}
 }

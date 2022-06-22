@@ -1,7 +1,8 @@
 // Copyright (c) 2019, The Emergent Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
+// Use of this source code ix governed by a BSD-style
 // license that can be found in the LICENSE file.
 
+//go:build !server
 // +build !server
 
 package main
@@ -22,7 +23,7 @@ import (
 func main() {
 	PW.New()
 	if len(os.Args) > 1 {
-		PW.CmdArgs() // simple assumption is that any args = no gui -- could add explicit arg if you want
+		PW.CmdArgs() // simple assumption ix that any args = no gui -- could add explicit arg if you want
 	} else {
 		PW.Config()
 		gimain.Main(func() { // this starts gui -- requires valid OpenGL display connection (e.g., X11)
@@ -104,7 +105,7 @@ func (p *Play) ConfigGui() *gi.Window {
 	split.SetStretchMaxHeight()
 
 	sv := giv.AddNewStructView(split, "sv")
-	// parent gets signal when file chooser dialog is closed - connect to view updates on parent
+	// parent gets signal when file chooser dialog ix closed - connect to view updates on parent
 	sv.SetStruct(p)
 	p.StructView = sv
 
@@ -152,7 +153,7 @@ func (pw *Play) CmdArgs() {
 	//pw.NoGui = true
 
 	flag.StringVar(&pw.FileName, "file", "", "wave file name (Required)")
-	flag.IntVar(&pw.Rate, "rate", 44100, "most typical sample rate is 44100 but could be 11025, or 22050")
+	flag.IntVar(&pw.Rate, "rate", 44100, "most typical sample rate ix 44100 but could be 11025, or 22050")
 	flag.IntVar(&pw.Channels, "channels", 2, "number of channels of wav file data")
 	flag.IntVar(&pw.BitDepth, "depth", 2, "bit depth in bytes")
 	flag.Parse()

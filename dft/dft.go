@@ -28,12 +28,12 @@ func (dft *Params) Defaults() {
 }
 
 // Filter filters the current window_in input data according to current settings -- called by ProcessStep, but can be called separately
-func (dft *Params) Filter(ch int, step int, windowIn *etensor.Float64, winSamples int, power *etensor.Float64, logPower *etensor.Float64, powerForSegment *etensor.Float64, logPowerForSegment *etensor.Float64) {
+func (dft *Params) Filter(step int, windowIn *etensor.Float64, winSamples int, power *etensor.Float64, logPower *etensor.Float64, powerForSegment *etensor.Float64, logPowerForSegment *etensor.Float64) {
 	fftCoefs := make([]complex128, winSamples)
 	dft.FftReal(fftCoefs, windowIn)
 	fft := fourier.NewCmplxFFT(len(fftCoefs))
 	fftCoefs = fft.Coefficients(nil, fftCoefs)
-	dft.Power(ch, step, winSamples, fftCoefs, power, logPower, powerForSegment, logPowerForSegment)
+	dft.Power(step, winSamples, fftCoefs, power, logPower, powerForSegment, logPowerForSegment)
 	fft = nil
 	fftCoefs = nil
 }
@@ -48,7 +48,7 @@ func (dft *Params) FftReal(fftCoefs []complex128, in *etensor.Float64) {
 }
 
 // Power
-func (dft *Params) Power(ch, step int, winSamples int, fftCoefs []complex128, power *etensor.Float64, logPower *etensor.Float64, powerForSegment *etensor.Float64, logPowerForSegment *etensor.Float64) {
+func (dft *Params) Power(step int, winSamples int, fftCoefs []complex128, power *etensor.Float64, logPower *etensor.Float64, powerForSegment *etensor.Float64, logPowerForSegment *etensor.Float64) {
 	for k := 0; k < winSamples/2+1; k++ {
 		rl := real(fftCoefs[k])
 		im := imag(fftCoefs[k])
@@ -57,7 +57,7 @@ func (dft *Params) Power(ch, step int, winSamples int, fftCoefs []complex128, po
 			powr = dft.PrevSmooth*power.FloatVal1D(k) + dft.CurSmooth*powr
 		}
 		power.SetFloat1D(k, powr)
-		powerForSegment.SetFloat([]int{step, k, ch}, powr)
+		powerForSegment.SetFloat([]int{k, step}, powr)
 
 		var logp float64
 		if dft.CompLogPow {
@@ -68,7 +68,7 @@ func (dft *Params) Power(ch, step int, winSamples int, fftCoefs []complex128, po
 				logp = math.Log(powr)
 			}
 			logPower.SetFloat1D(k, logp)
-			logPowerForSegment.SetFloat([]int{step, k, ch}, logp)
+			logPowerForSegment.SetFloat([]int{k, step}, logp)
 		}
 	}
 }

@@ -1,0 +1,9 @@
+I think Power and MelFBank can be local. Just keep PowerSegment and MelFBankSegment part of struct.
+
+Then rename dropping Segment portion
+
+And do we really need Power and LogPower - just keep the latter
+
+The implementation would be much cleaner if all the looping were replace with matrix operations
+
+MFCC, DFT, DCT should be uppercase

@@ -113,36 +113,15 @@ func (snd *Wave) SampleType() SoundSampleType {
 // can optionally select a specific channel (formats sound_data as a single-dimensional matrix of frames size),
 // and -1 gets all available channels (formats sound_data as two-dimensional matrix with outer dimension as
 // channels and inner dimension frames
-func (snd *Wave) SoundToTensor(samples *etensor.Float64, channel int) bool {
+func (snd *Wave) SoundToTensor(samples *etensor.Float64) bool {
 	nFrames := snd.Buf.NumFrames()
 
-	if channel < 0 && snd.Channels() > 1 { // multiple channels and we process all of them
-		shape := make([]int, 2)
-		shape[0] = snd.Channels()
-		shape[1] = nFrames
-		samples.SetShape(shape, nil, nil)
-		idx := 0
-		for i := 0; i < nFrames; i++ {
-			for c := 0; c < snd.Channels(); c, idx = c+1, idx+1 {
-				samples.SetFloat([]int{c, i}, snd.GetFloatAtIdx(snd.Buf, idx))
-			}
-		}
-	} else { // only process one channel
-		shape := make([]int, 1)
-		shape[0] = nFrames
-		samples.SetShape(shape, nil, nil)
+	shape := make([]int, 1)
+	shape[0] = nFrames
+	samples.SetShape(shape, nil, nil)
 
-		if snd.Channels() == 1 { // there is only one channel!
-			for i := 0; i < nFrames; i++ {
-				samples.SetFloat1D(i, float64(snd.GetFloatAtIdx(snd.Buf, i)))
-			}
-		} else {
-			idx := 0
-			for i := 0; i < nFrames; i++ { // process a specific channel
-				samples.SetFloat1D(i, float64(snd.GetFloatAtIdx(snd.Buf, idx+channel)))
-				idx += snd.Channels()
-			}
-		}
+	for i := 0; i < nFrames; i++ {
+		samples.SetFloat1D(i, float64(snd.GetFloatAtIdx(snd.Buf, i)))
 	}
 	return true
 }

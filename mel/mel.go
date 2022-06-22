@@ -86,7 +86,7 @@ func (mel *Params) InitFilters(dftSize int, sampleRate int, filters *etensor.Flo
 }
 
 // FilterDft applies the mel filters to power of dft
-func (mel *Params) FilterDft(ch, step int, dftPowerOut *etensor.Float64, segmentData *etensor.Float64, fBankData *etensor.Float64, filters *etensor.Float64) {
+func (mel *Params) FilterDft(step int, dftPowerOut *etensor.Float64, segmentData *etensor.Float64, fBankData *etensor.Float64, filters *etensor.Float64) {
 	mi := 0
 	for flt := 0; flt < int(mel.FBank.NFilters); flt, mi = flt+1, mi+1 {
 		minBin := mel.BinPts[flt]
@@ -117,7 +117,7 @@ func (mel *Params) FilterDft(ch, step int, dftPowerOut *etensor.Float64, segment
 			}
 		}
 		fBankData.SetFloat1D(mi, val)
-		segmentData.Set([]int{step, mi, ch}, val)
+		segmentData.Set([]int{mi, step}, val)
 	}
 }
 
@@ -158,7 +158,7 @@ func (mel *Params) FftReal(out []complex128, in *etensor.Float64) {
 }
 
 // CepstrumDct applies a discrete cosine transform (DCT) to get the cepstrum coefficients on the mel filterbank values
-func (mel *Params) CepstrumDct(ch, step int, fBankData *etensor.Float64, mfccSegment *etensor.Float64, mfccDct *etensor.Float64) {
+func (mel *Params) CepstrumDct(step int, fBankData *etensor.Float64, mfccSegment *etensor.Float64, mfccDct *etensor.Float64) {
 	sz := copy(mfccDct.Values, fBankData.Values)
 	if sz != len(mfccDct.Values) {
 		log.Printf("mel.CepstrumDctMel: memory copy size wrong")
@@ -174,7 +174,7 @@ func (mel *Params) CepstrumDct(ch, step int, fBankData *etensor.Float64, mfccSeg
 
 	// copy only NCoefs
 	for i := 0; i < mel.NCoefs; i++ {
-		mfccSegment.SetFloat([]int{step, i, ch}, mfccOut[i])
+		mfccSegment.SetFloat([]int{i, step}, mfccOut[i])
 	}
 
 	// calculate deltas

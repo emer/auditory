@@ -190,7 +190,7 @@ func ToTensor(specs []Filter, set *FilterSet) { // i is filter index in
 }
 
 // Convolve processes input using filters that operate over an entire segment of samples
-func Convolve(ch int, melData *etensor.Float64, filters FilterSet, rawOut *etensor.Float64, byTime bool) {
+func Convolve(melData *etensor.Float64, filters FilterSet, rawOut *etensor.Float32, byTime bool) {
 	if melData.Dim(0) < filters.SizeX {
 		log.Println("Gabor filter width can not be larger than the width of the mel matrix")
 		return
@@ -199,7 +199,7 @@ func Convolve(ch int, melData *etensor.Float64, filters FilterSet, rawOut *etens
 	tMax := 1
 	fMax := 1
 	tMaxStrides := 1
-	if rawOut.NumDims() == 3 {
+	if rawOut.NumDims() == 2 {
 		x := melData.Dim(0) - filters.SizeX
 		if x == 0 || x < filters.StrideX {
 			// leave tMax equal to 1
@@ -216,16 +216,16 @@ func Convolve(ch int, melData *etensor.Float64, filters FilterSet, rawOut *etens
 		} else {
 			fMax = y + 1
 		}
-	} else if rawOut.NumDims() == 5 {
-		tMax1 := rawOut.Shp[2] * filters.StrideX
+	} else if rawOut.NumDims() == 4 {
+		tMax1 := rawOut.Shp[1] * filters.StrideX
 		tMax2 := melData.Shp[0] - filters.StrideX
 		tMax = int(math.Min(float64(tMax1), float64(tMax2)))
 
-		fMax1 := rawOut.Shp[1] * filters.StrideY  // limit frequency strides so we don't overrun the output tensor
+		fMax1 := rawOut.Shp[0] * filters.StrideY  // limit frequency strides so we don't overrun the output tensor
 		fMax2 := melData.Shp[1] - filters.StrideY // limit strides based on melData in frequency dimension
 		fMax = int(math.Min(float64(fMax1), float64(fMax2)))
 	} else {
-		log.Println("The output tensor should have 3 or 5 dimensions (1 for number of channels plus 2 or 4 for 2D or 4D result")
+		log.Println("The output tensor should have 2 or 4 dimensions")
 		return
 	}
 
@@ -242,7 +242,7 @@ func Convolve(ch int, melData *etensor.Float64, filters FilterSet, rawOut *etens
 				for ff := int(0); ff < filters.SizeY; ff++ { // size of gabor filter in Y (frequency)
 					for ft := int(0); ft < filters.SizeX; ft++ { // size of gabor filter in X (time)
 						fVal := filters.Filters.Value([]int{flt, ff, ft})
-						iVal := melData.Value([]int{t + ft, f + ff, ch})
+						iVal := melData.Value([]int{t + ft, f + ff})
 						if math.IsNaN(iVal) {
 							iVal = .5
 						}
@@ -260,22 +260,22 @@ func Convolve(ch int, melData *etensor.Float64, filters FilterSet, rawOut *etens
 						x = flt + tIdx*filters.Filters.Dim(0) // tIdx increments for each stride, flt increments stepping through the filters
 					}
 					if pos {
-						rawOut.SetFloat([]int{ch, y, x}, act)
-						rawOut.SetFloat([]int{ch, y + 1, x}, 0)
+						rawOut.SetFloat([]int{y, x}, act)
+						rawOut.SetFloat([]int{y + 1, x}, 0)
 					} else {
-						rawOut.SetFloat([]int{ch, y, x}, 0)
-						rawOut.SetFloat([]int{ch, y + 1, x}, act)
+						rawOut.SetFloat([]int{y, x}, 0)
+						rawOut.SetFloat([]int{y + 1, x}, act)
 					}
 				} else if rawOut.NumDims() == 5 { // in the 4D case we have pools no need for the multiplication we have in the 2D setting of the output tensor
 					if pos {
-						rawOut.SetFloat([]int{ch, fIdx, tIdx, 0, flt}, act)
-						rawOut.SetFloat([]int{ch, fIdx, tIdx, 1, flt}, 0)
+						rawOut.SetFloat([]int{fIdx, tIdx, 0, flt}, act)
+						rawOut.SetFloat([]int{fIdx, tIdx, 1, flt}, 0)
 					} else {
-						rawOut.SetFloat([]int{ch, fIdx, tIdx, 0, flt}, 0)
-						rawOut.SetFloat([]int{ch, fIdx, tIdx, 1, flt}, act)
+						rawOut.SetFloat([]int{fIdx, tIdx, 0, flt}, 0)
+						rawOut.SetFloat([]int{fIdx, tIdx, 1, flt}, act)
 					}
 				} else {
-					log.Println("The output tensor should have 3 or 5 dimensions (1 for number of channels plus 2 or 4 for 2D or 4D result")
+					log.Println("The output tensor should have 2 or 4 dimensions")
 				}
 			}
 		}

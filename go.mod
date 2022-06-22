@@ -3,7 +3,7 @@ module github.com/emer/auditory
 go 1.17
 
 require (
-	github.com/emer/emergent v1.1.59
+	github.com/emer/emergent v1.1.55
 	github.com/emer/etable v1.0.44
 	github.com/emer/leabra v1.1.48
 	github.com/emer/vision v1.1.15
@@ -11,7 +11,7 @@ require (
 	github.com/go-audio/wav v1.0.0
 	github.com/goki/gi v1.2.17
 	github.com/goki/ki v1.1.5
-	github.com/goki/mat32 v1.0.10
+	github.com/goki/mat32 v1.0.10 // indirect
 	github.com/hajimehoshi/ebiten/v2 v2.1.4
 	github.com/hajimehoshi/oto v1.0.0
 
@@ -34,7 +34,6 @@ require (
 	github.com/aymerick/douceur v0.2.0 // indirect
 	github.com/c2h5oh/datasize v0.0.0-20200825124411-48ed595a09d2 // indirect
 	github.com/dlclark/regexp2 v1.4.0 // indirect
-	github.com/emer/empi v1.0.12 // indirect
 	github.com/fatih/camelcase v1.0.0 // indirect
 	github.com/fogleman/gg v1.3.0 // indirect
 	github.com/fsnotify/fsnotify v1.5.1 // indirect
