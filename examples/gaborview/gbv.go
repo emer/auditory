@@ -425,7 +425,7 @@ func (ap *App) Process(wparams *WinParams, pparams *ProcessParams, gparams *Gabo
 	for s := 0; s < wparams.StepsTotal; s++ {
 		e := 0.0
 		for f := 0; f < pparams.LogPowerSegment.Shape.Dim(1); f++ {
-			e += pparams.LogPowerSegment.FloatValRowCell(s, f)
+			e += pparams.LogPowerSegment.FloatValRowCell(f, s)
 		}
 		pparams.Energy.SetFloat1D(s, e)
 	}
@@ -738,7 +738,6 @@ func (ap *App) ConfigTableView(tv *etview.TableView) {
 				if err == nil {
 					ap.ApplyGabor(&ap.PParams1, &ap.GParams1)
 					ap.GUI.UpdateWindow()
-					ap.SnapShot1()
 				}
 			}
 
@@ -895,7 +894,6 @@ func (ap *App) ConfigGui() *gi.Window {
 				if err == nil {
 					ap.ApplyGabor(&ap.PParams1, &ap.GParams1)
 					ap.GUI.UpdateWindow()
-					ap.SnapShot1()
 				}
 			}
 		},
@@ -911,7 +909,6 @@ func (ap *App) ConfigGui() *gi.Window {
 				if err == nil {
 					ap.ApplyGabor(&ap.PParams2, &ap.GParams2)
 					ap.GUI.UpdateWindow()
-					//ap.SnapShot2()
 				}
 			}
 		},
@@ -942,7 +939,6 @@ func (ap *App) ConfigGui() *gi.Window {
 				if err == nil {
 					ap.ApplyGabor(&ap.PParams1, &ap.GParams1)
 					ap.GUI.UpdateWindow()
-					ap.SnapShot1()
 				}
 			}
 		},
@@ -973,7 +969,6 @@ func (ap *App) ConfigGui() *gi.Window {
 				if err == nil {
 					ap.ApplyGabor(&ap.PParams2, &ap.GParams2)
 					ap.GUI.UpdateWindow()
-					//ap.SnapShot2()
 				}
 			}
 		},
