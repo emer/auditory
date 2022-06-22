@@ -68,11 +68,10 @@ type SndEnv struct {
 	MelFBank        etensor.Float64 `view:"no-inline" desc:" mel scale transformation of dft_power, resulting in the mel filterbank output -- the natural log of this is typically applied"`
 	MelFBankSegment etensor.Float64 `view:"no-inline" desc:" full segment's worth of mel feature-bank output"`
 	MelFilters      etensor.Float64 `view:"no-inline" desc:" the actual filters"`
-	MelEnergy       []float64       `view:"no-inline" desc:"sum of mel values by step"`
+	Energy          etensor.Float64 `view:"no-inline" desc:" sum of log power per segment step"`
 	MfccDct         etensor.Float64 `view:"no-inline" desc:" discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
 	MfccSegment     etensor.Float64 `view:"no-inline" desc:" full segment's worth of discrete cosine transform of log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
-	//MfccDeltas      etensor.Float64
-	//MfccDeltaDeltas etensor.Float64
+	MFCCDeltas      etensor.Float64 `view:"no-inline" desc:" "`
 
 	GaborSpecs    []agabor.Filter  `view:"no-inline" desc:" a set of gabor filter specifications, one spec per filter'"`
 	GaborFilters  agabor.FilterSet `desc:"the actual gabor filters, the first spec determines the size of all filters in the set"`
@@ -162,8 +161,8 @@ func (se *SndEnv) Init() (err error) {
 
 	se.MelFBank.SetShape([]int{se.Mel.FBank.NFilters}, nil, nil)
 	se.MelFBankSegment.SetShape([]int{se.Params.SegmentSteps, se.Mel.FBank.NFilters, se.Sound.Channels()}, nil, nil)
+	se.Energy.SetShape([]int{se.Params.SegmentSteps, se.Sound.Channels()}, nil, nil)
 	if se.Mel.MFCC {
-		//se.MfccDctSegment.CopyShapeFrom(&se.MelFBankSegment)
 		se.MfccDct.SetShape([]int{se.Mel.FBank.NFilters}, nil, nil)
 		if se.Mel.Deltas == true {
 			se.MfccSegment.SetShape([]int{se.Params.SegmentSteps, 2 * se.Mel.NCoefs, se.Sound.Channels()}, nil, nil)
@@ -251,32 +250,64 @@ func (se *SndEnv) ProcessSegment(segment, add int) {
 	se.LogPowerSegment.SetZeros()
 	se.MelFBankSegment.SetZeros()
 	se.MfccSegment.SetZeros()
-	se.MelEnergy = nil
+	se.Energy.SetZeros()
 
 	for ch := int(0); ch < se.Sound.Channels(); ch++ {
 		for s := 0; s < int(se.Params.SegmentSteps); s++ {
 			err := se.ProcessStep(segment, ch, s, add)
 			if err != nil {
+				fmt.Println(err)
 				break
 			}
 		}
+
+		for ch := int(0); ch < se.Sound.Channels(); ch++ {
+			for s := 0; s < se.Params.SegmentSteps; s++ {
+				e := 0.0
+				for f := 0; f < se.LogPowerSegment.Shape.Dim(1); f++ {
+					e += se.LogPowerSegment.FloatValRowCell(s, f)
+				}
+				se.Energy.SetFloat1D(s, e)
+			}
+		}
+
+		for ch := int(0); ch < se.Sound.Channels(); ch++ {
+			for s := 0; s < se.Params.SegmentSteps; s++ {
+				se.MfccSegment.SetFloatRowCell(0, s, se.Energy.FloatVal1D(s))
+				fmt.Println(se.Energy.FloatVal1D(s))
+			}
+		}
+
 		//calculate the MFCC deltas (change in MFCC coeficient over time - basically first derivative)
 		//One source of the equation - https://privacycanada.net/mel-frequency-cepstral-coefficient/#Mel-filterbank-Computation
+
+		//denominator = 2 * sum([i**2 for i in range(1, N+1)])
+		// npn: For each frame, calculate delta features based on preceding and following npn frames
+		npn := 2
 		if se.Mel.MFCC && se.Mel.Deltas {
 			for s := 0; s < int(se.Params.SegmentSteps); s++ {
+				prv := 0.0
+				nxt := 0.0
 				for i := 0; i < se.Mel.NCoefs; i++ {
-					sprv := s - 1
-					snxt := s + 1
-					if s == 0 {
-						sprv = 0
+					nume := 0.0
+					for n := 1; n <= npn; n++ {
+						sprv := s - n
+						snxt := s + n
+						if sprv < 0 {
+							sprv = 0
+						}
+						if snxt > se.Params.SegmentSteps-1 {
+							snxt = se.Params.SegmentSteps - 1
+						}
+						prv += se.MfccSegment.FloatValRowCell(sprv, i)
+						nxt += se.MfccSegment.FloatValRowCell(snxt, i)
+						nume += float64(n) * (nxt - prv)
+
+						denom := float64(2 * n * n)
+						d := nume / denom
+						// ToDo: better to have separate matrix and combine if using one layer as input
+						se.MfccSegment.SetFloatRowCell(se.Mel.NCoefs, s, d)
 					}
-					if s == se.Params.SegmentSteps-1 {
-						snxt = se.Params.SegmentSteps - 1
-					}
-					prv := se.MfccSegment.FloatValRowCell(sprv, i)
-					nxt := se.MfccSegment.FloatValRowCell(snxt, i)
-					d := 2 * (nxt - prv) / 2
-					se.MfccSegment.SetFloatRowCell(s, i+se.Mel.NCoefs, d)
 				}
 			}
 		}
@@ -297,15 +328,9 @@ func (se *SndEnv) ProcessStep(segment, ch, step, add int) error {
 		se.Mel.FilterDft(int(ch), int(step), &se.Power, &se.MelFBankSegment, &se.MelFBank, &se.MelFilters)
 		if se.Mel.MFCC {
 			se.Mel.CepstrumDct(ch, step, &se.MelFBank, &se.MfccSegment, &se.MfccDct)
+			//se.MfccSegment.SetFloatRowCell(step, 0, se.Energy.FloatVal1D(step))
 		}
 	}
-	e := 0.0
-	for i := 0; i < se.MelFBank.Len(); i++ {
-		e += se.MelFBank.Value1D(i)
-	}
-	e = e / float64(se.MelFBank.Len()) // normalize
-	se.MelEnergy = append(se.MelEnergy, e)
-
 	return err
 }
 

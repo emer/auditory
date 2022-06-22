@@ -23,7 +23,7 @@ func (dft *Params) Defaults() {
 	dft.PrevSmooth = 0
 	dft.CurSmooth = 1.0 - dft.PrevSmooth
 	dft.CompLogPow = true
-	dft.LogOffSet = 0
+	dft.LogOffSet = 1.0
 	dft.LogMin = -100
 }
 
