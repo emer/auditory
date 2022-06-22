@@ -251,7 +251,7 @@ func Convolve(melData *etensor.Float64, filters FilterSet, rawOut *etensor.Float
 				}
 				pos := fSum >= 0.0
 				act := filters.Gain * math.Abs(fSum)
-				if rawOut.NumDims() == 3 {
+				if rawOut.NumDims() == 2 {
 					y := fIdx * 2 // we are populating 2 rows, off-center and on-center, thus we need to jump by 2 when populating the output tensor
 					x := 0
 					if byTime {
@@ -266,7 +266,7 @@ func Convolve(melData *etensor.Float64, filters FilterSet, rawOut *etensor.Float
 						rawOut.SetFloat([]int{y, x}, 0)
 						rawOut.SetFloat([]int{y + 1, x}, act)
 					}
-				} else if rawOut.NumDims() == 5 { // in the 4D case we have pools no need for the multiplication we have in the 2D setting of the output tensor
+				} else if rawOut.NumDims() == 4 { // in the 4D case we have pools no need for the multiplication we have in the 2D setting of the output tensor
 					if pos {
 						rawOut.SetFloat([]int{fIdx, tIdx, 0, flt}, act)
 						rawOut.SetFloat([]int{fIdx, tIdx, 1, flt}, 0)
