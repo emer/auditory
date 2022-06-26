@@ -252,9 +252,11 @@ func (se *SndEnv) ProcessSegment(segment, add int) {
 	se.LogPower.SetZeros()
 	se.PowerSegment.SetZeros()
 	se.LogPowerSegment.SetZeros()
-	se.MelFBankSegment.SetZeros()
-	se.MFCCSegment.SetZeros()
 	se.Energy.SetZeros()
+	se.MelFBankSegment.SetZeros()
+	if se.Mel.MFCC == true {
+		se.MFCCSegment.SetZeros()
+	}
 
 	for s := 0; s < int(se.Params.SegmentSteps); s++ {
 		err := se.ProcessStep(segment, s, add)
@@ -271,10 +273,11 @@ func (se *SndEnv) ProcessSegment(segment, add int) {
 		se.Energy.SetFloat1D(s, e)
 	}
 
-	for s := 0; s < se.Params.SegmentSteps; s++ {
-		se.MFCCSegment.SetFloatRowCell(0, s, se.Energy.FloatVal1D(s))
+	if se.Mel.MFCC == true {
+		for s := 0; s < se.Params.SegmentSteps; s++ {
+			se.MFCCSegment.SetFloatRowCell(0, s, se.Energy.FloatVal1D(s))
+		}
 	}
-
 	//calculate the MFCC deltas (change in MFCC coeficient over time - basically first derivative)
 	//One source of the equation - https://privacycanada.net/mel-frequency-cepstral-coefficient/#Mel-filterbank-Computation
 
