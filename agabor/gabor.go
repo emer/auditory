@@ -191,7 +191,7 @@ func ToTensor(specs []Filter, set *FilterSet) { // i is filter index in
 
 // Convolve processes input using filters that operate over an entire segment of samples
 func Convolve(melData *etensor.Float64, filters FilterSet, rawOut *etensor.Float32, byTime bool) {
-	if melData.Dim(0) < filters.SizeX {
+	if melData.Dim(1) < filters.SizeX {
 		log.Println("Gabor filter width can not be larger than the width of the mel matrix")
 		return
 	}
@@ -200,17 +200,17 @@ func Convolve(melData *etensor.Float64, filters FilterSet, rawOut *etensor.Float
 	fMax := 1
 	tMaxStrides := 1
 	if rawOut.NumDims() == 2 {
-		x := melData.Dim(0) - filters.SizeX
+		x := melData.Dim(1) - filters.SizeX
 		if x == 0 || x < filters.StrideX {
 			// leave tMax equal to 1
 		} else {
 			tMax = x + 1
 		}
 
-		z := melData.Dim(0) - filters.SizeX
+		z := melData.Dim(1) - filters.SizeX
 		tMaxStrides = z/filters.StrideX + 1
 
-		y := melData.Dim(1) - filters.SizeY
+		y := melData.Dim(0) - filters.SizeY
 		if y == 0 || y < filters.StrideY {
 			// leave fMax equal to 1
 		} else {
@@ -218,11 +218,11 @@ func Convolve(melData *etensor.Float64, filters FilterSet, rawOut *etensor.Float
 		}
 	} else if rawOut.NumDims() == 4 {
 		tMax1 := rawOut.Shp[1] * filters.StrideX
-		tMax2 := melData.Shp[0] - filters.StrideX
+		tMax2 := melData.Shp[1] - filters.StrideX
 		tMax = int(math.Min(float64(tMax1), float64(tMax2)))
 
 		fMax1 := rawOut.Shp[0] * filters.StrideY  // limit frequency strides so we don't overrun the output tensor
-		fMax2 := melData.Shp[1] - filters.StrideY // limit strides based on melData in frequency dimension
+		fMax2 := melData.Shp[0] - filters.StrideY // limit strides based on melData in frequency dimension
 		fMax = int(math.Min(float64(fMax1), float64(fMax2)))
 	} else {
 		log.Println("The output tensor should have 2 or 4 dimensions")
@@ -242,7 +242,7 @@ func Convolve(melData *etensor.Float64, filters FilterSet, rawOut *etensor.Float
 				for ff := int(0); ff < filters.SizeY; ff++ { // size of gabor filter in Y (frequency)
 					for ft := int(0); ft < filters.SizeX; ft++ { // size of gabor filter in X (time)
 						fVal := filters.Filters.Value([]int{flt, ff, ft})
-						iVal := melData.Value([]int{t + ft, f + ff})
+						iVal := melData.Value([]int{f + ff, t + ft})
 						if math.IsNaN(iVal) {
 							iVal = .5
 						}
