@@ -90,32 +90,33 @@ type WinParams struct {
 }
 
 type ProcessParams struct {
-	Dft             dft.Params      `view:"inline" desc:" "`
-	Power           etensor.Float64 `view:"+" desc:" power of the dft, up to the nyquist limit frequency (1/2 input.WinSamples)"`
-	LogPower        etensor.Float64 `view:"+" desc:" log power of the dft, up to the nyquist liit frequency (1/2 input.WinSamples)"`
-	PowerSegment    etensor.Float64 `view:"no-inline" desc:" full segment's worth of power of the dft, up to the nyquist limit frequency (1/2 input.WinSamples)"`
-	LogPowerSegment etensor.Float64 `view:"no-inline" desc:" full segment's worth of log power of the dft, up to the nyquist limit frequency (1/2 input.WinSamples)"`
-	Energy          etensor.Float64 `view:"no-inline" desc:" sum of log power per segment step"`
+	Dft             dft.Params      `view:"inline" desc:""`
+	Power           etensor.Float64 `view:"+" desc:"power of the dft, up to the nyquist limit frequency (1/2 input.WinSamples)"`
+	LogPower        etensor.Float64 `view:"+" desc:"log power of the dft, up to the nyquist liit frequency (1/2 input.WinSamples)"`
+	PowerSegment    etensor.Float64 `view:"no-inline" desc:"full segment's worth of power of the dft, up to the nyquist limit frequency (1/2 input.WinSamples)"`
+	LogPowerSegment etensor.Float64 `view:"no-inline" desc:"full segment's worth of log power of the dft, up to the nyquist limit frequency (1/2 input.WinSamples)"`
+	Energy          etensor.Float64 `view:"no-inline" desc:"sum of log power per segment step"`
 	Mel             mel.Params      `view:"inline"`
-	MelFBank        etensor.Float64 `view:"no-inline" desc:" mel scale transformation of dft_power, using triangular filters, resulting in the mel filterbank output -- the natural log of this is typically applied"`
-	MelFBankSegment etensor.Float64 `view:"no-inline" desc:" full segment's worth of mel feature-bank output"`
-	MelFilters      etensor.Float64 `view:"no-inline" desc:" the actual filters"`
-	MFCCDct         etensor.Float64 `view:"no-inline" desc:" discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
-	MFCCSegment     etensor.Float64 `view:"no-inline" desc:" full segment's worth of discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
-	MFCCDeltas      etensor.Float64 `view:"no-inline" desc:" "`
+	MelFBank        etensor.Float64 `view:"no-inline" desc:"mel scale transformation of dft_power, using triangular filters, resulting in the mel filterbank output -- the natural log of this is typically applied"`
+	MelFBankSegment etensor.Float64 `view:"no-inline" desc:"full segment's worth of mel feature-bank output"`
+	MelFilters      etensor.Float64 `view:"no-inline" desc:"the actual filters"`
+	MFCCDct         etensor.Float64 `view:"no-inline" desc:"discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
+	MFCCSegment     etensor.Float64 `view:"no-inline" desc:"full segment's worth of discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
+	MFCCDeltas      etensor.Float64 `view:"no-inline" desc:"MFCC deltas are the differences over time of the MFC coefficeints"`
+	MFCCDeltaDeltas etensor.Float64 `view:"no-inline" desc:"MFCC delta deltas are the differences over time of the MFCC deltas"`
 }
 
 type GaborParams struct {
 	GaborSpecs []agabor.Filter   `view:"no-inline" desc:"array of params describing each gabor filter"`
 	GaborSet   agabor.FilterSet  `view:"inline" desc:"a set of gabor filters with same x and y dimensions"`
-	GborOutput etensor.Float32   `view:"no-inline" desc:" raw output of Gabor -- full segment's worth of gabor steps"`
-	GborKwta   etensor.Float32   `view:"no-inline" desc:" post-kwta output of full segment's worth of gabor steps"`
+	GborOutput etensor.Float32   `view:"no-inline" desc:"raw output of Gabor -- full segment's worth of gabor steps"`
+	GborKwta   etensor.Float32   `view:"no-inline" desc:"post-kwta output of full segment's worth of gabor steps"`
 	Inhibs     fffb.Inhibs       `view:"no-inline" desc:"inhibition values for A1 KWTA"`
 	ExtGi      etensor.Float32   `view:"no-inline" desc:"A1 simple extra Gi from neighbor inhibition tensor"`
 	NeighInhib kwta.NeighInhib   `view:"no-inline" desc:"neighborhood inhibition for V1s -- each unit gets inhibition from same feature in nearest orthogonal neighbors -- reduces redundancy of feature code"`
 	Kwta       kwta.KWTA         `view:"no-inline" desc:"kwta parameters, using FFFB form"`
-	FftCoefs   []complex128      `view:"-" desc:" discrete fourier transform (fft) output complex representation"`
-	Fft        *fourier.CmplxFFT `view:"-" desc:" struct for fast fourier transform"`
+	FftCoefs   []complex128      `view:"-" desc:"discrete fourier transform (fft) output complex representation"`
+	Fft        *fourier.CmplxFFT `view:"-" desc:"struct for fast fourier transform"`
 }
 
 type App struct {
@@ -141,8 +142,8 @@ type App struct {
 	GParams1 GaborParams     `desc:"gabor filter specifications and parameters for applying gabors to the mel output for sound 1"`
 	GParams2 GaborParams     `desc:"gabor filter specifications and parameters for applying gabors to the mel output for sound 2"`
 	Sound    sound.Wave      `view:"inline"`
-	Signal   etensor.Float64 `view:"-" desc:" the full sound input obtained from the sound input - plus any added padding"`
-	Window   etensor.Float64 `view:"-" desc:" [Input.WinSamples] the raw sound input"`
+	Signal   etensor.Float64 `view:"-" desc:"the full sound input obtained from the sound input - plus any added padding"`
+	Window   etensor.Float64 `view:"-" desc:"[Input.WinSamples] the raw sound input"`
 	ByTime   bool            `desc:"display the gabor filtering result by time and then by filter, default is to order by filter and then time"`
 	ImgDir   string          `desc:"directory for storing images of mel, gabors, filtered result, etc"`
 
@@ -401,6 +402,7 @@ func (ap *App) Process(wparams *WinParams, pparams *ProcessParams, gparams *Gabo
 		pparams.MFCCDct.SetShape([]int{pparams.Mel.FBank.NFilters}, nil, nil)
 		pparams.MFCCSegment.SetShape([]int{pparams.Mel.NCoefs, wparams.StepsTotal}, nil, nil)
 		pparams.MFCCDeltas.SetShape([]int{pparams.Mel.NCoefs, wparams.StepsTotal}, nil, nil)
+		pparams.MFCCDeltaDeltas.SetShape([]int{pparams.Mel.NCoefs, wparams.StepsTotal}, nil, nil)
 	}
 	samples := sound.MSecToSamples(wparams.SegmentEnd-wparams.SegmentStart, ap.Sound.SampleRate())
 	siglen := len(ap.Signal.Values) - samples*ap.Sound.Channels()
@@ -462,6 +464,30 @@ func (ap *App) Process(wparams *WinParams, pparams *ProcessParams, gparams *Gabo
 					denom := n * n
 					d := nume / 2.0 * float64(denom)
 					pparams.MFCCDeltas.SetFloatRowCell(i, s, d)
+				}
+			}
+		}
+		for s := 0; s < int(wparams.StepsTotal); s++ {
+			prv := 0.0
+			nxt := 0.0
+			for i := 0; i < pparams.Mel.NCoefs; i++ {
+				nume := 0.0
+				for n := 1; n <= N; n++ {
+					sprv := s - n
+					snxt := s + n
+					if sprv < 0 {
+						sprv = 0
+					}
+					if snxt > wparams.StepsTotal-1 {
+						snxt = wparams.StepsTotal - 1
+					}
+					prv += pparams.MFCCDeltas.FloatValRowCell(i, sprv)
+					nxt += pparams.MFCCDeltas.FloatValRowCell(i, snxt)
+					nume += float64(n) * (nxt - prv)
+
+					denom := n * n
+					d := nume / 2.0 * float64(denom)
+					pparams.MFCCDeltaDeltas.SetFloatRowCell(i, s, d)
 				}
 			}
 		}
@@ -646,19 +672,19 @@ func (ap *App) SndToWindow(start int, wparams *WinParams) error {
 // ApplyGabor convolves the gabor filters with the mel output
 func (ap *App) ApplyGabor(pparams *ProcessParams, gparams *GaborParams) {
 	// determine gabor output size
-	y1 := pparams.MelFBankSegment.Dim(1)
+	y1 := pparams.MelFBankSegment.Dim(0)
 	y2 := gparams.GaborSet.SizeY
 	y := float64(y1 - y2)
 	sy := (int(math.Floor(y/float64(gparams.GaborSet.StrideY))) + 1) * 2 // double - two rows, off-center and on-center
 
-	x1 := pparams.MelFBankSegment.Dim(0)
+	x1 := pparams.MelFBankSegment.Dim(1)
 	x2 := gparams.GaborSet.SizeX
 	x := x1 - x2
 	active := agabor.Active(gparams.GaborSpecs)
 	sx := (int(math.Floor(float64(x)/float64(gparams.GaborSet.StrideX))) + 1) * len(active)
 
 	ap.UpdateGabors(gparams)
-	gparams.GborOutput.SetShape([]int{sy, sx}, nil, []string{"chan", "freq", "time"})
+	gparams.GborOutput.SetShape([]int{sy, sx}, nil, []string{"freq", "time"})
 	gparams.ExtGi.SetShape([]int{sy, gparams.GaborSet.Filters.Dim(0)}, nil, nil) // passed in for each channel
 	gparams.GborOutput.SetMetaData("odd-row", "true")
 	gparams.GborOutput.SetMetaData("grid-fill", ".9")
@@ -1088,6 +1114,11 @@ func (ap *App) ConfigGui() *gi.Window {
 	tg.Disp.ColorMap = "ColdHot"
 	// tg.Disp.MinMax = false (this call doesn't exist so turn off min and max in config dialog for best representation)
 
+	tg = tv.AddNewTab(etview.KiT_TensorGrid, "DeltaDeltas").(*etview.TensorGrid)
+	tg.SetStretchMax()
+	tg.SetTensor(&ap.PParams1.MFCCDeltaDeltas)
+	tg.Disp.ColorMap = "ColdHot"
+
 	tv2 := gi.AddNewTabView(split, "tv2")
 	split.SetSplits(.3, .15, .15, .2, .2)
 
@@ -1121,6 +1152,11 @@ func (ap *App) ConfigGui() *gi.Window {
 	tg.SetTensor(&ap.PParams2.MFCCDeltas)
 	tg.Disp.ColorMap = "ColdHot"
 	// tg.Disp.MinMax = false (this call doesn't exist so turn off min and max in config dialog for best representation)
+
+	tg = tv2.AddNewTab(etview.KiT_TensorGrid, "DeltaDeltas").(*etview.TensorGrid)
+	tg.SetStretchMax()
+	tg.SetTensor(&ap.PParams2.MFCCDeltaDeltas)
+	tg.Disp.ColorMap = "ColdHot"
 
 	ap.StatLabel = gi.AddNewLabel(mfr, "status", "Status...")
 	ap.StatLabel.SetStretchMaxWidth()
