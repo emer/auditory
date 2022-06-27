@@ -71,7 +71,8 @@ type SndEnv struct {
 	Energy          etensor.Float64 `view:"no-inline" desc:" sum of log power per segment step"`
 	MFCCDCT         etensor.Float64 `view:"no-inline" desc:" discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
 	MFCCSegment     etensor.Float64 `view:"no-inline" desc:" full segment's worth of discrete cosine transform of log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
-	MFCCDeltas      etensor.Float64 `view:"no-inline" desc:" "`
+	MFCCDeltas      etensor.Float64 `view:"no-inline" desc:" MFCC deltas are the differences over time of the MFC coefficeints"`
+	MFCCDeltaDeltas etensor.Float64 `view:"no-inline" desc:"MFCC delta deltas are the differences over time of the MFCC deltas"`
 
 	GaborSpecs    []agabor.Filter  `view:"no-inline" desc:" a set of gabor filter specifications, one spec per filter'"`
 	GaborFilters  agabor.FilterSet `desc:"the actual gabor filters, the first spec determines the size of all filters in the set"`
@@ -166,6 +167,7 @@ func (se *SndEnv) Init() (err error) {
 		se.MFCCDCT.SetShape([]int{se.Mel.FBank.NFilters}, nil, nil)
 		se.MFCCSegment.SetShape([]int{se.Mel.NCoefs, se.Params.SegmentSteps}, nil, nil)
 		se.MFCCDeltas.SetShape([]int{se.Mel.NCoefs, se.Params.SegmentSteps}, nil, nil)
+		se.MFCCDeltaDeltas.SetShape([]int{se.Mel.NCoefs, se.Params.SegmentSteps}, nil, nil)
 	}
 
 	siglen := len(se.Signal.Values) - se.Params.SegmentSamples*se.Sound.Channels()
@@ -307,6 +309,33 @@ func (se *SndEnv) ProcessSegment(segment, add int) {
 					d := nume / denom
 					// ToDo: better to have separate matrix and combine if using one layer as input
 					se.MFCCDeltas.SetFloatRowCell(i, s, d)
+				}
+			}
+		}
+
+		// now the delta deltas
+		for s := 0; s < int(se.Params.SegmentSteps); s++ {
+			prv := 0.0
+			nxt := 0.0
+			for i := 0; i < se.Mel.NCoefs; i++ {
+				nume := 0.0
+				for n := 1; n <= npn; n++ {
+					sprv := s - n
+					snxt := s + n
+					if sprv < 0 {
+						sprv = 0
+					}
+					if snxt > se.Params.SegmentSteps-1 {
+						snxt = se.Params.SegmentSteps - 1
+					}
+					prv += se.MFCCDeltas.FloatValRowCell(i, sprv)
+					nxt += se.MFCCDeltas.FloatValRowCell(i, snxt)
+					nume += float64(n) * (nxt - prv)
+
+					denom := float64(2 * n * n)
+					d := nume / denom
+					// ToDo: better to have separate matrix and combine if using one layer as input
+					se.MFCCDeltaDeltas.SetFloatRowCell(i, s, d)
 				}
 			}
 		}
