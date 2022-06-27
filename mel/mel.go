@@ -37,9 +37,10 @@ type Params struct {
 
 // Defaults
 func (mel *Params) Defaults() {
-	mel.MFCC = false
-	mel.NCoefs = 13
 	mel.FBank.Defaults()
+	mel.MFCC = true
+	mel.NCoefs = 13
+	mel.Deltas = true
 }
 
 // InitFilters computes the filter bin values
