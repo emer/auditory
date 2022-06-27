@@ -41,7 +41,7 @@ type Params struct {
 	StrideMs    float32 `def:"100" desc:"how far to move on each trial"`
 	BorderSteps int     `def:"6" view:"+" desc:"overlap with previous segment"`
 	Channel     int     `viewif:"Channels=1" desc:"specific channel to process, if input has multiple channels, and we only process one of them (-1 = process all)"`
-	PadValue    float32
+	PadValue    float64
 
 	// these are calculated
 	WinSamples     int   `inactive:"+" desc:"number of samples to process each step"`
@@ -68,19 +68,19 @@ func (sp *SndProcess) ParamDefaults() {
 type SndProcess struct {
 	Params          Params            `desc:"basic window and time parameters"`
 	Sound           sound.Wave        `view:"no-inline"`
-	Signal          etensor.Float32   `view:"-" desc:" the full sound input obtained from the sound input - plus any added padding"`
-	Samples         etensor.Float32   `view:"-" desc:" a window's worth of raw sound input, one channel at a time"`
+	Signal          etensor.Float64   `view:"-" desc:" the full sound input obtained from the sound input - plus any added padding"`
+	Samples         etensor.Float64   `view:"-" desc:" a window's worth of raw sound input, one channel at a time"`
 	Dft             dft.Params        `view:"-" desc:" "`
-	Power           etensor.Float32   `view:"-" desc:" power of the dft, up to the nyquist limit frequency (1/2 input.WinSamples)"`
-	LogPower        etensor.Float32   `view:"-" desc:" log power of the dft, up to the nyquist liit frequency (1/2 input.WinSamples)"`
-	PowerSegment    etensor.Float32   `view:"no-inline" desc:" full segment's worth of power of the dft, up to the nyquist limit frequency (1/2 input.WinSamples)"`
-	LogPowerSegment etensor.Float32   `view:"no-inline" desc:" full segment's worth of log power of the dft, up to the nyquist limit frequency (1/2 input.WinSamples)"`
+	Power           etensor.Float64   `view:"-" desc:" power of the dft, up to the nyquist limit frequency (1/2 input.WinSamples)"`
+	LogPower        etensor.Float64   `view:"-" desc:" log power of the dft, up to the nyquist liit frequency (1/2 input.WinSamples)"`
+	PowerSegment    etensor.Float64   `view:"no-inline" desc:" full segment's worth of power of the dft, up to the nyquist limit frequency (1/2 input.WinSamples)"`
+	LogPowerSegment etensor.Float64   `view:"no-inline" desc:" full segment's worth of log power of the dft, up to the nyquist limit frequency (1/2 input.WinSamples)"`
 	Mel             mel.Params        `view:"no-inline"`
-	MelFBank        etensor.Float32   `view:"no-inline" desc:" mel scale transformation of dft_power, using triangular filters, resulting in the mel filterbank output -- the natural log of this is typically applied"`
-	MelFBankSegment etensor.Float32   `view:"no-inline" desc:" full segment's worth of mel feature-bank output"`
-	MelFilters      etensor.Float32   `view:"no-inline" desc:" the actual filters"`
-	MfccDct         etensor.Float32   `view:"-" desc:" discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
-	MfccDctSegment  etensor.Float32   `view:"-" desc:" full segment's worth of discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
+	MelFBank        etensor.Float64   `view:"no-inline" desc:" mel scale transformation of dft_power, using triangular filters, resulting in the mel filterbank output -- the natural log of this is typically applied"`
+	MelFBankSegment etensor.Float64   `view:"no-inline" desc:" full segment's worth of mel feature-bank output"`
+	MelFilters      etensor.Float64   `view:"no-inline" desc:" the actual filters"`
+	MfccDct         etensor.Float64   `view:"-" desc:" discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
+	MfccDctSegment  etensor.Float64   `view:"-" desc:" full segment's worth of discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
 	GaborSpecs      []agabor.Filter   `view:" no-inline" desc:"array of params describing each gabor filter"`
 	GaborFilters    agabor.FilterSet  `desc:"a set of gabor filters with same x and y dimensions"`
 	GaborTsr        etensor.Float32   `view:"no-inline" desc:" raw output of Gabor -- full segment's worth of gabor steps"`
@@ -114,25 +114,26 @@ func (sp *SndProcess) Config() {
 	sp.Params.SegmentSteps = steps + 2*sp.Params.BorderSteps
 	sp.Params.StrideSamples = MSecToSamples(sp.Params.StrideMs, sr)
 
-	sp.Dft.Initialize(sp.Params.WinSamples)
+	//sp.Dft.Initialize(sp.Params.WinSamples)
+	sp.Dft.Defaults()
 	sp.Mel.Defaults()
 	// override any default Mel values here - then call InitFilters
 	sp.Mel.InitFilters(sp.Params.WinSamples, sp.Sound.SampleRate(), &sp.MelFilters)
 	sp.Samples.SetShape([]int{sp.Params.WinSamples}, nil, nil)
 	sp.Power.SetShape([]int{sp.Params.WinSamples/2 + 1}, nil, nil)
 	sp.LogPower.SetShape([]int{sp.Params.WinSamples/2 + 1}, nil, nil)
-	sp.PowerSegment.SetShape([]int{sp.Params.SegmentSteps, sp.Params.WinSamples/2 + 1, sp.Sound.Channels()}, nil, nil)
+	sp.PowerSegment.SetShape([]int{sp.Params.WinSamples/2 + 1, sp.Params.SegmentSteps, sp.Sound.Channels()}, nil, nil)
 	if sp.Dft.CompLogPow {
-		sp.LogPowerSegment.SetShape([]int{sp.Params.SegmentSteps, sp.Params.WinSamples/2 + 1, sp.Sound.Channels()}, nil, nil)
+		sp.LogPowerSegment.SetShape([]int{sp.Params.WinSamples/2 + 1, sp.Params.SegmentSteps, sp.Sound.Channels()}, nil, nil)
 	}
 
 	sp.FftCoefs = make([]complex128, sp.Params.WinSamples)
 	sp.Fft = fourier.NewCmplxFFT(len(sp.FftCoefs))
 
 	sp.MelFBank.SetShape([]int{sp.Mel.FBank.NFilters}, nil, nil)
-	sp.MelFBankSegment.SetShape([]int{sp.Params.SegmentSteps, sp.Mel.FBank.NFilters, sp.Sound.Channels()}, nil, nil)
+	sp.MelFBankSegment.SetShape([]int{sp.Mel.FBank.NFilters, sp.Params.SegmentSteps, sp.Sound.Channels()}, nil, nil)
 	if sp.Mel.MFCC {
-		sp.MfccDctSegment.SetShape([]int{sp.Params.SegmentSteps, sp.Mel.FBank.NFilters, sp.Sound.Channels()}, nil, nil)
+		sp.MfccDctSegment.SetShape([]int{sp.Mel.FBank.NFilters, sp.Params.SegmentSteps, sp.Sound.Channels()}, nil, nil)
 		sp.MfccDct.SetShape([]int{sp.Mel.FBank.NFilters}, nil, nil)
 	}
 
@@ -150,18 +151,18 @@ func (sp *SndProcess) Config() {
 	sp.GaborSpecs = nil // in case there are some specs already
 	sp.ByTime = false
 
-	i := 0
-	var w float32
-	var l float32
-	orient := []float32{0, 45, 90, 135}
-	wavelen := []float32{2.0}
-	phase := []float32{0, 1.5708}
+	orient := []float64{0, 45, 90, 135}
+	wavelen := []float64{2.0}
+	phase := []float64{0, 1.5708}
+	sigma := []float64{0.5}
+
+	sp.GaborSpecs = nil // in case there are some specs already
 
 	for _, or := range orient {
-		for _, wl := range wavelen {
+		for _, wv := range wavelen {
 			for _, ph := range phase {
-				for i, w, l = 0, 0.25, 0.25; i < 2; i, w, l = i+1, w+w*2, l+l*2 {
-					spec := agabor.Filter{WaveLen: wl, Orientation: or, SigmaWidth: w, SigmaLength: l, PhaseOffset: ph, CircleEdge: true}
+				for _, wl := range sigma {
+					spec := agabor.Filter{WaveLen: wv, Orientation: or, SigmaWidth: wl, SigmaLength: wl, PhaseOffset: ph, CircleEdge: true}
 					sp.GaborSpecs = append(sp.GaborSpecs, spec)
 				}
 			}
@@ -212,9 +213,9 @@ func (sp *SndProcess) Initialize() {
 // LoadSound initializes the AuditoryProc with the sound loaded from file by "Sound"
 func (sp *SndProcess) LoadSound(snd *sound.Wave) {
 	if sp.Sound.Channels() > 1 {
-		snd.SoundToTensor(&sp.Signal, -1)
+		snd.SoundToTensor(&sp.Signal)
 	} else {
-		snd.SoundToTensor(&sp.Signal, sp.Params.Channel)
+		snd.SoundToTensor(&sp.Signal)
 	}
 }
 
@@ -272,10 +273,10 @@ func (sp *SndProcess) ProcessSegment() {
 // bands that mimic the non-linear human perception of sound
 func (sp *SndProcess) ProcessStep(ch, step int) bool {
 	available := sp.SoundToWindow(sp.Segment, sp.Params.Steps[step], ch)
-	sp.Dft.Filter(int(ch), int(step), &sp.Samples, sp.Params.WinSamples, &sp.Power, &sp.LogPower, &sp.PowerSegment, &sp.LogPowerSegment)
-	sp.Mel.FilterDft(int(ch), int(step), &sp.Power, &sp.MelFBankSegment, &sp.MelFBank, &sp.MelFilters)
+	sp.Dft.Filter(step, &sp.Samples, sp.Params.WinSamples, &sp.Power, &sp.LogPower, &sp.PowerSegment, &sp.LogPowerSegment)
+	sp.Mel.FilterDft(step, &sp.Power, &sp.MelFBankSegment, &sp.MelFBank, &sp.MelFilters)
 	if sp.Mel.MFCC {
-		sp.Mel.CepstrumDct(ch, step, &sp.MelFBank, &sp.MfccDctSegment, &sp.MfccDct)
+		sp.Mel.CepstrumDct(step, &sp.MelFBank, &sp.MfccDctSegment, &sp.MfccDct)
 	}
 	return available
 }
@@ -283,7 +284,7 @@ func (sp *SndProcess) ProcessStep(ch, step int) bool {
 // ApplyGabor convolves the gabor filters with the mel output
 func (sp *SndProcess) ApplyGabor() {
 	for ch := int(0); ch < sp.Sound.Channels(); ch++ {
-		agabor.Convolve(ch, &sp.MelFBankSegment, sp.GaborFilters, &sp.GaborTsr, sp.ByTime)
+		agabor.Convolve(&sp.MelFBankSegment, sp.GaborFilters, &sp.GaborTsr, sp.ByTime)
 	}
 }
 
@@ -297,12 +298,12 @@ func (sp *SndProcess) SoundToWindow(segment, stepOffset, ch int) bool {
 			fmt.Println("SndToWindow: end beyond signal length!!")
 			return false
 		}
-		var pad []float32
+		var pad []float64
 		if start < 0 && end <= 0 {
-			pad = make([]float32, end-start)
+			pad = make([]float64, end-start)
 			sp.Samples.Values = pad[0:]
 		} else if start < 0 && end > 0 {
-			pad = make([]float32, 0-start)
+			pad = make([]float64, 0-start)
 			sp.Samples.Values = pad[0:]
 			sp.Samples.Values = append(sp.Samples.Values, sp.Signal.Values[0:end]...)
 		} else {
@@ -319,17 +320,17 @@ func (sp *SndProcess) SoundToWindow(segment, stepOffset, ch int) bool {
 // 		Utility Code
 
 // Tail returns the number of samples that remain beyond the last full stride
-func (sp *SndProcess) Tail(signal []float32) int {
+func (sp *SndProcess) Tail(signal []float64) int {
 	temp := len(signal) - sp.Params.SegmentSamples
 	tail := temp % sp.Params.StrideSamples
 	return tail
 }
 
 // Pad pads the signal so that the length of signal divided by stride has no remainder
-func (sp *SndProcess) Pad(signal []float32) (padded []float32) {
+func (sp *SndProcess) Pad(signal []float64) (padded []float64) {
 	tail := sp.Tail(signal)
 	padLen := sp.Params.SegmentSamples - sp.Params.StepSamples - tail%sp.Params.StepSamples
-	pad := make([]float32, padLen)
+	pad := make([]float64, padLen)
 	for i := range pad {
 		pad[i] = sp.Params.PadValue
 	}
