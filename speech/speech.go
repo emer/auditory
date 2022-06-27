@@ -44,3 +44,7 @@ type Sequence struct {
 	CurTime  float64 `desc:"current time in ms as we stride through the sound sequence"`
 	NextTime float64 `desc:"time in ms that it will be after processing the next segment"`
 }
+
+func (seq *Sequence) Init() {
+	seq.Units = []Unit{}
+}
