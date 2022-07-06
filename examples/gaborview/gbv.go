@@ -1086,38 +1086,52 @@ func (ap *App) ConfigGui() *gi.Window {
 	tg.SetStretchMax()
 	ap.PParams1.LogPowerSegment.SetMetaData("grid-min", "10")
 	tg.SetTensor(&ap.GParams1.GaborSet.Filters)
+	// set Display after setting tensor
+	tg.Disp.Range.FixMin = false
+	tg.Disp.Range.FixMax = false
 
 	tg = tv.AddNewTab(etview.KiT_TensorGrid, "Power").(*etview.TensorGrid)
 	tg.SetStretchMax()
 	ap.PParams1.LogPowerSegment.SetMetaData("grid-min", "10")
 	tg.SetTensor(&ap.PParams1.LogPowerSegment)
+	tg.Disp.Range.FixMin = false
+	tg.Disp.Range.FixMax = false
 
 	tg = tv.AddNewTab(etview.KiT_TensorGrid, "Mel").(*etview.TensorGrid)
 	tg.SetStretchMax()
 	tg.SetTensor(&ap.PParams1.MelFBankSegment)
+	// set Display after setting tensor
 	tg.Disp.ColorMap = "ColdHot"
-	// tg.Disp.MinMax = false (this call doesn't exist so turn off min and max in config dialog for best representation)
+	tg.Disp.Range.FixMin = false
+	tg.Disp.Range.FixMax = false
 
 	tg = tv.AddNewTab(etview.KiT_TensorGrid, "Result").(*etview.TensorGrid)
 	tg.SetStretchMax()
 	tg.SetTensor(&ap.GParams1.GborOutput)
+	tg.Disp.Range.FixMin = false
+	tg.Disp.Range.FixMax = false
 
 	tg = tv.AddNewTab(etview.KiT_TensorGrid, "MFCC").(*etview.TensorGrid)
 	tg.SetStretchMax()
 	tg.SetTensor(&ap.PParams1.MFCCSegment)
+	// set Display after setting tensor
 	tg.Disp.ColorMap = "ColdHot"
-	// tg.Disp.MinMax = false (this call doesn't exist so turn off min and max in config dialog for best representation)
+	tg.Disp.Range.FixMin = false
+	tg.Disp.Range.FixMax = false
 
 	tg = tv.AddNewTab(etview.KiT_TensorGrid, "Deltas").(*etview.TensorGrid)
 	tg.SetStretchMax()
 	tg.SetTensor(&ap.PParams1.MFCCDeltas)
 	tg.Disp.ColorMap = "ColdHot"
-	// tg.Disp.MinMax = false (this call doesn't exist so turn off min and max in config dialog for best representation)
+	tg.Disp.Range.FixMin = false
+	tg.Disp.Range.FixMax = false
 
 	tg = tv.AddNewTab(etview.KiT_TensorGrid, "DeltaDeltas").(*etview.TensorGrid)
 	tg.SetStretchMax()
 	tg.SetTensor(&ap.PParams1.MFCCDeltaDeltas)
 	tg.Disp.ColorMap = "ColdHot"
+	tg.Disp.Range.FixMin = false
+	tg.Disp.Range.FixMax = false
 
 	tv2 := gi.AddNewTabView(split, "tv2")
 	split.SetSplits(.3, .15, .15, .2, .2)
@@ -1125,38 +1139,52 @@ func (ap *App) ConfigGui() *gi.Window {
 	tg = tv2.AddNewTab(etview.KiT_TensorGrid, "Gabors").(*etview.TensorGrid)
 	tg.SetStretchMax()
 	tg.SetTensor(&ap.GParams2.GaborSet.Filters)
+	// set Display after setting tensor
+	tg.Disp.Range.FixMin = false
+	tg.Disp.Range.FixMax = false
 
 	tg = tv2.AddNewTab(etview.KiT_TensorGrid, "Power").(*etview.TensorGrid)
 	tg.SetStretchMax()
 	ap.PParams2.LogPowerSegment.SetMetaData("grid-min", "10")
 	tg.SetTensor(&ap.PParams2.LogPowerSegment)
+	tg.Disp.Range.FixMin = false
+	tg.Disp.Range.FixMax = false
 
 	tg = tv2.AddNewTab(etview.KiT_TensorGrid, "Mel").(*etview.TensorGrid)
 	tg.SetStretchMax()
 	tg.SetTensor(&ap.PParams2.MelFBankSegment)
 	tg.Disp.ColorMap = "ColdHot"
-	// tg.Disp.MinMax = false (this call doesn't exist so turn off min and max in config dialog for best representation)
+	tg.Disp.Range.FixMin = false
+	tg.Disp.Range.FixMax = false
 
 	tg = tv2.AddNewTab(etview.KiT_TensorGrid, "Result").(*etview.TensorGrid)
 	tg.SetStretchMax()
 	tg.SetTensor(&ap.GParams2.GborOutput)
+	// set Display after setting tensor
+	tg.Disp.Range.FixMin = false
+	tg.Disp.Range.FixMax = false
 
 	tg = tv2.AddNewTab(etview.KiT_TensorGrid, "MFCC").(*etview.TensorGrid)
 	tg.SetStretchMax()
 	tg.SetTensor(&ap.PParams2.MFCCSegment)
 	tg.Disp.ColorMap = "ColdHot"
-	// tg.Disp.MinMax = false (this call doesn't exist so turn off min and max in config dialog for best representation)
+	tg.Disp.Range.FixMin = false
+	tg.Disp.Range.FixMax = false
 
 	tg = tv2.AddNewTab(etview.KiT_TensorGrid, "Deltas").(*etview.TensorGrid)
 	tg.SetStretchMax()
 	tg.SetTensor(&ap.PParams2.MFCCDeltas)
 	tg.Disp.ColorMap = "ColdHot"
-	// tg.Disp.MinMax = false (this call doesn't exist so turn off min and max in config dialog for best representation)
+	tg.Disp.Range.FixMin = false
+	tg.Disp.Range.FixMax = false
 
 	tg = tv2.AddNewTab(etview.KiT_TensorGrid, "DeltaDeltas").(*etview.TensorGrid)
 	tg.SetStretchMax()
 	tg.SetTensor(&ap.PParams2.MFCCDeltaDeltas)
+	// set Display after setting tensor
 	tg.Disp.ColorMap = "ColdHot"
+	tg.Disp.Range.FixMin = false
+	tg.Disp.Range.FixMax = false
 
 	ap.StatLabel = gi.AddNewLabel(mfr, "status", "Status...")
 	ap.StatLabel.SetStretchMaxWidth()
