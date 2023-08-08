@@ -2,17 +2,19 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
+//go:build !server
 // +build !server
 
 package sound
 
 import (
-	"github.com/hajimehoshi/ebiten/v2/audio/wav"
-	"github.com/hajimehoshi/oto"
 	"io"
 	"os"
 	"runtime"
 	"sync"
+
+	"github.com/hajimehoshi/ebiten/v2/audio/wav"
+	"github.com/hajimehoshi/oto"
 )
 
 func PlayWav(context *oto.Context, fn string, rate int) error {

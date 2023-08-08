@@ -15,26 +15,58 @@ import (
 
 // Filter, a struct of gabor filter parameters
 type Filter struct {
-	Off         bool    `desc:"filter on is default - set to true to exclude filter"`
-	WaveLen     float64 `desc:"wavelength of the sine waves in normalized units, 1.5 and 2 are reasonable values"`
+
+	// filter on is default - set to true to exclude filter
+	Off bool `desc:"filter on is default - set to true to exclude filter"`
+
+	// wavelength of the sine waves in normalized units, 1.5 and 2 are reasonable values
+	WaveLen float64 `desc:"wavelength of the sine waves in normalized units, 1.5 and 2 are reasonable values"`
+
+	// orientation of the gabor in degrees, e.g. 0, 45, 90, 135. Multiple of the same orientation will get evenly distributed with the filter matrix
 	Orientation float64 `desc:"orientation of the gabor in degrees, e.g. 0, 45, 90, 135. Multiple of the same orientation will get evenly distributed with the filter matrix"`
-	SigmaWidth  float64 `def:"0.6" desc:"gaussian sigma for the width dimension (in the direction of the sine waves) -- normalized as a function of filter size in relevant dimension"`
+
+	// [def: 0.6] gaussian sigma for the width dimension (in the direction of the sine waves) -- normalized as a function of filter size in relevant dimension
+	SigmaWidth float64 `def:"0.6" desc:"gaussian sigma for the width dimension (in the direction of the sine waves) -- normalized as a function of filter size in relevant dimension"`
+
+	// [def: 0.3] gaussian sigma for the length dimension (elongated axis perpendicular to the sine waves) -- normalized as a function of filter size in relevant dimension
 	SigmaLength float64 `def:"0.3" desc:"gaussian sigma for the length dimension (elongated axis perpendicular to the sine waves) -- normalized as a function of filter size in relevant dimension"`
+
+	// [def: 0] offset for the sine phase -- default is an asymmetric sine wave -- can make it into a symmetric cosine gabor by using PI/2 = 1.5708
 	PhaseOffset float64 `def:"0" desc:"offset for the sine phase -- default is an asymmetric sine wave -- can make it into a symmetric cosine gabor by using PI/2 = 1.5708"`
-	CircleEdge  bool    `desc:"cut off the filter (to zero) outside a circle of diameter filter_size -- makes the filter more radially symmetric - no default - suggest using true"`
-	Circular    bool    `desc:"is the gabor circular? orientation, phase, sigmalength and circleedge not used for circular gabor"`
+
+	// cut off the filter (to zero) outside a circle of diameter filter_size -- makes the filter more radially symmetric - no default - suggest using true
+	CircleEdge bool `desc:"cut off the filter (to zero) outside a circle of diameter filter_size -- makes the filter more radially symmetric - no default - suggest using true"`
+
+	// is the gabor circular? orientation, phase, sigmalength and circleedge not used for circular gabor
+	Circular bool `desc:"is the gabor circular? orientation, phase, sigmalength and circleedge not used for circular gabor"`
 }
 
 // FilterSet, a struct holding a set of gabor filters stored as a tensor. Though individual filters can vary in size, when used as a set they should all have the same size.
 type FilterSet struct {
-	SizeX      int             `desc:"size of each filter in X"`
-	SizeY      int             `desc:"size of each filter in Y"`
-	StrideX    int             `desc:"how far to move the filter in X each step"`
-	StrideY    int             `desc:"how far to move the filter in Y each step"`
-	Gain       float64         `desc:"overall gain multiplier applied after gabor filtering -- only relevant if not using renormalization (otherwize it just gets renormed away)"`
-	Distribute bool            `desc:"if multiple horiz or vertical distribute evenly"`
-	Filters    etensor.Float64 `view:"no-inline" desc:"actual gabor filters"`
-	Table      etable.Table    `view:"-" desc:"simple gabor filter table (view only)"`
+
+	// size of each filter in X
+	SizeX int `desc:"size of each filter in X"`
+
+	// size of each filter in Y
+	SizeY int `desc:"size of each filter in Y"`
+
+	// how far to move the filter in X each step
+	StrideX int `desc:"how far to move the filter in X each step"`
+
+	// how far to move the filter in Y each step
+	StrideY int `desc:"how far to move the filter in Y each step"`
+
+	// overall gain multiplier applied after gabor filtering -- only relevant if not using renormalization (otherwize it just gets renormed away)
+	Gain float64 `desc:"overall gain multiplier applied after gabor filtering -- only relevant if not using renormalization (otherwize it just gets renormed away)"`
+
+	// if multiple horiz or vertical distribute evenly
+	Distribute bool `desc:"if multiple horiz or vertical distribute evenly"`
+
+	// [view: no-inline] actual gabor filters
+	Filters etensor.Float64 `view:"no-inline" desc:"actual gabor filters"`
+
+	// [view: -] simple gabor filter table (view only)
+	Table etable.Table `view:"-" desc:"simple gabor filter table (view only)"`
 }
 
 // Defaults sets default values for any filter fields where 0 is not a reasonable value

@@ -22,20 +22,42 @@ import (
 
 // Params defines the sound input parameters for auditory processing
 type Params struct {
-	WinMs       float64 `def:"25" desc:"input window -- number of milliseconds worth of sound to filter at a time"`
-	StepMs      float64 `def:"5,10,12.5" desc:"input step -- number of milliseconds worth of sound that the input is stepped along to obtain the next window sample"`
-	SegmentMs   float64 `def:"100" desc:"length of full segment's worth of input -- total number of milliseconds to accumulate into a complete segment -- must be a multiple of StepMs -- input will be SegmentMs / StepMs = SegmentSteps wide in the X axis, and number of filters in the Y axis"`
-	StrideMs    float64 `def:"100" desc:"how far to move on each trial"`
-	BorderSteps int     `def:"6" view:"+" desc:"overlap with previous and next segment"`
-	Channel     int     `viewif:"Channels=1" desc:"specific channel to process, if input has multiple channels, and we only process one of them (-1 = process all)"`
 
-	// these are calculated
-	WinSamples     int   `inactive:"+" desc:"number of samples to process each step"`
-	StepSamples    int   `inactive:"+" desc:"number of samples to step input by"`
-	SegmentSamples int   `inactive:"+" desc:"number of samples in a segment"`
-	StrideSamples  int   `inactive:"+" desc:"number of samples converted from StrideMS"`
-	SegmentSteps   int   `inactive:"+" desc:"includes border steps on both sides"`
-	Steps          []int `inactive:"+" desc:"pre-calculated start position for each step"`
+	// [def: 25] input window -- number of milliseconds worth of sound to filter at a time
+	WinMs float64 `def:"25" desc:"input window -- number of milliseconds worth of sound to filter at a time"`
+
+	// [def: 5,10,12.5] input step -- number of milliseconds worth of sound that the input is stepped along to obtain the next window sample
+	StepMs float64 `def:"5,10,12.5" desc:"input step -- number of milliseconds worth of sound that the input is stepped along to obtain the next window sample"`
+
+	// [def: 100] length of full segment's worth of input -- total number of milliseconds to accumulate into a complete segment -- must be a multiple of StepMs -- input will be SegmentMs / StepMs = SegmentSteps wide in the X axis, and number of filters in the Y axis
+	SegmentMs float64 `def:"100" desc:"length of full segment's worth of input -- total number of milliseconds to accumulate into a complete segment -- must be a multiple of StepMs -- input will be SegmentMs / StepMs = SegmentSteps wide in the X axis, and number of filters in the Y axis"`
+
+	// [def: 100] how far to move on each trial
+	StrideMs float64 `def:"100" desc:"how far to move on each trial"`
+
+	// [def: 6] [view: +] overlap with previous and next segment
+	BorderSteps int `def:"6" view:"+" desc:"overlap with previous and next segment"`
+
+	// [viewif: Channels=1] specific channel to process, if input has multiple channels, and we only process one of them (-1 = process all)
+	Channel int `viewif:"Channels=1" desc:"specific channel to process, if input has multiple channels, and we only process one of them (-1 = process all)"`
+
+	// number of samples to process each step
+	WinSamples int `inactive:"+" desc:"number of samples to process each step"`
+
+	// number of samples to step input by
+	StepSamples int `inactive:"+" desc:"number of samples to step input by"`
+
+	// number of samples in a segment
+	SegmentSamples int `inactive:"+" desc:"number of samples in a segment"`
+
+	// number of samples converted from StrideMS
+	StrideSamples int `inactive:"+" desc:"number of samples converted from StrideMS"`
+
+	// includes border steps on both sides
+	SegmentSteps int `inactive:"+" desc:"includes border steps on both sides"`
+
+	// pre-calculated start position for each step
+	Steps []int `inactive:"+" desc:"pre-calculated start position for each step"`
 }
 
 // ParamDefaults initializes the Input
@@ -49,46 +71,114 @@ func (se *SndEnv) ParamDefaults() {
 }
 
 type SndEnv struct {
-	// "Segment" in var name indicates that the data applies to a segment of samples rather than the entire signal
-	Nm     string `desc:"name of this environment"`
-	Dsc    string `desc:"description of this environment"`
-	On     bool   `desc:"false turns off processing of this sound"`
-	Sound  Wave   `desc:"specifications of the raw sensory input"`
+
+	// name of this environment
+	Nm string `desc:"name of this environment"`
+
+	// description of this environment
+	Dsc string `desc:"description of this environment"`
+
+	// false turns off processing of this sound
+	On bool `desc:"false turns off processing of this sound"`
+
+	// specifications of the raw sensory input
+	Sound  Wave `desc:"specifications of the raw sensory input"`
 	Params Params
+
+	// [view: no-inline]  the full sound input
 	Signal etensor.Float64 `view:"no-inline" desc:" the full sound input"`
-	SegCnt int             `desc:"the number of segments in this sound file (based on current segment size)"`
+
+	// the number of segments in this sound file (based on current segment size)
+	SegCnt int `desc:"the number of segments in this sound file (based on current segment size)"`
+
+	//  [Input.WinSamples] the raw sound input, one channel at a time
 	Window etensor.Float64 `inactive:"+" desc:" [Input.WinSamples] the raw sound input, one channel at a time"`
 
-	DFT             dft.Params
-	Power           etensor.Float64 `view:"-" desc:" power of the dft, up to the nyquist limit frequency (1/2 input.WinSamples)"`
-	LogPower        etensor.Float64 `view:"-" desc:" log power of the dft, up to the nyquist liit frequency (1/2 input.WinSamples)"`
-	PowerSegment    etensor.Float64 `view:"no-inline" desc:" full segment's worth of power of the dft, up to the nyquist limit frequency (1/2 input.win_samples)"`
+	DFT dft.Params
+
+	// [view: -]  power of the dft, up to the nyquist limit frequency (1/2 input.WinSamples)
+	Power etensor.Float64 `view:"-" desc:" power of the dft, up to the nyquist limit frequency (1/2 input.WinSamples)"`
+
+	// [view: -]  log power of the dft, up to the nyquist liit frequency (1/2 input.WinSamples)
+	LogPower etensor.Float64 `view:"-" desc:" log power of the dft, up to the nyquist liit frequency (1/2 input.WinSamples)"`
+
+	// [view: no-inline]  full segment's worth of power of the dft, up to the nyquist limit frequency (1/2 input.win_samples)
+	PowerSegment etensor.Float64 `view:"no-inline" desc:" full segment's worth of power of the dft, up to the nyquist limit frequency (1/2 input.win_samples)"`
+
+	// [view: no-inline]  full segment's worth of log power of the dft, up to the nyquist limit frequency (1/2 input.win_samples)
 	LogPowerSegment etensor.Float64 `view:"no-inline" desc:" full segment's worth of log power of the dft, up to the nyquist limit frequency (1/2 input.win_samples)"`
-	Mel             mel.Params      `view:"no-inline"`
-	MelFBank        etensor.Float64 `view:"no-inline" desc:" mel scale transformation of dft_power, resulting in the mel filterbank output -- the natural log of this is typically applied"`
+
+	// [view: no-inline]
+	Mel mel.Params `view:"no-inline"`
+
+	// [view: no-inline]  mel scale transformation of dft_power, resulting in the mel filterbank output -- the natural log of this is typically applied
+	MelFBank etensor.Float64 `view:"no-inline" desc:" mel scale transformation of dft_power, resulting in the mel filterbank output -- the natural log of this is typically applied"`
+
+	// [view: no-inline]  full segment's worth of mel feature-bank output
 	MelFBankSegment etensor.Float64 `view:"no-inline" desc:" full segment's worth of mel feature-bank output"`
-	MelFilters      etensor.Float64 `view:"no-inline" desc:" the actual filters"`
-	Energy          etensor.Float64 `view:"no-inline" desc:" sum of log power per segment step"`
-	MFCCDCT         etensor.Float64 `view:"no-inline" desc:" discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
-	MFCCSegment     etensor.Float64 `view:"no-inline" desc:" full segment's worth of discrete cosine transform of log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
-	MFCCDeltas      etensor.Float64 `view:"no-inline" desc:" MFCC deltas are the differences over time of the MFC coefficeints"`
+
+	// [view: no-inline]  the actual filters
+	MelFilters etensor.Float64 `view:"no-inline" desc:" the actual filters"`
+
+	// [view: no-inline]  sum of log power per segment step
+	Energy etensor.Float64 `view:"no-inline" desc:" sum of log power per segment step"`
+
+	// [view: no-inline]  discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients
+	MFCCDCT etensor.Float64 `view:"no-inline" desc:" discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
+
+	// [view: no-inline]  full segment's worth of discrete cosine transform of log_mel_filter_out values, producing the final mel-frequency cepstral coefficients
+	MFCCSegment etensor.Float64 `view:"no-inline" desc:" full segment's worth of discrete cosine transform of log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
+
+	// [view: no-inline]  MFCC deltas are the differences over time of the MFC coefficeints
+	MFCCDeltas etensor.Float64 `view:"no-inline" desc:" MFCC deltas are the differences over time of the MFC coefficeints"`
+
+	// [view: no-inline] MFCC delta deltas are the differences over time of the MFCC deltas
 	MFCCDeltaDeltas etensor.Float64 `view:"no-inline" desc:"MFCC delta deltas are the differences over time of the MFCC deltas"`
 
-	GaborSpecs    []agabor.Filter  `view:"no-inline" desc:" a set of gabor filter specifications, one spec per filter'"`
-	GaborFilters  agabor.FilterSet `desc:"the actual gabor filters, the first spec determines the size of all filters in the set"`
-	GaborTab      etable.Table     `view:"no-inline" desc:"gabor filter table (view only)"`
-	GborOutPoolsX int              `view:"+" desc:" the number of neuron pools along the time dimension in the input layer"`
-	GborOutPoolsY int              `view:"+" desc:" the number of neuron pools along the frequency dimension in the input layer"`
-	GborOutUnitsX int              `view:"+" desc:" the number of neurons in a pool (typically the number of gabor filters) along the time dimension in the input layer"`
-	GborOutUnitsY int              `view:"+" desc:" the number of neurons in a pool along the frequency dimension in the input layer"`
-	GborOutput    etensor.Float32  `view:"no-inline" desc:" raw output of Gabor -- full segment's worth of gabor steps"`
-	GborKwta      etensor.Float32  `view:"no-inline" desc:" post-kwta output of full segment's worth of gabor steps"`
-	Inhibs        fffb.Inhibs      `view:"no-inline" desc:"inhibition values for A1 KWTA"`
-	ExtGi         etensor.Float32  `view:"no-inline" desc:"A1 simple extra Gi from neighbor inhibition tensor"`
-	NeighInhib    kwta.NeighInhib  `desc:"neighborhood inhibition for V1s -- each unit gets inhibition from same feature in nearest orthogonal neighbors -- reduces redundancy of feature code"`
-	Kwta          kwta.KWTA        `desc:"kwta parameters, using FFFB form"`
-	KwtaPool      bool             `desc:"if Kwta.On == true, call KwtaPool (true) or KwtaLayer (false)"`
-	ByTime        bool             `desc:"display the gabor filtering result by time and then by filter, default is to order by filter and then time"`
+	// [view: no-inline]  a set of gabor filter specifications, one spec per filter'
+	GaborSpecs []agabor.Filter `view:"no-inline" desc:" a set of gabor filter specifications, one spec per filter'"`
+
+	// the actual gabor filters, the first spec determines the size of all filters in the set
+	GaborFilters agabor.FilterSet `desc:"the actual gabor filters, the first spec determines the size of all filters in the set"`
+
+	// [view: no-inline] gabor filter table (view only)
+	GaborTab etable.Table `view:"no-inline" desc:"gabor filter table (view only)"`
+
+	// [view: +]  the number of neuron pools along the time dimension in the input layer
+	GborOutPoolsX int `view:"+" desc:" the number of neuron pools along the time dimension in the input layer"`
+
+	// [view: +]  the number of neuron pools along the frequency dimension in the input layer
+	GborOutPoolsY int `view:"+" desc:" the number of neuron pools along the frequency dimension in the input layer"`
+
+	// [view: +]  the number of neurons in a pool (typically the number of gabor filters) along the time dimension in the input layer
+	GborOutUnitsX int `view:"+" desc:" the number of neurons in a pool (typically the number of gabor filters) along the time dimension in the input layer"`
+
+	// [view: +]  the number of neurons in a pool along the frequency dimension in the input layer
+	GborOutUnitsY int `view:"+" desc:" the number of neurons in a pool along the frequency dimension in the input layer"`
+
+	// [view: no-inline]  raw output of Gabor -- full segment's worth of gabor steps
+	GborOutput etensor.Float32 `view:"no-inline" desc:" raw output of Gabor -- full segment's worth of gabor steps"`
+
+	// [view: no-inline]  post-kwta output of full segment's worth of gabor steps
+	GborKwta etensor.Float32 `view:"no-inline" desc:" post-kwta output of full segment's worth of gabor steps"`
+
+	// [view: no-inline] inhibition values for A1 KWTA
+	Inhibs fffb.Inhibs `view:"no-inline" desc:"inhibition values for A1 KWTA"`
+
+	// [view: no-inline] A1 simple extra Gi from neighbor inhibition tensor
+	ExtGi etensor.Float32 `view:"no-inline" desc:"A1 simple extra Gi from neighbor inhibition tensor"`
+
+	// neighborhood inhibition for V1s -- each unit gets inhibition from same feature in nearest orthogonal neighbors -- reduces redundancy of feature code
+	NeighInhib kwta.NeighInhib `desc:"neighborhood inhibition for V1s -- each unit gets inhibition from same feature in nearest orthogonal neighbors -- reduces redundancy of feature code"`
+
+	// kwta parameters, using FFFB form
+	Kwta kwta.KWTA `desc:"kwta parameters, using FFFB form"`
+
+	// if Kwta.On == true, call KwtaPool (true) or KwtaLayer (false)
+	KwtaPool bool `desc:"if Kwta.On == true, call KwtaPool (true) or KwtaLayer (false)"`
+
+	// display the gabor filtering result by time and then by filter, default is to order by filter and then time
+	ByTime bool `desc:"display the gabor filtering result by time and then by filter, default is to order by filter and then time"`
 }
 
 // Defaults

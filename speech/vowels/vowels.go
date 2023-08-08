@@ -12,11 +12,12 @@ package vowels
 
 import (
 	"bufio"
-	"github.com/emer/auditory/speech"
 	"log"
 	"os"
 	"strconv"
 	"strings"
+
+	"github.com/emer/auditory/speech"
 )
 
 // Cats are the categories, in this case vowel sounds

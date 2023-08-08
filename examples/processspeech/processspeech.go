@@ -6,12 +6,13 @@ package main
 
 import (
 	"fmt"
-	"github.com/emer/auditory/agabor"
-	"github.com/emer/etable/etable"
-	"github.com/emer/etable/etview"
 	"log"
 	"math"
 	"strings"
+
+	"github.com/emer/auditory/agabor"
+	"github.com/emer/etable/etable"
+	"github.com/emer/etable/etview"
 
 	"github.com/emer/auditory/dft"
 	"github.com/emer/auditory/mel"
@@ -35,21 +36,43 @@ func main() {
 
 // Params defines the sound input parameters for auditory processing
 type Params struct {
-	WinMs       float32 `def:"25" desc:"input window -- number of milliseconds worth of sound to filter at a time"`
-	StepMs      float32 `def:"5,10,12.5" desc:"input step -- number of milliseconds worth of sound that the input is stepped along to obtain the next window sample"`
-	SegmentMs   float32 `def:"100" desc:"length of full segment's worth of input -- total number of milliseconds to accumulate into a complete segment -- must be a multiple of StepMs -- input will be SegmentMs / StepMs = SegmentSteps wide in the X axis, and number of filters in the Y axis"`
-	StrideMs    float32 `def:"100" desc:"how far to move on each trial"`
-	BorderSteps int     `def:"6" view:"+" desc:"overlap with previous segment"`
-	Channel     int     `viewif:"Channels=1" desc:"specific channel to process, if input has multiple channels, and we only process one of them (-1 = process all)"`
-	PadValue    float64
 
-	// these are calculated
-	WinSamples     int   `inactive:"+" desc:"number of samples to process each step"`
-	StepSamples    int   `inactive:"+" desc:"number of samples to step input by"`
-	SegmentSamples int   `inactive:"+" desc:"number of samples in a segment"`
-	StrideSamples  int   `inactive:"+" desc:"number of samples converted from StrideMS"`
-	SegmentSteps   int   `inactive:"+" desc:"SegmentSteps plus steps overlapping next segment or for padding if no next segment"`
-	Steps          []int `inactive:"+" desc:"pre-calculated start position for each step"`
+	// [def: 25] input window -- number of milliseconds worth of sound to filter at a time
+	WinMs float32 `def:"25" desc:"input window -- number of milliseconds worth of sound to filter at a time"`
+
+	// [def: 5,10,12.5] input step -- number of milliseconds worth of sound that the input is stepped along to obtain the next window sample
+	StepMs float32 `def:"5,10,12.5" desc:"input step -- number of milliseconds worth of sound that the input is stepped along to obtain the next window sample"`
+
+	// [def: 100] length of full segment's worth of input -- total number of milliseconds to accumulate into a complete segment -- must be a multiple of StepMs -- input will be SegmentMs / StepMs = SegmentSteps wide in the X axis, and number of filters in the Y axis
+	SegmentMs float32 `def:"100" desc:"length of full segment's worth of input -- total number of milliseconds to accumulate into a complete segment -- must be a multiple of StepMs -- input will be SegmentMs / StepMs = SegmentSteps wide in the X axis, and number of filters in the Y axis"`
+
+	// [def: 100] how far to move on each trial
+	StrideMs float32 `def:"100" desc:"how far to move on each trial"`
+
+	// [def: 6] [view: +] overlap with previous segment
+	BorderSteps int `def:"6" view:"+" desc:"overlap with previous segment"`
+
+	// [viewif: Channels=1] specific channel to process, if input has multiple channels, and we only process one of them (-1 = process all)
+	Channel  int `viewif:"Channels=1" desc:"specific channel to process, if input has multiple channels, and we only process one of them (-1 = process all)"`
+	PadValue float64
+
+	// number of samples to process each step
+	WinSamples int `inactive:"+" desc:"number of samples to process each step"`
+
+	// number of samples to step input by
+	StepSamples int `inactive:"+" desc:"number of samples to step input by"`
+
+	// number of samples in a segment
+	SegmentSamples int `inactive:"+" desc:"number of samples in a segment"`
+
+	// number of samples converted from StrideMS
+	StrideSamples int `inactive:"+" desc:"number of samples converted from StrideMS"`
+
+	// SegmentSteps plus steps overlapping next segment or for padding if no next segment
+	SegmentSteps int `inactive:"+" desc:"SegmentSteps plus steps overlapping next segment or for padding if no next segment"`
+
+	// pre-calculated start position for each step
+	Steps []int `inactive:"+" desc:"pre-calculated start position for each step"`
 }
 
 // ParamDefaults initializes the Input
@@ -66,42 +89,102 @@ func (sp *SndProcess) ParamDefaults() {
 // SndProcess encapsulates a specific auditory processing pipeline in
 // use in a given case -- can add / modify this as needed
 type SndProcess struct {
-	Params          Params            `desc:"basic window and time parameters"`
-	Sound           sound.Wave        `view:"no-inline"`
-	Signal          etensor.Float64   `view:"-" desc:" the full sound input obtained from the sound input - plus any added padding"`
-	Samples         etensor.Float64   `view:"-" desc:" a window's worth of raw sound input, one channel at a time"`
-	Dft             dft.Params        `view:"-" desc:" "`
-	Power           etensor.Float64   `view:"-" desc:" power of the dft, up to the nyquist limit frequency (1/2 input.WinSamples)"`
-	LogPower        etensor.Float64   `view:"-" desc:" log power of the dft, up to the nyquist liit frequency (1/2 input.WinSamples)"`
-	PowerSegment    etensor.Float64   `view:"no-inline" desc:" full segment's worth of power of the dft, up to the nyquist limit frequency (1/2 input.WinSamples)"`
-	LogPowerSegment etensor.Float64   `view:"no-inline" desc:" full segment's worth of log power of the dft, up to the nyquist limit frequency (1/2 input.WinSamples)"`
-	Mel             mel.Params        `view:"no-inline"`
-	MelFBank        etensor.Float64   `view:"no-inline" desc:" mel scale transformation of dft_power, using triangular filters, resulting in the mel filterbank output -- the natural log of this is typically applied"`
-	MelFBankSegment etensor.Float64   `view:"no-inline" desc:" full segment's worth of mel feature-bank output"`
-	MelFilters      etensor.Float64   `view:"no-inline" desc:" the actual filters"`
-	MfccDct         etensor.Float64   `view:"-" desc:" discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
-	MfccDctSegment  etensor.Float64   `view:"-" desc:" full segment's worth of discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
-	GaborSpecs      []agabor.Filter   `view:" no-inline" desc:"array of params describing each gabor filter"`
-	GaborFilters    agabor.FilterSet  `desc:"a set of gabor filters with same x and y dimensions"`
-	GaborTsr        etensor.Float32   `view:"no-inline" desc:" raw output of Gabor -- full segment's worth of gabor steps"`
-	GaborTab        etable.Table      `view:"no-inline" desc:"gabor filter table (view only)"`
-	Segment         int               `inactive:"+" desc:"current segment of full sound (zero based)"`
-	FftCoefs        []complex128      `view:"-" desc:" discrete fourier transform (fft) output complex representation"`
-	Fft             *fourier.CmplxFFT `view:"-" desc:" struct for fast fourier transform"`
-	SndFile         gi.FileName       `view:"-" desc:" holds the full path & name of the file to be loaded/processed"`
 
-	// internal state - view:"-"
+	// basic window and time parameters
+	Params Params `desc:"basic window and time parameters"`
+
+	// [view: no-inline]
+	Sound sound.Wave `view:"no-inline"`
+
+	// [view: -]  the full sound input obtained from the sound input - plus any added padding
+	Signal etensor.Float64 `view:"-" desc:" the full sound input obtained from the sound input - plus any added padding"`
+
+	// [view: -]  a window's worth of raw sound input, one channel at a time
+	Samples etensor.Float64 `view:"-" desc:" a window's worth of raw sound input, one channel at a time"`
+
+	// [view: -]
+	Dft dft.Params `view:"-" desc:" "`
+
+	// [view: -]  power of the dft, up to the nyquist limit frequency (1/2 input.WinSamples)
+	Power etensor.Float64 `view:"-" desc:" power of the dft, up to the nyquist limit frequency (1/2 input.WinSamples)"`
+
+	// [view: -]  log power of the dft, up to the nyquist liit frequency (1/2 input.WinSamples)
+	LogPower etensor.Float64 `view:"-" desc:" log power of the dft, up to the nyquist liit frequency (1/2 input.WinSamples)"`
+
+	// [view: no-inline]  full segment's worth of power of the dft, up to the nyquist limit frequency (1/2 input.WinSamples)
+	PowerSegment etensor.Float64 `view:"no-inline" desc:" full segment's worth of power of the dft, up to the nyquist limit frequency (1/2 input.WinSamples)"`
+
+	// [view: no-inline]  full segment's worth of log power of the dft, up to the nyquist limit frequency (1/2 input.WinSamples)
+	LogPowerSegment etensor.Float64 `view:"no-inline" desc:" full segment's worth of log power of the dft, up to the nyquist limit frequency (1/2 input.WinSamples)"`
+
+	// [view: no-inline]
+	Mel mel.Params `view:"no-inline"`
+
+	// [view: no-inline]  mel scale transformation of dft_power, using triangular filters, resulting in the mel filterbank output -- the natural log of this is typically applied
+	MelFBank etensor.Float64 `view:"no-inline" desc:" mel scale transformation of dft_power, using triangular filters, resulting in the mel filterbank output -- the natural log of this is typically applied"`
+
+	// [view: no-inline]  full segment's worth of mel feature-bank output
+	MelFBankSegment etensor.Float64 `view:"no-inline" desc:" full segment's worth of mel feature-bank output"`
+
+	// [view: no-inline]  the actual filters
+	MelFilters etensor.Float64 `view:"no-inline" desc:" the actual filters"`
+
+	// [view: -]  discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients
+	MfccDct etensor.Float64 `view:"-" desc:" discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
+
+	// [view: -]  full segment's worth of discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients
+	MfccDctSegment etensor.Float64 `view:"-" desc:" full segment's worth of discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
+
+	// [view:  no-inline] array of params describing each gabor filter
+	GaborSpecs []agabor.Filter `view:" no-inline" desc:"array of params describing each gabor filter"`
+
+	// a set of gabor filters with same x and y dimensions
+	GaborFilters agabor.FilterSet `desc:"a set of gabor filters with same x and y dimensions"`
+
+	// [view: no-inline]  raw output of Gabor -- full segment's worth of gabor steps
+	GaborTsr etensor.Float32 `view:"no-inline" desc:" raw output of Gabor -- full segment's worth of gabor steps"`
+
+	// [view: no-inline] gabor filter table (view only)
+	GaborTab etable.Table `view:"no-inline" desc:"gabor filter table (view only)"`
+
+	// current segment of full sound (zero based)
+	Segment int `inactive:"+" desc:"current segment of full sound (zero based)"`
+
+	// [view: -]  discrete fourier transform (fft) output complex representation
+	FftCoefs []complex128 `view:"-" desc:" discrete fourier transform (fft) output complex representation"`
+
+	// [view: -]  struct for fast fourier transform
+	Fft *fourier.CmplxFFT `view:"-" desc:" struct for fast fourier transform"`
+
+	// [view: -]  holds the full path & name of the file to be loaded/processed
+	SndFile gi.FileName `view:"-" desc:" holds the full path & name of the file to be loaded/processed"`
+
+	// [view: -]  are there more samples to process
 	MoreSegments bool `view:"-" desc:" are there more samples to process"`
 
-	// gui
-	Win        *gi.Window         `view:"-" desc:"main GUI window"`
-	StructView *giv.StructView    `view:"-" desc:"the params viewer"`
-	ToolBar    *gi.ToolBar        `view:"-" desc:"the master toolbar"`
-	PowerGrid  *etview.TensorGrid `view:"-" desc:"power grid view for the current segment"`
-	MelGrid    *etview.TensorGrid `view:"-" desc:"melfbank grid view for the current segment"`
-	GaborGrid  *etview.TensorGrid `view:"-" desc:"gabor grid view for the result of applying gabor filters to mel output"`
-	SndName    string             `view:"inactive" desc:"just the name, no path"`
-	ByTime     bool               `desc:"display the gabor filtering result by time and then by filter, default is to order by filter and then time"`
+	// [view: -] main GUI window
+	Win *gi.Window `view:"-" desc:"main GUI window"`
+
+	// [view: -] the params viewer
+	StructView *giv.StructView `view:"-" desc:"the params viewer"`
+
+	// [view: -] the master toolbar
+	ToolBar *gi.ToolBar `view:"-" desc:"the master toolbar"`
+
+	// [view: -] power grid view for the current segment
+	PowerGrid *etview.TensorGrid `view:"-" desc:"power grid view for the current segment"`
+
+	// [view: -] melfbank grid view for the current segment
+	MelGrid *etview.TensorGrid `view:"-" desc:"melfbank grid view for the current segment"`
+
+	// [view: -] gabor grid view for the result of applying gabor filters to mel output
+	GaborGrid *etview.TensorGrid `view:"-" desc:"gabor grid view for the result of applying gabor filters to mel output"`
+
+	// [view: inactive] just the name, no path
+	SndName string `view:"inactive" desc:"just the name, no path"`
+
+	// display the gabor filtering result by time and then by filter, default is to order by filter and then time
+	ByTime bool `desc:"display the gabor filtering result by time and then by filter, default is to order by filter and then time"`
 }
 
 func (sp *SndProcess) Config() {

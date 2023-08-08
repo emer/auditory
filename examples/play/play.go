@@ -11,13 +11,14 @@ import (
 	"flag"
 	"fmt"
 
+	"os"
+
 	"github.com/emer/auditory/sound"
 	_ "github.com/emer/etable/etview" // include to get gui views
 	"github.com/goki/gi/gi"
 	"github.com/goki/gi/gimain"
 	"github.com/goki/gi/giv"
 	"github.com/goki/ki/ki"
-	"os"
 )
 
 func main() {
@@ -43,15 +44,26 @@ type Params struct {
 
 // Play
 type Play struct {
-	// gui
-	Win        *gi.Window      `view:"-" desc:"main GUI window"`
-	StructView *giv.StructView `view:"-" desc:"the params viewer"`
-	ToolBar    *gi.ToolBar     `view:"-" desc:""`
 
-	// required params
-	Rate     int    `desc:"wav sample rate"`
-	Channels int    `desc:"number of channels of wav data in file"`
-	BitDepth int    `desc:"bit depth in bytes"`
+	// [view: -] main GUI window
+	Win *gi.Window `view:"-" desc:"main GUI window"`
+
+	// [view: -] the params viewer
+	StructView *giv.StructView `view:"-" desc:"the params viewer"`
+
+	// [view: -]
+	ToolBar *gi.ToolBar `view:"-" desc:""`
+
+	// wav sample rate
+	Rate int `desc:"wav sample rate"`
+
+	// number of channels of wav data in file
+	Channels int `desc:"number of channels of wav data in file"`
+
+	// bit depth in bytes
+	BitDepth int `desc:"bit depth in bytes"`
+
+	// name of wave file to play
 	FileName string `desc:"name of wave file to play"`
 }
 

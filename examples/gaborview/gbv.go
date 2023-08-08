@@ -58,9 +58,15 @@ func guirun() {
 
 // Table contains all the info for one table
 type Table struct {
-	Table *etable.Table     `desc:"jobs table"`
-	View  *etview.TableView `view:"-" desc:"view of table"`
-	Sels  []string          `desc:"selected row ids in ascending order in view"`
+
+	// jobs table
+	Table *etable.Table `desc:"jobs table"`
+
+	// [view: -] view of table
+	View *etview.TableView `view:"-" desc:"view of table"`
+
+	// selected row ids in ascending order in view
+	Sels []string `desc:"selected row ids in ascending order in view"`
 }
 
 // CurSnd meta info for the sound processed
@@ -73,80 +79,200 @@ type CurSnd struct {
 
 // WinParams defines the sound input parameters for auditory processing
 type WinParams struct {
-	WinMs        float64 `def:"25" desc:"input window -- number of milliseconds worth of sound to filter at a time"`
-	StepMs       float64 `def:"10" desc:"input step -- number of milliseconds worth of sound that the input is stepped along to obtain the next window sample"`
-	SegmentStart float64 `desc:"start of sound segment in milliseconds"`
-	SegmentEnd   float64 `desc:"end of sound segment in milliseconds"`
-	BorderSteps  int     `def:"0" desc:"overlap with previous and next segment"`
-	Channel      int     `desc:"specific channel to process, if input has multiple channels, and we only process one of them (-1 = process all)"`
-	Resize       bool    `desc:"if resize is true segment durations will be lengthened (a bit before and a bit after) to be align with gabor filter size and striding"`
-	TimeMode     bool    `desc:"use the user entered start/end times, ignoring the current sound selection times, the current file will be used"`
 
-	// these are calculated
-	WinSamples  int   `view:"-" desc:"number of samples to process each step"`
-	StepSamples int   `view:"-" desc:"number of samples to step input by"`
-	StepsTotal  int   `view:"-" desc:"SegmentSteps plus steps overlapping next segment or for padding if no next segment"`
-	Steps       []int `view:"-" desc:"pre-calculated start position for each step"`
+	// [def: 25] input window -- number of milliseconds worth of sound to filter at a time
+	WinMs float64 `def:"25" desc:"input window -- number of milliseconds worth of sound to filter at a time"`
+
+	// [def: 10] input step -- number of milliseconds worth of sound that the input is stepped along to obtain the next window sample
+	StepMs float64 `def:"10" desc:"input step -- number of milliseconds worth of sound that the input is stepped along to obtain the next window sample"`
+
+	// start of sound segment in milliseconds
+	SegmentStart float64 `desc:"start of sound segment in milliseconds"`
+
+	// end of sound segment in milliseconds
+	SegmentEnd float64 `desc:"end of sound segment in milliseconds"`
+
+	// [def: 0] overlap with previous and next segment
+	BorderSteps int `def:"0" desc:"overlap with previous and next segment"`
+
+	// specific channel to process, if input has multiple channels, and we only process one of them (-1 = process all)
+	Channel int `desc:"specific channel to process, if input has multiple channels, and we only process one of them (-1 = process all)"`
+
+	// if resize is true segment durations will be lengthened (a bit before and a bit after) to be align with gabor filter size and striding
+	Resize bool `desc:"if resize is true segment durations will be lengthened (a bit before and a bit after) to be align with gabor filter size and striding"`
+
+	// use the user entered start/end times, ignoring the current sound selection times, the current file will be used
+	TimeMode bool `desc:"use the user entered start/end times, ignoring the current sound selection times, the current file will be used"`
+
+	// [view: -] number of samples to process each step
+	WinSamples int `view:"-" desc:"number of samples to process each step"`
+
+	// [view: -] number of samples to step input by
+	StepSamples int `view:"-" desc:"number of samples to step input by"`
+
+	// [view: -] SegmentSteps plus steps overlapping next segment or for padding if no next segment
+	StepsTotal int `view:"-" desc:"SegmentSteps plus steps overlapping next segment or for padding if no next segment"`
+
+	// [view: -] pre-calculated start position for each step
+	Steps []int `view:"-" desc:"pre-calculated start position for each step"`
 }
 
 type ProcessParams struct {
-	Dft             dft.Params      `view:"inline" desc:""`
-	Power           etensor.Float64 `view:"+" desc:"power of the dft, up to the nyquist limit frequency (1/2 input.WinSamples)"`
-	LogPower        etensor.Float64 `view:"+" desc:"log power of the dft, up to the nyquist liit frequency (1/2 input.WinSamples)"`
-	PowerSegment    etensor.Float64 `view:"no-inline" desc:"full segment's worth of power of the dft, up to the nyquist limit frequency (1/2 input.WinSamples)"`
+
+	// [view: inline]
+	Dft dft.Params `view:"inline" desc:""`
+
+	// [view: +] power of the dft, up to the nyquist limit frequency (1/2 input.WinSamples)
+	Power etensor.Float64 `view:"+" desc:"power of the dft, up to the nyquist limit frequency (1/2 input.WinSamples)"`
+
+	// [view: +] log power of the dft, up to the nyquist liit frequency (1/2 input.WinSamples)
+	LogPower etensor.Float64 `view:"+" desc:"log power of the dft, up to the nyquist liit frequency (1/2 input.WinSamples)"`
+
+	// [view: no-inline] full segment's worth of power of the dft, up to the nyquist limit frequency (1/2 input.WinSamples)
+	PowerSegment etensor.Float64 `view:"no-inline" desc:"full segment's worth of power of the dft, up to the nyquist limit frequency (1/2 input.WinSamples)"`
+
+	// [view: no-inline] full segment's worth of log power of the dft, up to the nyquist limit frequency (1/2 input.WinSamples)
 	LogPowerSegment etensor.Float64 `view:"no-inline" desc:"full segment's worth of log power of the dft, up to the nyquist limit frequency (1/2 input.WinSamples)"`
-	Energy          etensor.Float64 `view:"no-inline" desc:"sum of log power per segment step"`
-	Mel             mel.Params      `view:"inline"`
-	MelFBank        etensor.Float64 `view:"no-inline" desc:"mel scale transformation of dft_power, using triangular filters, resulting in the mel filterbank output -- the natural log of this is typically applied"`
+
+	// [view: no-inline] sum of log power per segment step
+	Energy etensor.Float64 `view:"no-inline" desc:"sum of log power per segment step"`
+
+	// [view: inline]
+	Mel mel.Params `view:"inline"`
+
+	// [view: no-inline] mel scale transformation of dft_power, using triangular filters, resulting in the mel filterbank output -- the natural log of this is typically applied
+	MelFBank etensor.Float64 `view:"no-inline" desc:"mel scale transformation of dft_power, using triangular filters, resulting in the mel filterbank output -- the natural log of this is typically applied"`
+
+	// [view: no-inline] full segment's worth of mel feature-bank output
 	MelFBankSegment etensor.Float64 `view:"no-inline" desc:"full segment's worth of mel feature-bank output"`
-	MelFilters      etensor.Float64 `view:"no-inline" desc:"the actual filters"`
-	MFCCDct         etensor.Float64 `view:"no-inline" desc:"discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
-	MFCCSegment     etensor.Float64 `view:"no-inline" desc:"full segment's worth of discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
-	MFCCDeltas      etensor.Float64 `view:"no-inline" desc:"MFCC deltas are the differences over time of the MFC coefficeints"`
+
+	// [view: no-inline] the actual filters
+	MelFilters etensor.Float64 `view:"no-inline" desc:"the actual filters"`
+
+	// [view: no-inline] discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients
+	MFCCDct etensor.Float64 `view:"no-inline" desc:"discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
+
+	// [view: no-inline] full segment's worth of discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients
+	MFCCSegment etensor.Float64 `view:"no-inline" desc:"full segment's worth of discrete cosine transform of the log_mel_filter_out values, producing the final mel-frequency cepstral coefficients"`
+
+	// [view: no-inline] MFCC deltas are the differences over time of the MFC coefficeints
+	MFCCDeltas etensor.Float64 `view:"no-inline" desc:"MFCC deltas are the differences over time of the MFC coefficeints"`
+
+	// [view: no-inline] MFCC delta deltas are the differences over time of the MFCC deltas
 	MFCCDeltaDeltas etensor.Float64 `view:"no-inline" desc:"MFCC delta deltas are the differences over time of the MFCC deltas"`
 }
 
 type GaborParams struct {
-	GaborSpecs []agabor.Filter   `view:"no-inline" desc:"array of params describing each gabor filter"`
-	GaborSet   agabor.FilterSet  `view:"inline" desc:"a set of gabor filters with same x and y dimensions"`
-	GborOutput etensor.Float32   `view:"no-inline" desc:"raw output of Gabor -- full segment's worth of gabor steps"`
-	GborKwta   etensor.Float32   `view:"no-inline" desc:"post-kwta output of full segment's worth of gabor steps"`
-	Inhibs     fffb.Inhibs       `view:"no-inline" desc:"inhibition values for A1 KWTA"`
-	ExtGi      etensor.Float32   `view:"no-inline" desc:"A1 simple extra Gi from neighbor inhibition tensor"`
-	NeighInhib kwta.NeighInhib   `view:"no-inline" desc:"neighborhood inhibition for V1s -- each unit gets inhibition from same feature in nearest orthogonal neighbors -- reduces redundancy of feature code"`
-	Kwta       kwta.KWTA         `view:"no-inline" desc:"kwta parameters, using FFFB form"`
-	FftCoefs   []complex128      `view:"-" desc:"discrete fourier transform (fft) output complex representation"`
-	Fft        *fourier.CmplxFFT `view:"-" desc:"struct for fast fourier transform"`
+
+	// [view: no-inline] array of params describing each gabor filter
+	GaborSpecs []agabor.Filter `view:"no-inline" desc:"array of params describing each gabor filter"`
+
+	// [view: inline] a set of gabor filters with same x and y dimensions
+	GaborSet agabor.FilterSet `view:"inline" desc:"a set of gabor filters with same x and y dimensions"`
+
+	// [view: no-inline] raw output of Gabor -- full segment's worth of gabor steps
+	GborOutput etensor.Float32 `view:"no-inline" desc:"raw output of Gabor -- full segment's worth of gabor steps"`
+
+	// [view: no-inline] post-kwta output of full segment's worth of gabor steps
+	GborKwta etensor.Float32 `view:"no-inline" desc:"post-kwta output of full segment's worth of gabor steps"`
+
+	// [view: no-inline] inhibition values for A1 KWTA
+	Inhibs fffb.Inhibs `view:"no-inline" desc:"inhibition values for A1 KWTA"`
+
+	// [view: no-inline] A1 simple extra Gi from neighbor inhibition tensor
+	ExtGi etensor.Float32 `view:"no-inline" desc:"A1 simple extra Gi from neighbor inhibition tensor"`
+
+	// [view: no-inline] neighborhood inhibition for V1s -- each unit gets inhibition from same feature in nearest orthogonal neighbors -- reduces redundancy of feature code
+	NeighInhib kwta.NeighInhib `view:"no-inline" desc:"neighborhood inhibition for V1s -- each unit gets inhibition from same feature in nearest orthogonal neighbors -- reduces redundancy of feature code"`
+
+	// [view: no-inline] kwta parameters, using FFFB form
+	Kwta kwta.KWTA `view:"no-inline" desc:"kwta parameters, using FFFB form"`
+
+	// [view: -] discrete fourier transform (fft) output complex representation
+	FftCoefs []complex128 `view:"-" desc:"discrete fourier transform (fft) output complex representation"`
+
+	// [view: -] struct for fast fourier transform
+	Fft *fourier.CmplxFFT `view:"-" desc:"struct for fast fourier transform"`
 }
 
 type App struct {
-	Nm        string            `view:"-" desc:"name of this environment"`
-	Dsc       string            `view:"-" desc:"description of this environment"`
-	GUI       egui.GUI          `view:"-" desc:"manages all the gui elements"`
-	Corpus    string            `desc:"the set of sound files"`
-	OpenPath  string            `desc:"start here when opening the load sounds dialog"`
-	SndFile   string            `inactive:"+" desc:"full path of open sound file"`
-	Text      string            `inactive:"+" desc:"the text of the current sound file if available"`
-	CurSnd1   CurSnd            `desc:"the currently selected sound for view 1"`
-	CurSnd2   CurSnd            `desc:"the currently selected sound for view 2"`
-	Sequence  []speech.Sequence `view:"no-inline" desc:"a slice of Sequence structs, one per open sound file"`
-	SndsTable Table             `desc:"table of sounds from the open sound files"`
-	Row       int               `view:"-" desc:"SndsTable selected row, as seen by user"`
-	LastFile  string            `view:"-" desc:"name of the last sound file loaded, compare with this and don't reload if processing sound from same file'"`
-	Load      bool              `view:"-" desc:"used to prevent reloading a file we are already processing"`
 
-	WParams1 WinParams       `view:"inline" desc:"fundamental processing parameters for sound 1"`
-	WParams2 WinParams       `view:"inline" desc:"fundamental processing parameters for sound 2"`
-	PParams1 ProcessParams   `desc:"the power and mel parameters for processing the sound to generate a mel filter bank for sound 1"`
-	PParams2 ProcessParams   `desc:"the power and mel parameters for processing the sound to generate a mel filter bank for sound 2"`
-	GParams1 GaborParams     `desc:"gabor filter specifications and parameters for applying gabors to the mel output for sound 1"`
-	GParams2 GaborParams     `desc:"gabor filter specifications and parameters for applying gabors to the mel output for sound 2"`
-	Sound    sound.Wave      `view:"inline"`
-	Signal   etensor.Float64 `view:"-" desc:"the full sound input obtained from the sound input - plus any added padding"`
-	Window   etensor.Float64 `view:"-" desc:"[Input.WinSamples] the raw sound input"`
-	ByTime   bool            `desc:"display the gabor filtering result by time and then by filter, default is to order by filter and then time"`
-	ImgDir   string          `desc:"directory for storing images of mel, gabors, filtered result, etc"`
+	// [view: -] name of this environment
+	Nm string `view:"-" desc:"name of this environment"`
 
+	// [view: -] description of this environment
+	Dsc string `view:"-" desc:"description of this environment"`
+
+	// [view: -] manages all the gui elements
+	GUI egui.GUI `view:"-" desc:"manages all the gui elements"`
+
+	// the set of sound files
+	Corpus string `desc:"the set of sound files"`
+
+	// start here when opening the load sounds dialog
+	OpenPath string `desc:"start here when opening the load sounds dialog"`
+
+	// full path of open sound file
+	SndFile string `inactive:"+" desc:"full path of open sound file"`
+
+	// the text of the current sound file if available
+	Text string `inactive:"+" desc:"the text of the current sound file if available"`
+
+	// the currently selected sound for view 1
+	CurSnd1 CurSnd `desc:"the currently selected sound for view 1"`
+
+	// the currently selected sound for view 2
+	CurSnd2 CurSnd `desc:"the currently selected sound for view 2"`
+
+	// [view: no-inline] a slice of Sequence structs, one per open sound file
+	Sequence []speech.Sequence `view:"no-inline" desc:"a slice of Sequence structs, one per open sound file"`
+
+	// table of sounds from the open sound files
+	SndsTable Table `desc:"table of sounds from the open sound files"`
+
+	// [view: -] SndsTable selected row, as seen by user
+	Row int `view:"-" desc:"SndsTable selected row, as seen by user"`
+
+	// [view: -] name of the last sound file loaded, compare with this and don't reload if processing sound from same file'
+	LastFile string `view:"-" desc:"name of the last sound file loaded, compare with this and don't reload if processing sound from same file'"`
+
+	// [view: -] used to prevent reloading a file we are already processing
+	Load bool `view:"-" desc:"used to prevent reloading a file we are already processing"`
+
+	// [view: inline] fundamental processing parameters for sound 1
+	WParams1 WinParams `view:"inline" desc:"fundamental processing parameters for sound 1"`
+
+	// [view: inline] fundamental processing parameters for sound 2
+	WParams2 WinParams `view:"inline" desc:"fundamental processing parameters for sound 2"`
+
+	// the power and mel parameters for processing the sound to generate a mel filter bank for sound 1
+	PParams1 ProcessParams `desc:"the power and mel parameters for processing the sound to generate a mel filter bank for sound 1"`
+
+	// the power and mel parameters for processing the sound to generate a mel filter bank for sound 2
+	PParams2 ProcessParams `desc:"the power and mel parameters for processing the sound to generate a mel filter bank for sound 2"`
+
+	// gabor filter specifications and parameters for applying gabors to the mel output for sound 1
+	GParams1 GaborParams `desc:"gabor filter specifications and parameters for applying gabors to the mel output for sound 1"`
+
+	// gabor filter specifications and parameters for applying gabors to the mel output for sound 2
+	GParams2 GaborParams `desc:"gabor filter specifications and parameters for applying gabors to the mel output for sound 2"`
+
+	// [view: inline]
+	Sound sound.Wave `view:"inline"`
+
+	// [view: -] the full sound input obtained from the sound input - plus any added padding
+	Signal etensor.Float64 `view:"-" desc:"the full sound input obtained from the sound input - plus any added padding"`
+
+	// [view: -] [Input.WinSamples] the raw sound input
+	Window etensor.Float64 `view:"-" desc:"[Input.WinSamples] the raw sound input"`
+
+	// display the gabor filtering result by time and then by filter, default is to order by filter and then time
+	ByTime bool `desc:"display the gabor filtering result by time and then by filter, default is to order by filter and then time"`
+
+	// directory for storing images of mel, gabors, filtered result, etc
+	ImgDir string `desc:"directory for storing images of mel, gabors, filtered result, etc"`
+
+	// [view: -] status label
 	StatLabel *gi.Label `view:"-" desc:"status label"`
 }
 
@@ -722,7 +848,7 @@ func (ap *App) ApplyKwta(gparams *GaborParams) {
 	}
 }
 
-/// ConfigSoundsTable
+// / ConfigSoundsTable
 func (ap *App) ConfigSoundsTable() {
 	ap.SndsTable.Table = &etable.Table{}
 	ap.SndsTable.Table.SetMetaData("name", "The Loaded Sounds")

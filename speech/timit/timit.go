@@ -8,7 +8,6 @@
 // in IEEE Transactions on Acoustics, Speech and Signal Processing, Vol 37, 1989 for the original
 // set and collapsing to 39 phones
 // Many later studies use the 39 phone set
-//
 package timit
 
 import (

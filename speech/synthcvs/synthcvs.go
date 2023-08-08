@@ -11,11 +11,12 @@ package synthcvs
 import (
 	"bufio"
 	"fmt"
-	"github.com/emer/auditory/speech"
 	"log"
 	"os"
 	"strconv"
 	"strings"
+
+	"github.com/emer/auditory/speech"
 )
 
 // !! really 3 groups of 4, first, second and third position of trisyllabic word - keep the order!!
