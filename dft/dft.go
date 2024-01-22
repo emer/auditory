@@ -15,16 +15,16 @@ import (
 type Params struct {
 
 	// [def: true] compute the log of the power and save that to a separate table -- generaly more useful for visualization of power than raw power values
-	CompLogPow bool `def:"true" desc:"compute the log of the power and save that to a separate table -- generaly more useful for visualization of power than raw power values"`
+	CompLogPow bool `default:"true" desc:"compute the log of the power and save that to a separate table -- generaly more useful for visualization of power than raw power values"`
 
 	// [def: -100] [viewif: CompLogPow] minimum value a log can produce -- puts a lower limit on log output
-	LogMin float64 `viewif:"CompLogPow" def:"-100" desc:"minimum value a log can produce -- puts a lower limit on log output"`
+	LogMin float64 `viewif:"CompLogPow" default:"-100" desc:"minimum value a log can produce -- puts a lower limit on log output"`
 
 	// [def: 0] [viewif: CompLogPow] add this amount when taking the log of the dft power -- e.g., 1.0 makes everything positive -- affects the relative contrast of the outputs
-	LogOffSet float64 `viewif:"CompLogPow" def:"0" desc:"add this amount when taking the log of the dft power -- e.g., 1.0 makes everything positive -- affects the relative contrast of the outputs"`
+	LogOffSet float64 `viewif:"CompLogPow" default:"0" desc:"add this amount when taking the log of the dft power -- e.g., 1.0 makes everything positive -- affects the relative contrast of the outputs"`
 
 	// [def: 0] how much of the previous step's power value to include in this one -- smooths out the power spectrum which can be artificially bumpy due to discrete window samples
-	PrevSmooth float64 `def:"0" desc:"how much of the previous step's power value to include in this one -- smooths out the power spectrum which can be artificially bumpy due to discrete window samples"`
+	PrevSmooth float64 `default:"0" desc:"how much of the previous step's power value to include in this one -- smooths out the power spectrum which can be artificially bumpy due to discrete window samples"`
 
 	//  how much of current power to include
 	CurSmooth float64 `inactive:"+" desc:" how much of current power to include"`

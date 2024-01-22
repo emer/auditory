@@ -81,10 +81,10 @@ type CurSnd struct {
 type WinParams struct {
 
 	// [def: 25] input window -- number of milliseconds worth of sound to filter at a time
-	WinMs float64 `def:"25" desc:"input window -- number of milliseconds worth of sound to filter at a time"`
+	WinMs float64 `default:"25" desc:"input window -- number of milliseconds worth of sound to filter at a time"`
 
 	// [def: 10] input step -- number of milliseconds worth of sound that the input is stepped along to obtain the next window sample
-	StepMs float64 `def:"10" desc:"input step -- number of milliseconds worth of sound that the input is stepped along to obtain the next window sample"`
+	StepMs float64 `default:"10" desc:"input step -- number of milliseconds worth of sound that the input is stepped along to obtain the next window sample"`
 
 	// start of sound segment in milliseconds
 	SegmentStart float64 `desc:"start of sound segment in milliseconds"`
@@ -93,7 +93,7 @@ type WinParams struct {
 	SegmentEnd float64 `desc:"end of sound segment in milliseconds"`
 
 	// [def: 0] overlap with previous and next segment
-	BorderSteps int `def:"0" desc:"overlap with previous and next segment"`
+	BorderSteps int `default:"0" desc:"overlap with previous and next segment"`
 
 	// specific channel to process, if input has multiple channels, and we only process one of them (-1 = process all)
 	Channel int `desc:"specific channel to process, if input has multiple channels, and we only process one of them (-1 = process all)"`

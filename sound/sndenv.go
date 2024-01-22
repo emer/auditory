@@ -24,19 +24,19 @@ import (
 type Params struct {
 
 	// [def: 25] input window -- number of milliseconds worth of sound to filter at a time
-	WinMs float64 `def:"25" desc:"input window -- number of milliseconds worth of sound to filter at a time"`
+	WinMs float64 `default:"25" desc:"input window -- number of milliseconds worth of sound to filter at a time"`
 
 	// [def: 5,10,12.5] input step -- number of milliseconds worth of sound that the input is stepped along to obtain the next window sample
-	StepMs float64 `def:"5,10,12.5" desc:"input step -- number of milliseconds worth of sound that the input is stepped along to obtain the next window sample"`
+	StepMs float64 `default:"5,10,12.5" desc:"input step -- number of milliseconds worth of sound that the input is stepped along to obtain the next window sample"`
 
 	// [def: 100] length of full segment's worth of input -- total number of milliseconds to accumulate into a complete segment -- must be a multiple of StepMs -- input will be SegmentMs / StepMs = SegmentSteps wide in the X axis, and number of filters in the Y axis
-	SegmentMs float64 `def:"100" desc:"length of full segment's worth of input -- total number of milliseconds to accumulate into a complete segment -- must be a multiple of StepMs -- input will be SegmentMs / StepMs = SegmentSteps wide in the X axis, and number of filters in the Y axis"`
+	SegmentMs float64 `default:"100" desc:"length of full segment's worth of input -- total number of milliseconds to accumulate into a complete segment -- must be a multiple of StepMs -- input will be SegmentMs / StepMs = SegmentSteps wide in the X axis, and number of filters in the Y axis"`
 
 	// [def: 100] how far to move on each trial
-	StrideMs float64 `def:"100" desc:"how far to move on each trial"`
+	StrideMs float64 `default:"100" desc:"how far to move on each trial"`
 
 	// [def: 6] [view: +] overlap with previous and next segment
-	BorderSteps int `def:"6" view:"+" desc:"overlap with previous and next segment"`
+	BorderSteps int `default:"6" view:"+" desc:"overlap with previous and next segment"`
 
 	// [viewif: Channels=1] specific channel to process, if input has multiple channels, and we only process one of them (-1 = process all)
 	Channel int `viewif:"Channels=1" desc:"specific channel to process, if input has multiple channels, and we only process one of them (-1 = process all)"`

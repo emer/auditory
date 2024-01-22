@@ -16,19 +16,19 @@ import (
 type FilterBank struct {
 
 	// [def: 32,26] [view: +] number of Mel frequency filters to compute
-	NFilters int `view:"+" def:"32,26" desc:"number of Mel frequency filters to compute"`
+	NFilters int `view:"+" default:"32,26" desc:"number of Mel frequency filters to compute"`
 
 	// [def: 120,300] [view: +] [step: 10.0] low frequency end of mel frequency spectrum
-	LoHz float64 `view:"+" def:"120,300" step:"10.0" desc:"low frequency end of mel frequency spectrum"`
+	LoHz float64 `view:"+" default:"120,300" step:"10.0" desc:"low frequency end of mel frequency spectrum"`
 
 	// [def: 10000,8000] [view: +] [step: 1000.0] high frequency end of mel frequency spectrum -- must be <= sample_rate / 2 (i.e., less than the Nyquist frequencY
-	HiHz float64 `view:"+" def:"10000,8000" step:"1000.0" desc:"high frequency end of mel frequency spectrum -- must be <= sample_rate / 2 (i.e., less than the Nyquist frequencY"`
+	HiHz float64 `view:"+" default:"10000,8000" step:"1000.0" desc:"high frequency end of mel frequency spectrum -- must be <= sample_rate / 2 (i.e., less than the Nyquist frequencY"`
 
 	// [def: 0] [view: +] on add this amount when taking the log of the Mel filter sums to produce the filter-bank output -- e.g., 1.0 makes everything positive -- affects the relative contrast of the outputs
-	LogOff float64 `view:"+" def:"0" desc:"on add this amount when taking the log of the Mel filter sums to produce the filter-bank output -- e.g., 1.0 makes everything positive -- affects the relative contrast of the outputs"`
+	LogOff float64 `view:"+" default:"0" desc:"on add this amount when taking the log of the Mel filter sums to produce the filter-bank output -- e.g., 1.0 makes everything positive -- affects the relative contrast of the outputs"`
 
 	// [def: -10] [view: +] minimum value a log can produce -- puts a lower limit on log output
-	LogMin float64 `view:"+" def:"-10" desc:"minimum value a log can produce -- puts a lower limit on log output"`
+	LogMin float64 `view:"+" default:"-10" desc:"minimum value a log can produce -- puts a lower limit on log output"`
 
 	//  whether to perform renormalization of the mel values
 	Renorm bool `desc:" whether to perform renormalization of the mel values"`
@@ -56,13 +56,13 @@ type Params struct {
 	HzPts []float64 `view:"-" desc:" mel scale points in hz"`
 
 	// [def: false] [view: +]  compute cepstrum discrete cosine transform (dct) of the mel-frequency filter bank features
-	MFCC bool `view:"+" def:"false" desc:" compute cepstrum discrete cosine transform (dct) of the mel-frequency filter bank features"`
+	MFCC bool `view:"+" default:"false" desc:" compute cepstrum discrete cosine transform (dct) of the mel-frequency filter bank features"`
 
 	// [def: false] [view: +]  compute the MFCC deltas and delta-deltas
-	Deltas bool `view:"+" def:"false" desc:" compute the MFCC deltas and delta-deltas"`
+	Deltas bool `view:"+" default:"false" desc:" compute the MFCC deltas and delta-deltas"`
 
 	// [def: 13] [viewif: MFCC]  number of mfcc coefficients to output -- typically 1/2 of the number of filterbank features
-	NCoefs int `viewif:"MFCC" def:"13" desc:" number of mfcc coefficients to output -- typically 1/2 of the number of filterbank features"`
+	NCoefs int `viewif:"MFCC" default:"13" desc:" number of mfcc coefficients to output -- typically 1/2 of the number of filterbank features"`
 }
 
 // Defaults
