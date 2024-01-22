@@ -434,8 +434,8 @@ func SamplesToMSec(samples int, rate int) float32 {
 ////////////////////////////////////////////////////////////////////////////////////////////
 // 		Gui
 
-// ConfigGui configures the GoGi gui interface for this Aud
-func (sp *SndProcess) ConfigGui() *gi.Window {
+// ConfigGUI configures the Cogent Core gui interface for this Aud
+func (sp *SndProcess) ConfigGUI() *gi.Window {
 	width := 1600
 	height := 1200
 
@@ -537,7 +537,7 @@ var TheSP SndProcess
 
 func mainrun() {
 	TheSP.ParamDefaults()
-	win := TheSP.ConfigGui()
+	win := TheSP.ConfigGUI()
 	TheSP.Win = win
 	TheSP.SndFile = gi.FileName("sounds/bug.wav")
 	TheSP.ProcessSound(string(TheSP.SndFile))

@@ -34,7 +34,7 @@ func main() {
 }
 
 func guirun() {
-	win := PW.ConfigGui()
+	win := PW.ConfigGUI()
 	win.StartEventLoop()
 }
 
@@ -92,8 +92,8 @@ func (pw *Play) PlayIt() {
 ////////////////////////////////////////////////////////////////////////////////////////////
 // 		Gui
 
-// ConfigGui configures the GoGi gui interface for this Aud
-func (p *Play) ConfigGui() *gi.Window {
+// ConfigGUI configures the Cogent Core gui interface for this Aud
+func (p *Play) ConfigGUI() *gi.Window {
 	width := 1600
 	height := 1200
 

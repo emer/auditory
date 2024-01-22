@@ -48,7 +48,7 @@ func main() {
 
 func guirun() {
 	TheApp.Init()
-	win := TheApp.ConfigGui()
+	win := TheApp.ConfigGUI()
 	TheApp.GUI.ToolBar.UpdateActions()
 	win.StartEventLoop()
 }
@@ -948,8 +948,8 @@ func TimitSxFilter(fv *giv.FileView, fi *giv.FileInfo) bool {
 	return false
 }
 
-// ConfigGui configures the GoGi gui interface for this simulation,
-func (ap *App) ConfigGui() *gi.Window {
+// ConfigGUI configures the Cogent Core gui interface for this simulation,
+func (ap *App) ConfigGUI() *gi.Window {
 	gi.SetAppName("Gabor View")
 	gi.SetAppAbout("Application/Utility to allow viewing of gabor convolution with sound")
 
